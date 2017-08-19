@@ -36,6 +36,10 @@ from util import print_error, InvalidPassword
 import ecdsa
 import pyaes
 
+# Bitcoin Cash fork block specification
+BITCOIN_CASH_FORK_BLOCK_HEIGHT = 478559
+BITCOIN_CASH_FORK_BLOCK_HASH = "000000000000000000651ef99cb9fcbe0dadde1d424bd9f15ff20136191a5eec"
+
 # Bitcoin network constants
 TESTNET = False
 NOLNET = False
