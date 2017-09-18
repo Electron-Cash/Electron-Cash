@@ -242,6 +242,16 @@ class Commands:
             x_pubkey = 'fd' + (chr(0) + h160).encode('hex')
             tx.sign({x_pubkey:privkey})
         else:
+            tx.deserialize()
+            if self.wallet:
+                my_coins = self.wallet.get_spendable_coins(None, self.config)
+                my_outpoints = [vin['prevout_hash'] + ':' + str(vin['prevout_n']) for vin in my_coins]
+                for i, txin in enumerate(tx.inputs()):
+                    outpoint = txin['prevout_hash'] + ':' + str(txin['prevout_n'])
+                    if outpoint in my_outpoints:
+                        my_index = my_outpoints.index(outpoint)
+                        tx._inputs[i]['value'] = my_coins[my_index]['value']
+            # tx.serialize()
             self.wallet.sign_transaction(tx, password)
         return tx.as_dict()
 
