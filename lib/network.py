@@ -73,13 +73,6 @@ def set_testnet():
         'electrum-testnet-abc.criptolayer.net': {'s': '50112'},
     }
 
-def set_nolnet():
-    global DEFAULT_PORTS, DEFAULT_SERVERS
-    DEFAULT_PORTS = {'t':'52001', 's':'52002'}
-    DEFAULT_SERVERS = {
-        '14.3.140.101': DEFAULT_PORTS,
-    }
-
 NODES_RETRY_INTERVAL = 60
 SERVER_RETRY_INTERVAL = 10
 

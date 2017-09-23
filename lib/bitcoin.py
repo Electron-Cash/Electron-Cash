@@ -42,7 +42,6 @@ BITCOIN_CASH_FORK_BLOCK_HASH = "000000000000000000651ef99cb9fcbe0dadde1d424bd9f1
 
 # Bitcoin network constants
 TESTNET = False
-NOLNET = False
 ADDRTYPE_P2PKH = 0
 ADDRTYPE_P2SH = 5
 ADDRTYPE_P2WPKH = 6
@@ -64,21 +63,6 @@ def set_testnet():
     XPUB_HEADER = 0x043587cf
     HEADERS_URL = ""
     GENESIS = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
-
-def set_nolnet():
-    global ADDRTYPE_P2PKH, ADDRTYPE_P2SH, ADDRTYPE_P2WPKH
-    global XPRV_HEADER, XPUB_HEADER
-    global NOLNET, HEADERS_URL
-    global GENESIS
-    TESTNET = True
-    ADDRTYPE_P2PKH = 0
-    ADDRTYPE_P2SH = 5
-    ADDRTYPE_P2WPKH = 6
-    XPRV_HEADER = 0x0488ade4
-    XPUB_HEADER = 0x0488b21e
-    HEADERS_URL = ""
-    GENESIS = "663c88be18d07c45f87f910b93a1a71ed9ef1946cad50eb6a6f3af4c424625c6"
-
 
 
 ################################## transactions
@@ -236,8 +220,6 @@ def seed_type(x):
         return 'standard'
     elif TESTNET and is_new_seed(x, version.SEED_PREFIX_SW):
         return 'segwit'
-    elif is_new_seed(x, version.SEED_PREFIX_2FA):
-        return '2fa'
     return ''
 
 is_seed = lambda x: bool(seed_type(x))

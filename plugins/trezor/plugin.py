@@ -8,7 +8,7 @@ from functools import partial
 from electrum.bitcoin import (bc_address_to_hash_160, xpub_from_pubkey,
                               public_key_to_p2pkh, EncodeBase58Check,
                               TYPE_ADDRESS, TYPE_SCRIPT,
-                              TESTNET, ADDRTYPE_P2PKH, ADDRTYPE_P2SH)
+                              ADDRTYPE_P2PKH, ADDRTYPE_P2SH)
 from electrum.i18n import _
 from electrum.plugins import BasePlugin, hook
 from electrum.transaction import deserialize, Transaction
@@ -55,7 +55,7 @@ class TrezorCompatibleKeyStore(Hardware_KeyStore):
         for txin in tx.inputs():
             pubkeys, x_pubkeys = tx.get_sorted_pubkeys(txin)
             tx_hash = txin['prevout_hash']
-            prev_tx[tx_hash] = txin['prev_tx'] 
+            prev_tx[tx_hash] = txin['prev_tx']
             for x_pubkey in x_pubkeys:
                 if not is_xpubkey(x_pubkey):
                     continue
@@ -96,7 +96,7 @@ class TrezorCompatiblePlugin(HW_PluginBase):
             # raise
             self.print_error("cannot connect at", device.path, str(e))
             return None
- 
+
     def _try_bridge(self, device):
         self.print_error("Trying to connect over Trezor Bridge...")
         try:
@@ -145,9 +145,6 @@ class TrezorCompatiblePlugin(HW_PluginBase):
         if client:
             client.used()
         return client
-
-    def get_coin_name(self):
-        return "Bcash Testnet" if TESTNET else "Bcash"
 
     def initialize_device(self, device_id, wizard, handler):
         # Initialization method

@@ -8,7 +8,7 @@ class TrezorKeyStore(TrezorCompatibleKeyStore):
 class TrezorPlugin(TrezorCompatiblePlugin):
     firmware_URL = 'https://www.mytrezor.com'
     libraries_URL = 'https://github.com/trezor/python-trezor'
-    minimum_firmware = (1, 3, 3)
+    minimum_firmware = (1, 5, 2)
     keystore_class = TrezorKeyStore
 
     def __init__(self, *args):
@@ -33,3 +33,7 @@ class TrezorPlugin(TrezorCompatiblePlugin):
     def bridge_transport(self, d):
         from trezorlib.transport_bridge import BridgeTransport
         return BridgeTransport(d)
+
+    def get_coin_name(self):
+        # No testnet support yet
+        return "Bcash"
