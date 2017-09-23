@@ -90,16 +90,8 @@ class SimpleConfig(PrintError):
         if not os.path.exists(path):
             if os.path.islink(path):
                 raise BaseException('Dangling link: ' + path)
-            self.print_error("Making directory {} and copying wallets".format(path))
+            self.print_error("Making directory {}".format(path))
             os.makedirs(path)
-            electrum_path = user_dir(True)
-            if self.get('testnet'):
-                electrum_path = os.path.join(electrum_path, 'testnet')
-            elif self.get('nolnet'):
-                electrum_path = os.path.join(electrum_path, 'nolnet')
-            if os.path.exists(electrum_path):
-                # Deliberately don't copy config
-                shutil.copytree(os.path.join(electrum_path, 'wallets'), os.path.join(path, 'wallets'))
         obsolete_file = os.path.join(path, 'recent_servers')
         if os.path.exists(obsolete_file):
             os.remove(obsolete_file)
