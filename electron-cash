@@ -89,22 +89,16 @@ def check_imports():
 if not is_android:
     check_imports()
 
-# load local module as electrum
-if is_bundle or is_local or is_android:
-    import imp
-    imp.load_module('electrum', *imp.find_module('lib'))
-    imp.load_module('electrum_gui', *imp.find_module('gui'))
-
-from electrum import bitcoin, network
-from electrum import SimpleConfig, Network
-from electrum.wallet import Wallet, Imported_Wallet
-from electrum.storage import WalletStorage
-from electrum.util import print_msg, print_stderr, json_encode, json_decode
-from electrum.util import set_verbosity, InvalidPassword, check_www_dir
-from electrum.commands import get_parser, known_commands, Commands, config_variables
-from electrum import daemon
-from electrum import keystore
-from electrum.mnemonic import Mnemonic
+from electroncash import bitcoin, network
+from electroncash import SimpleConfig, Network
+from electroncash.wallet import Wallet, Imported_Wallet
+from electroncash.storage import WalletStorage
+from electroncash.util import print_msg, print_stderr, json_encode, json_decode
+from electroncash.util import set_verbosity, InvalidPassword, check_www_dir
+from electroncash.commands import get_parser, known_commands, Commands, config_variables
+from electroncash import daemon
+from electroncash import keystore
+from electroncash.mnemonic import Mnemonic
 
 # get password routine
 def prompt_password(prompt, confirm=True):
@@ -290,7 +284,7 @@ def run_offline_command(config, config_options):
     return result
 
 def init_plugins(config, gui_name):
-    from electrum.plugins import Plugins
+    from electroncash.plugins import Plugins
     return Plugins(config, is_bundle or is_local or is_android, gui_name)
 
 if __name__ == '__main__':
@@ -392,7 +386,7 @@ if __name__ == '__main__':
                 d = daemon.Daemon(config, fd)
                 d.start()
                 if config.get('websocket_server'):
-                    from electrum import websockets
+                    from electroncash import websockets
                     websockets.WebSocketServer(config, d.network).start()
                 if config.get('requests_dir'):
                     check_www_dir(config.get('requests_dir'))

@@ -14,8 +14,8 @@ import re
 import shutil
 import sys
 
-from lib.util import print_error
-from lib.version import ELECTRUM_VERSION as version
+from electroncash.util import print_error
+from electroncash.version import ELECTRONCASH_VERSION as version
 
 
 name = "Electron-Cash"
@@ -28,7 +28,7 @@ if sys.version_info[:3] < (2, 6, 0):
 if sys.platform == 'darwin':
     from plistlib import Plist
     plist = Plist.fromFile('Info.plist')
-    plist.update(dict(CFBundleIconFile='electrum.icns'))
+    plist.update(dict(CFBundleIconFile='electron.icns'))
 
     shutil.copy(mainscript, mainscript + '.py')
     mainscript += '.py'
@@ -37,8 +37,8 @@ if sys.platform == 'darwin':
         app=[mainscript],
         options=dict(py2app=dict(argv_emulation=False,
                                  includes=['PyQt4.QtCore', 'PyQt4.QtGui', 'PyQt4.QtWebKit', 'PyQt4.QtNetwork', 'sip'],
-                                 packages=['lib', 'gui', 'plugins', 'packages'],
-                                 iconfile='electrum.icns',
+                                 packages=['electroncahs', 'packages'],
+                                 iconfile='electron.icns',
                                  plist=plist,
                                  resources=["icons"])),
     )

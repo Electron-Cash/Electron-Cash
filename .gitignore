@@ -4,10 +4,9 @@
 build/
 dist/
 *.egg/
-/electrum.py
 contrib/pyinstaller/
-Electrum.egg-info/
-gui/qt/icons_rc.py
+Electron_Cash.egg-info/
+electroncash/gui/qt/icons_rc.py
 locale/
 .devlocaltmp/
 *_trial_temp
@@ -24,3 +23,5 @@ bin/
 # MacOSX
 .DS_Store/
 icons/.DS_Store/
+
+.idea
