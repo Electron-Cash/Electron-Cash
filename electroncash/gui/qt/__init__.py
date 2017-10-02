@@ -50,7 +50,7 @@ try:
     import icons_rc
 except Exception:
     print "Error: Could not find icons file."
-    print "Please run 'pyrcc4 icons.qrc -o gui/qt/icons_rc.py', and reinstall Electrum"
+    print "Please run 'pyrcc4 icons.qrc -o electroncash/gui/qt/icons_rc.py', and reinstall Electron Cash"
     sys.exit(1)
 
 from util import *   # * needed for plugins
@@ -113,9 +113,9 @@ class ElectrumGui:
 
     def tray_icon(self):
         if self.dark_icon:
-            return QIcon(':icons/electrum_dark_icon.png')
+            return QIcon(':icons/electron_dark_icon.png')
         else:
-            return QIcon(':icons/electrum_light_icon.png')
+            return QIcon(':icons/electron_light_icon.png')
 
     def toggle_tray_icon(self):
         self.dark_icon = not self.dark_icon

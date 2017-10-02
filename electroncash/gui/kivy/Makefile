@@ -9,7 +9,7 @@ theming:
 prepare:
 	# running pre build setup
 	@cp tools/buildozer.spec ../../buildozer.spec
-	# copy electrum to main.py
+	# copy electron-cash to main.py
 	@cp ../../electron-cash ../../main.py
 	@-if [ ! -d "../../.buildozer" ];then \
 		cd ../..; buildozer android debug;\
@@ -26,7 +26,7 @@ release:
 	@make clean
 clean:
 	# Cleaning up
-	# rename main.py to electrum
+	# rename main.py to electron-cash
 	@-rm ../../main.py
 	# remove buildozer.spec
 	@-rm ../../buildozer.spec

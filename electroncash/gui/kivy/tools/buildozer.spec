@@ -39,7 +39,7 @@ presplash.filename = %(source.dir)s/icons/electrum_presplash.png
 
 # (str) Icon of the application
 #icon.filename = %(source.dir)s/icons/electrum_android_launcher_icon.png
-icon.filename = %(source.dir)s/icons/electrum_launcher.png
+icon.filename = %(source.dir)s/icons/electron_launcher.png
 
 # (str) Supported orientation (one of landscape, portrait or all)
 orientation = portrait

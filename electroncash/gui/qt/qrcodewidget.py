@@ -5,7 +5,7 @@ import PyQt4.QtGui as QtGui
 import os
 import qrcode
 
-import electrum
+import electroncash
 from electroncash.i18n import _
 from util import WindowModalDialog
 
@@ -98,7 +98,7 @@ class QRDialog(WindowModalDialog):
         hbox = QHBoxLayout()
         hbox.addStretch(1)
 
-        config = electrum.get_config()
+        config = electroncash.get_config()
         if config:
             filename = os.path.join(config.path, "qrcode.png")
 

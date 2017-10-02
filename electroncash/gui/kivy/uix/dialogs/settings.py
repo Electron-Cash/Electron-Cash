@@ -14,11 +14,11 @@ from choice_dialog import ChoiceDialog
 
 Builder.load_string('''
 #:import partial functools.partial
-#:import _ electrum_gui.kivy.i18n._
+#:import _ electroncash.gui.kivy.i18n._
 
 <SettingsDialog@Popup>
     id: settings
-    title: _('Electrum Settings')
+    title: _('Electron Cash Settings')
     disable_pin: False
     use_encryption: False
     BoxLayout:

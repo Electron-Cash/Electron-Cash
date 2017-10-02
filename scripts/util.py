@@ -1,4 +1,4 @@
-import select, time, electrum, Queue
+import select, time, electroncash, Queue
 from electroncash import Connection, Interface, SimpleConfig
 from electroncash.network import filter_protocol, parse_servers
 from collections import defaultdict

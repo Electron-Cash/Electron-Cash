@@ -1,23 +1,23 @@
-name: electrum
+name: electron-cash
 version: master
-summary: Bitcoin thin client
+summary: Bitcoin Cash thin client
 description: |
-  Lightweight Bitcoin client
+  Lightweight Bitcoin Cash client
 
 grade: devel # must be 'stable' to release into candidate/stable channels
 confinement: strict
 
 apps:
-  electrum:
-    command: desktop-launch electrum
+  electron-cash:
+    command: desktop-launch electron-cash
     plugs: [network, network-bind, x11, unity7]
 
 parts:
-  electrum:
+  electron-cash:
     source: .
     plugin: python
     python-version: python2
     stage-packages: [python-qt4]
     build-packages: [pyqt4-dev-tools]
-    install: pyrcc4 icons.qrc -o $SNAPCRAFT_PART_INSTALL/lib/python2.7/site-packages/electrum_gui/qt/icons_rc.py
+    install: pyrcc4 icons.qrc -o $SNAPCRAFT_PART_INSTALL/lib/python2.7/site-packages/electroncash/gui/qt/icons_rc.py
     after: [desktop-qt4]

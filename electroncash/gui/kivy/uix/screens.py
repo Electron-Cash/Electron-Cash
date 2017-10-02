@@ -176,9 +176,9 @@ class SendScreen(CScreen):
     payment_request = None
 
     def set_URI(self, text):
-        import electrum
+        import electroncash
         try:
-            uri = electrum.util.parse_URI(text, self.app.on_pr)
+            uri = electroncash.util.parse_URI(text, self.app.on_pr)
         except:
             self.app.show_info(_("Not a Bitcoin URI"))
             return
