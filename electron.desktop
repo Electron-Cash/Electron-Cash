@@ -1,4 +1,4 @@
-# If you want electrum to appear in a linux app launcher ("start menu"), install this by doing:
+# If you want Electron Cash to appear in a linux app launcher ("start menu"), install this by doing:
 # sudo desktop-file-install ElectronCash.desktop
 
 [Desktop Entry]

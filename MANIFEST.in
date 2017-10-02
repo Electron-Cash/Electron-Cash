@@ -1,12 +1,10 @@
 include LICENCE RELEASE-NOTES AUTHORS
 include README.rst
-include electrum.conf.sample
-include electrum.desktop
+include electroncash.conf.sample
+include electron.desktop
 include *.py
-include electrum
-recursive-include lib *.py
-recursive-include gui *.py
-recursive-include plugins *.py
+include electron-ash
+recursive-include electroncash *.py
 recursive-include packages *.py
 recursive-include packages cacert.pem
 include app.fil

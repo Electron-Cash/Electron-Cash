@@ -9,7 +9,7 @@ import platform
 import imp
 import argparse
 
-version = imp.load_source('version', 'lib/version.py')
+version = imp.load_source('version', 'electroncash/version.py')
 
 if sys.version_info[:3] < (2, 7, 0):
     sys.exit("Error: Electron Cash requires Python version >= 2.7.0...")
@@ -34,7 +34,7 @@ if platform.system() in ['Linux', 'FreeBSD', 'DragonFly']:
 
 setup(
     name="Electron Cash",
-    version=version.ELECTRUM_VERSION,
+    version=version.ELECTRONCASH_VERSION,
     install_requires=[
         'pyaes',
         'ecdsa>=0.9',
@@ -47,33 +47,17 @@ setup(
         'PySocks>=1.6.6',
     ],
     packages=[
-        'electrum',
-        'electrum_gui',
-        'electrum_gui.qt',
-        'electrum_plugins',
-        'electrum_plugins.audio_modem',
-        'electrum_plugins.cosigner_pool',
-        'electrum_plugins.email_requests',
-        'electrum_plugins.greenaddress_instant',
-        'electrum_plugins.hw_wallet',
-        'electrum_plugins.keepkey',
-        'electrum_plugins.labels',
-        'electrum_plugins.ledger',
-        'electrum_plugins.trezor',
-        'electrum_plugins.digitalbitbox',
-        'electrum_plugins.virtualkeyboard',
+        'electroncash',
     ],
     package_dir={
-        'electrum': 'lib',
-        'electrum_gui': 'gui',
-        'electrum_plugins': 'plugins',
+        'electroncash': 'electroncash',
     },
     package_data={
-        'electrum': [
+        'electroncash': [
             'currencies.json',
             'www/index.html',
             'wordlist/*.txt',
-            'locale/*/LC_MESSAGES/electrum.mo',
+            'locale/*/LC_MESSAGES/electroncash.mo',
         ]
     },
     scripts=['electron-cash'],

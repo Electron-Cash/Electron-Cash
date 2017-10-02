@@ -20,7 +20,7 @@ Qt interface, install the Qt dependencies::
     sudo apt-get install python-qt4
 
 If you downloaded the official package (tar.gz), you can run
-Electron Cash from its root directory (called Electrum), without installing it on your
+Electron Cash from its root directory, without installing it on your
 system; all the python dependencies are included in the 'packages'
 directory. To run Electron Cash from its root directory, just do::
 
@@ -54,7 +54,7 @@ Run install (this should install dependencies)::
 Compile the icons file for Qt::
 
     sudo apt-get install pyqt4-dev-tools
-    pyrcc4 icons.qrc -o gui/qt/icons_rc.py
+    pyrcc4 icons.qrc -o electroncash/gui/qt/icons_rc.py
 
 Compile the protobuf description file::
 
