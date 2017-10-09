@@ -141,12 +141,12 @@ class SimpleConfig(PrintError):
             return
         path = os.path.join(self.path, "config")
         s = json.dumps(self.user_config, indent=4, sort_keys=True)
-        f = open(path, "w")
+        if 'ANDROID_DATA' not in os.environ:
+            f = os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT, 0o600), 'w')
+        else:
+            f = open(path, "w")
         f.write(s)
         f.close()
-        if 'ANDROID_DATA' not in os.environ:
-            import stat
-            os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
 
     def get_wallet_path(self):
         """Set the path of the wallet."""
