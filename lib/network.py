@@ -71,6 +71,7 @@ def set_testnet():
     DEFAULT_SERVERS = {
         '180.235.49.196': DEFAULT_PORTS,
         'electrum-testnet-abc.criptolayer.net': {'s': '50112'},
+        'electrontest.cascharia.com': {'s': '51002'},
     }
 
 NODES_RETRY_INTERVAL = 60
