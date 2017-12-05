@@ -4,14 +4,14 @@ import threading
 from PyQt5.Qt import Qt
 from PyQt5.Qt import QGridLayout, QInputDialog, QPushButton
 from PyQt5.Qt import QVBoxLayout, QLabel
-from electrum_gui.qt.util import *
+from electroncash_gui.qt.util import *
 from .plugin import TIM_NEW, TIM_RECOVER, TIM_MNEMONIC
 from ..hw_wallet.qt import QtHandlerBase, QtPluginBase
 
-from electrum.i18n import _
-from electrum.plugins import hook, DeviceMgr
-from electrum.util import PrintError, UserCancelled, bh2u
-from electrum.wallet import Wallet, Standard_Wallet
+from electroncash.i18n import _
+from electroncash.plugins import hook, DeviceMgr
+from electroncash.util import PrintError, UserCancelled, bh2u
+from electroncash.wallet import Wallet, Standard_Wallet
 
 PASSPHRASE_HELP_SHORT =_(
     "Passphrases allow you to access new wallets, each "
@@ -221,7 +221,7 @@ class QtPlugin(QtPluginBase):
             hbox1 = QHBoxLayout()
             gb.setLayout(hbox1)
             # KeepKey recovery doesn't need a word count
-            if method == TIM_NEW or self.device == 'TREZOR':
+            if method == TIM_NEW:
                 vbox.addWidget(gb)
             gb.setTitle(_("Select your seed length:"))
             bg = QButtonGroup()
