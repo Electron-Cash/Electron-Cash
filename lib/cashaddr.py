@@ -19,6 +19,8 @@
 # THE SOFTWARE.
 
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+PUBKEY_TYPE = 0;
+SCRIPT_TYPE = 1;
 
 def cashaddr_polymod(values):
     """Internal function that computes the cashaddr checksum."""
@@ -57,13 +59,15 @@ def cashaddr_create_checksum(hrp, data):
     """Compute the checksum values given HRP and data."""
     values = cashaddr_hrp_expand(hrp) + data
     polymod = cashaddr_polymod(values + [0, 0, 0, 0, 0, 0, 0, 0])
-    return [(polymod >> 5 * (5 - i)) & 31 for i in range(8)]
+    # Return the polymod expanded into eight 5-bit elements
+    return [(polymod >> 5 * (7 - i)) & 31 for i in range(8)]
 
 
 def cashaddr_encode(hrp, data):
     """Compute a cashaddr string given HRP and data values."""
-    combined = data + cashaddr_create_checksum(hrp, data)
-    return hrp + '1' + ''.join([CHARSET[d] for d in combined])
+    combined = data
+    combined.extend(cashaddr_create_checksum(hrp, data))
+    return ''.join([CHARSET[d] for d in combined])
 
 
 def cashaddr_decode(bech):
@@ -73,7 +77,7 @@ def cashaddr_decode(bech):
         return (None, None)
     bech = bech.lower()
     pos = bech.rfind(':')
-    if pos < 1 or pos + 7 > len(bech) or len(bech) > 90:
+    if pos < 1 or pos + 7 > len(bech) or len(bech[pos+1:]) > 80:
         return (None, None)
     if not all(x in CHARSET for x in bech[pos+1:]):
         return (None, None)
@@ -112,21 +116,41 @@ def decode(hrp, addr):
     hrpgot, data = cashaddr_decode(addr)
     if hrpgot != hrp:
         return (None, None)
+
+    # Need to check for padding here.
     decoded, padded = convertbits(data, 5, 8, False)
-    witver = decoded[0]
-    withash = decoded[1:]
-    if decoded is None or len(withash) < 2 or len(withash) > 40:
+    version = decoded[0]
+    size = (version & 0x07) * 4 + 20
+    version >>= 3
+    if version != SCRIPT_TYPE and version != PUBKEY_TYPE:
         return (None, None)
-    if witver > 16:
+    if size != len(decoded[1:]):
         return (None, None)
-    if witver == 0 and len(withash) != 20 and len(withash) != 32:
-        return (None, None)
-    return (witver, withash)
+
+    decoded_hash = decoded[1:]
+    
+    return (version, decoded_hash)
 
 
-def encode(hrp, witver, witprog):
+def pack_addr_data( addrtype, addrhash ):
+    """Pack addr data with version byte"""
+    assert addrtype == 0 or addrtype == 1, "invalid addrtype"
+    version_byte = addrtype << 3
+    encoded_size = (len(addrhash) - 20) // 4
+    assert (len(addrhash) - 20) % 4 == 0, "invalid addrhash size"
+    assert encoded_size >= 0 and encoded_size <= 8, "encoded size out of valid range"
+    version_byte |= encoded_size
+
+    data = [version_byte]
+    data.extend(addrhash)
+    packed_data, padded = convertbits(data, 8, 5, True) 
+
+    return packed_data
+
+
+def encode(hrp, addrtype, addrhash):
     """Encode a cashaddr address."""
-    ret = cashaddr_encode(hrp, [witver] + convertbits(witprog, 8, 5))
-    if decode(hrp, ret) == (None, None):
-        return None
-    return ret
+    # Need to handle the address type and pack size here.
+    packed_data = pack_addr_data(addrtype, addrhash)
+    ret = cashaddr_encode(hrp, packed_data)
+    return hrp + ':' + ret

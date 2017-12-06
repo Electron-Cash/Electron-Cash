@@ -25,18 +25,8 @@
 
 import binascii
 import unittest
+import random
 from lib import cashaddr
-
-INVALID_CHECKSUM = [
-    " 1nwldj5",
-    "\x7F" + "1axkwrx",
-    "an84characterslonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1569pvx",
-    "pzry9x0s0muk",
-    "1pzry9x0s0muk",
-    "x1b4n0q5v",
-    "li1dgmt3",
-    "de1lg7wt\xff",
-]
 
 VALID_PUBKEY_ADDRESSES = [
     "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a",
@@ -50,7 +40,6 @@ VALID_SCRIPT_ADDRESSES = [
     "bitcoincash:pqq3728yw0y47sqn6l2na30mcw6zm78dzq5ucqzc37"
 ]
 
-
 VALID_HASHES = [
     [ 118, 160, 64,  83, 189, 160, 168, 139, 218, 81,
      119, 184, 106, 21, 195, 178, 159, 85,  152, 115 ],
@@ -63,24 +52,36 @@ VALID_HASHES = [
 
 class TestCashAddrAddress(unittest.TestCase):
     """Unit test class for cashaddr addressess."""
+    def test_encode_decode(self):
+        """Test whether valid addresses encode and decode properly, for all hash sizes."""
+        for encoded_size in range(0, 7):
+            # Convert to a valid number of bytes for a hash
+            size = encoded_size * 4 + 20
+            hashbytes = [random.randint(0,255) for i in range(size)]
+            hrp = "bitcoincash"
+            addr = cashaddr.encode(hrp, cashaddr.PUBKEY_TYPE, hashbytes)
+            addrtype, addrhash = cashaddr.decode(hrp, addr)
+            self.assertIsNotNone(addrtype)
+            self.assertEqual(addrtype, cashaddr.PUBKEY_TYPE)
+            self.assertEqual(addrhash, hashbytes)
 
     def test_valid_pubkeyhash(self):
         """Test whether valid addresses decode to the correct output."""
-        for (address, hash) in zip(VALID_SCRIPT_ADDRESSES, VALID_HASHES):
+        for (address, hashbytes) in zip(VALID_SCRIPT_ADDRESSES, VALID_HASHES):
             hrp = "bitcoincash"
-            witver, witprog = cashaddr.decode(hrp, address)
-            self.assertIsNotNone(witver)
-            self.assertEqual(witver, 8)
-            self.assertEqual(witprog, hash)
+            addrtype, addrhash = cashaddr.decode(hrp, address)
+            self.assertIsNotNone(addrtype)
+            self.assertEqual(addrtype, cashaddr.SCRIPT_TYPE)
+            self.assertEqual(addrhash, hashbytes)
 
     def test_valid_scripthash(self):
         """Test whether valid addresses decode to the correct output."""
-        for (address, hash) in zip(VALID_PUBKEY_ADDRESSES, VALID_HASHES):
+        for (address, hashbytes) in zip(VALID_PUBKEY_ADDRESSES, VALID_HASHES):
             hrp = "bitcoincash"
-            witver, witprog = cashaddr.decode(hrp, address)
-            self.assertIsNotNone(witver)
-            self.assertEqual(witver, 0)
-            self.assertEqual(witprog, hash)
+            addrtype, addrhash = cashaddr.decode(hrp, address)
+            self.assertIsNotNone(addrtype)
+            self.assertEqual(addrtype, 0)
+            self.assertEqual(addrhash, hashbytes)
 
 if __name__ == '__main__':
     unittest.main()
