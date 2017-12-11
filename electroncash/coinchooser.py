@@ -68,7 +68,7 @@ class PRNG:
             x[i], x[j] = x[j], x[i]
 
 
-Bucket = namedtuple('Bucket', ['desc', 'size', 'value', 'coins'])
+Bucket = namedtuple('Bucket', ['desc', 'size', 'value', 'coins', 'min_height'])
 
 def strip_unneeded(bkts, sufficient_funds):
     '''Remove buckets that are unnecessary in achieving the spend amount'''
@@ -94,7 +94,8 @@ class CoinChooserBase(PrintError):
             size = sum(Transaction.estimated_input_size(coin, sign_schnorr=sign_schnorr)
                        for coin in coins)
             value = sum(coin['value'] for coin in coins)
-            return Bucket(desc, size, value, coins)
+            min_height = min(coin['height'] for coin in coins)
+            return Bucket(desc, size, value, coins, min_height)
 
         return list(map(make_Bucket, buckets.keys(), buckets.values()))
 
@@ -214,8 +215,11 @@ class CoinChooserBase(PrintError):
 
 class CoinChooserRandom(CoinChooserBase):
 
-    def bucket_candidates(self, buckets, sufficient_funds):
+    def bucket_candidates_any(self, buckets, sufficient_funds):
         '''Returns a list of bucket sets.'''
+        if not buckets:
+            raise NotEnoughFunds()
+
         candidates = set()
 
         # Add all singletons
@@ -242,8 +246,42 @@ class CoinChooserRandom(CoinChooserBase):
         candidates = [[buckets[n] for n in c] for c in candidates]
         return [strip_unneeded(c, sufficient_funds) for c in candidates]
 
+    def bucket_candidates_prefer_confirmed(self, buckets, sufficient_funds):
+        """Returns a list of bucket sets preferring confirmed coins.
+
+        Any bucket can be:
+        1. "confirmed" if it only contains confirmed coins; else
+        2. "unconfirmed" if it does not contain coins with unconfirmed parents
+        3. "unconfirmed parent" otherwise
+
+        This method tries to only use buckets of type 1, and if the coins there
+        are not enough, tries to use the next type but while also selecting
+        all buckets of all previous types.
+        """
+        conf_buckets = [bkt for bkt in buckets if bkt.min_height > 0]
+        unconf_buckets = [bkt for bkt in buckets if bkt.min_height == 0]
+        unconf_par_buckets = [bkt for bkt in buckets if bkt.min_height == -1]
+
+        bucket_sets = [conf_buckets, unconf_buckets, unconf_par_buckets]
+        already_selected_buckets = []
+
+        for bkts_choose_from in bucket_sets:
+            try:
+                def sfunds(bkts):
+                    return sufficient_funds(already_selected_buckets + bkts)
+
+                candidates = self.bucket_candidates_any(bkts_choose_from, sfunds)
+                break
+            except NotEnoughFunds:
+                already_selected_buckets += bkts_choose_from
+        else:
+            raise NotEnoughFunds()
+
+        candidates = [(already_selected_buckets + c) for c in candidates]
+        return [strip_unneeded(c, sufficient_funds) for c in candidates]
+
     def choose_buckets(self, buckets, sufficient_funds, penalty_func):
-        candidates = self.bucket_candidates(buckets, sufficient_funds)
+        candidates = self.bucket_candidates_prefer_confirmed(buckets, sufficient_funds)
         penalties = [penalty_func(cand) for cand in candidates]
         winner = candidates[penalties.index(min(penalties))]
         self.print_error("Bucket sets:", len(buckets))
@@ -251,14 +289,15 @@ class CoinChooserRandom(CoinChooserBase):
         return winner
 
 class CoinChooserPrivacy(CoinChooserRandom):
-    '''Attempts to better preserve user privacy.  First, if any coin is
-    spent from a user address, all coins are.  Compared to spending
-    from other addresses to make up an amount, this reduces
+    """Attempts to better preserve user privacy.
+    First, if any coin is spent from a user address, all coins are.
+    Compared to spending from other addresses to make up an amount, this reduces
     information leakage about sender holdings.  It also helps to
     reduce blockchain UTXO bloat, and reduce future privacy loss that
-    would come from reusing that address' remaining UTXOs.  Second, it
-    penalizes change that is quite different to the sent amount.
-    Third, it penalizes change that is too big.'''
+    would come from reusing that address' remaining UTXOs.
+    Second, it penalizes change that is quite different to the sent amount.
+    Third, it penalizes change that is too big.
+    """
 
     def keys(self, coins):
         return [coin['address'] for coin in coins]
@@ -271,6 +310,7 @@ class CoinChooserPrivacy(CoinChooserRandom):
         def penalty(buckets):
             badness = len(buckets) - 1
             total_input = sum(bucket.value for bucket in buckets)
+            # FIXME "change" here also includes fees
             change = float(total_input - spent_amount)
             # Penalize change not roughly in output range
             if change < min_change:
@@ -284,8 +324,12 @@ class CoinChooserPrivacy(CoinChooserRandom):
         return penalty
 
 
+COIN_CHOOSERS = {
+    'Privacy': CoinChooserPrivacy,
+}
+
 def get_name(config):
     kind = config.get('coin_chooser')
     if not kind in COIN_CHOOSERS:
-        kind = 'Priority'
+        kind = 'Privacy'
     return kind
