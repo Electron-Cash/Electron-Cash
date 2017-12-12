@@ -3,10 +3,6 @@
 NAME_ROOT=electrum
 PYTHON_VERSION=3.5.4
 
-if [ "$#" -gt 0 ]; then
-    BRANCH="$1"
-fi
-
 # These settings probably don't need any change
 export WINEPREFIX=/opt/wine64
 export PYTHONDONTWRITEBYTECODE=1
@@ -58,6 +54,10 @@ popd
  
 
 pushd electrum
+if [ ! -z "$1" ]; then
+    git checkout $1
+fi
+
 VERSION="3.0"
 echo "Last commit: $VERSION"
 find -exec touch -d '2000-11-11T11:11:11+00:00' {} +
