@@ -97,7 +97,8 @@ Next, you'll try and run it but it will complain that it can't find the 'cocoa' 
 
     /opt/local/libexec/qt5/plugins 
 
-into::
+Into a directory called 'qt_plugins' as such::
+
     dist/Electron-Cash.app/Contents/Resoureces/qt_plugins 
 
 and then use install_name_tool on each .dylib file to rewrite hard-coded lib names to @rpath/../Frameworks/.  
