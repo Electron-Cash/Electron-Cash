@@ -144,6 +144,8 @@ class BaseWizard(object):
             self.wallet = Imported_Wallet(self.storage)
             for x in text.split():
                 self.wallet.import_private_key(x, None)
+            self.keystores = self.wallet.get_keystores()
+            self.request_password(run_next=self.on_password)
         self.terminate()
 
     def restore_from_key(self):
