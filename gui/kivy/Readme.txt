@@ -12,3 +12,6 @@ then you need to rebuild the distribution. To do so:
 
   rm -rf .buildozer/android/platform/python-for-android/dist
 
+If still not working, try:
+  rm -rf .ccache/
+
