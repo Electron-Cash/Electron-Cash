@@ -193,7 +193,7 @@ class Blockchain(util.PrintError):
         if prev_hash != header.get('prev_block_hash'):
             raise VerifyError("prev hash mismatch: %s vs %s" % (prev_hash, header.get('prev_block_hash')))
         # checkpoint BitcoinCash fork block
-        if ( header.get('block_height') == BITCOIN_CASH_FORK_BLOCK_HEIGHT and hash_header(header) != BITCOIN_CASH_FORK_BLOCK_HASH ):
+        if ( header.get('block_height') == BITCOIN_CASH_FORK_BLOCK_HEIGHT and hash_header(header) != BITCOIN_CASH_FORK_BLOCK_HASH and not NetworkConstants.TESTNET ):
             err_str = "block at height %i is not cash chain fork block. hash %s" % (header.get('block_height'), hash_header(header))
             self.print_error(err_str)
             raise VerifyError(err_str)
@@ -350,9 +350,12 @@ class Blockchain(util.PrintError):
         prior = self.read_header(height - 1)
         bits = prior['bits']
 
-        # testnet 20 minute rule
-        if NetworkConstants.TESTNET and height % 2016 != 0:
-            if header['timestamp'] - prior['timestamp'] > 20*60:
+        if NetworkConstants.TESTNET:
+            # testnet 20 minute rule
+            if height % 2016 != 0 and header['timestamp'] - prior['timestamp'] > 20*60:
+                return MAX_BITS
+            # This block didn't adjust properly
+            if height == 1199520:
                 return MAX_BITS
 
         #NOV 13 HF DAA
