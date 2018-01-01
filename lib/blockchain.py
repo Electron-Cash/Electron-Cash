@@ -350,14 +350,6 @@ class Blockchain(util.PrintError):
         prior = self.read_header(height - 1)
         bits = prior['bits']
 
-        if NetworkConstants.TESTNET:
-            # testnet 20 minute rule
-            if height % 2016 != 0 and header['timestamp'] - prior['timestamp'] > 20*60:
-                return MAX_BITS
-            # This block didn't adjust properly
-            if height == 1199520:
-                return MAX_BITS
-
         #NOV 13 HF DAA
 
         prevheight = height -1
@@ -365,6 +357,11 @@ class Blockchain(util.PrintError):
 
         #if (daa_mtp >= 1509559291):  #leave this here for testing
         if (daa_mtp >= 1510600000):
+
+            if NetworkConstants.TESTNET:
+                # testnet 20 minute rule
+                if header['timestamp'] - prior['timestamp'] > 20*60:
+                    return MAX_BITS
 
             # determine block range
             daa_starting_height=self.get_suitable_block_height(prevheight-144)
@@ -400,6 +397,9 @@ class Blockchain(util.PrintError):
             return self.get_new_bits(height)
 
         if NetworkConstants.TESTNET:
+            # testnet 20 minute rule
+            if header['timestamp'] - prior['timestamp'] > 20*60:
+                return MAX_BITS
             return self.read_header(height // 2016 * 2016)['bits']
 
         # bitcoin cash EDA
