@@ -27,8 +27,7 @@ import threading
 
 
 from . import util
-from .networks import (NetworkConstants, BITCOIN_CASH_FORK_BLOCK_HEIGHT,
-                       BITCOIN_CASH_FORK_BLOCK_HASH)
+from .networks import NetworkConstants
 from .bitcoin import *
 
 class VerifyError(Exception):
@@ -193,9 +192,8 @@ class Blockchain(util.PrintError):
         if prev_hash != header.get('prev_block_hash'):
             raise VerifyError("prev hash mismatch: %s vs %s" % (prev_hash, header.get('prev_block_hash')))
         # checkpoint BitcoinCash fork block
-        if ( header.get('block_height') == BITCOIN_CASH_FORK_BLOCK_HEIGHT and hash_header(header) != BITCOIN_CASH_FORK_BLOCK_HASH and not NetworkConstants.TESTNET ):
+        if (header.get('block_height') == NetworkConstants.BITCOIN_CASH_FORK_BLOCK_HEIGHT and hash_header(header) != NetworkConstants.BITCOIN_CASH_FORK_BLOCK_HASH):
             err_str = "block at height %i is not cash chain fork block. hash %s" % (header.get('block_height'), hash_header(header))
-            self.print_error(err_str)
             raise VerifyError(err_str)
         if bits != header.get('bits'):
             raise VerifyError("bits mismatch: %s vs %s" % (bits, header.get('bits')))
