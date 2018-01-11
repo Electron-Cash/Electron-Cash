@@ -159,7 +159,7 @@ class CoinChooserBase(PrintError):
         dust = sum(amount for amount in amounts if amount < dust_threshold)
         amounts = [amount for amount in amounts if amount >= dust_threshold]
         change = [(TYPE_ADDRESS, addr, amount)
-                  for addr, amount in zip(change_addrs, amounts)]
+                  for addr, amount in zip(change_addrs, amounts) if amount > 0]
         self.print_error('change:', change)
         if dust:
             self.print_error('not keeping dust', dust)
