@@ -384,7 +384,7 @@ class Commands:
         out = self.wallet.contacts.resolve(x)
         if out.get('type') == 'openalias' and self.nocheck is False and out.get('validated') is False:
             raise BaseException('cannot verify alias', x)
-        return out['address']
+        return Address.from_string(out['address'])
 
     @command('n')
     def sweep(self, privkey, destination, fee=None, nocheck=False, imax=100):
