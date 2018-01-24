@@ -52,6 +52,7 @@ class HistoryList(MyTreeWidget):
         MyTreeWidget.__init__(self, parent, self.create_menu, [], 3)
         self.refresh_headers()
         self.setColumnHidden(1, True)
+        self.setSortingEnabled(True)
 
     def refresh_headers(self):
         headers = ['', '', _('Date'), _('Description') , _('Amount'), _('Balance')]
