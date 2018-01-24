@@ -44,6 +44,17 @@ TX_ICONS = [
     "confirmed.png",
 ]
 
+class HistoryTreeWidgetItem(QTreeWidgetItem):
+    def __init__(self, parent=None):
+        QTreeWidgetItem.__init__(self, parent)
+    
+    def __lt__(self, otherItem):
+        column = self.treeWidget().sortColumn()
+        try:
+            return float( self.text(column) ) < float( otherItem.text(column) )
+        except ValueError:
+            return self.text(column) < otherItem.text(column)
+
 
 class HistoryList(MyTreeWidget):
     filter_columns = [2, 3, 4]  # Date, Description, Amount
@@ -88,7 +99,7 @@ class HistoryList(MyTreeWidget):
                 for amount in [value, balance]:
                     text = fx.historical_value_str(amount, date)
                     entry.append(text)
-            item = QTreeWidgetItem(entry)
+            item = HistoryTreeWidgetItem(entry)
             item.setIcon(0, icon)
             item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
             if has_invoice:
