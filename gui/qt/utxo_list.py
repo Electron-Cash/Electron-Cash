@@ -25,6 +25,16 @@
 from .util import *
 from electroncash.i18n import _
 
+class UXTOListTreeWidgetItem(QTreeWidgetItem):
+    def __init__(self, parent=None):
+        QTreeWidgetItem.__init__(self, parent)
+    
+    def __lt__(self, otherItem):
+        column = self.treeWidget().sortColumn()
+        try:
+            return float( self.text(column) ) < float( otherItem.text(column) )
+        except ValueError:
+            return self.text(column) < otherItem.text(column)
 
 class UTXOList(MyTreeWidget):
     filter_columns = [0, 2]  # Address, Label
@@ -32,6 +42,7 @@ class UTXOList(MyTreeWidget):
     def __init__(self, parent=None):
         MyTreeWidget.__init__(self, parent, self.create_menu, [ _('Address'), _('Label'), _('Amount'), _('Height'), _('Output point')], 1)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.setSortingEnabled(True)
 
     def get_name(self, x):
         return x.get('prevout_hash') + ":%d"%x.get('prevout_n')
@@ -47,7 +58,7 @@ class UTXOList(MyTreeWidget):
             name = self.get_name(x)
             label = self.wallet.get_label(x['prevout_hash'])
             amount = self.parent.format_amount(x['value'])
-            utxo_item = QTreeWidgetItem([address_text, label, amount,
+            utxo_item = UXTOListTreeWidgetItem([address_text, label, amount,
                                          str(height),
                                          name[0:10] + '...' + name[-2:]])
             utxo_item.setFont(0, QFont(MONOSPACE_FONT))
