@@ -50,10 +50,13 @@ class HistoryTreeWidgetItem(QTreeWidgetItem):
     
     def __lt__(self, otherItem):
         column = self.treeWidget().sortColumn()
-        try:
-            return float( self.text(column) ) < float( otherItem.text(column) )
-        except ValueError:
-            return self.text(column) < otherItem.text(column)
+        if column == 0:
+            return float( self.data(column, Qt.UserRole+1) ) < float( otherItem.data(column, Qt.UserRole+1) )
+        else:
+            try:
+                return float( self.text(column) ) < float( otherItem.text(column) )
+            except ValueError:
+                return self.text(column) < otherItem.text(column)
 
 
 class HistoryList(MyTreeWidget):
@@ -102,6 +105,7 @@ class HistoryList(MyTreeWidget):
             item = HistoryTreeWidgetItem(entry)
             item.setIcon(0, icon)
             item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
+            item.setData(0, Qt.UserRole+1, conf+status)
             if has_invoice:
                 item.setIcon(3, QIcon(":icons/seal"))
             for i in range(len(entry)):
@@ -142,6 +146,7 @@ class HistoryList(MyTreeWidget):
         if items:
             item = items[0]
             item.setIcon(0, icon)
+            item.setData(0, Qt.UserRole+1, conf+status)
             item.setText(2, status_str)
 
     def create_menu(self, position):
