@@ -50,13 +50,13 @@ class HistoryTreeWidgetItem(QTreeWidgetItem):
     
     def __lt__(self, otherItem):
         column = self.treeWidget().sortColumn()
-        if column == 0:
-            return float( self.data(column, Qt.UserRole+1) ) < float( otherItem.data(column, Qt.UserRole+1) )
-        else:
-            try:
+        try:
+            if column == 0:
+                return int( self.data(column, Qt.UserRole+1) ) < int( otherItem.data(column, Qt.UserRole+1) )
+            else:
                 return float( self.text(column) ) < float( otherItem.text(column) )
-            except ValueError:
-                return self.text(column) < otherItem.text(column)
+        except ValueError:
+            return self.text(column) < otherItem.text(column)
 
 
 class HistoryList(MyTreeWidget):
