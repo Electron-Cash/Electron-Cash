@@ -36,6 +36,17 @@ from electroncash.address import Address
 from electroncash.plugins import run_hook
 import electroncash.web as web
 
+class AddressListTreeWidgetItem(QTreeWidgetItem):
+    def __init__(self, parent=None):
+        QTreeWidgetItem.__init__(self, parent)
+    
+    def __lt__(self, otherItem):
+        column = self.treeWidget().sortColumn()
+        try:
+            return float( self.text(column) ) < float( otherItem.text(column) )
+        except ValueError:
+            return self.text(column) < otherItem.text(column)
+
 
 class AddressList(MyTreeWidget):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
@@ -44,6 +55,7 @@ class AddressList(MyTreeWidget):
         super().__init__(parent, self.create_menu, [], 1)
         self.refresh_headers()
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.setSortingEnabled(True)
 
     def refresh_headers(self):
         headers = [ _('Address'), _('Label'), _('Balance'), _('Tx')]
@@ -69,13 +81,13 @@ class AddressList(MyTreeWidget):
         for is_change in sequences:
             if len(sequences) > 1:
                 name = _("Receiving") if not is_change else _("Change")
-                seq_item = QTreeWidgetItem( [ name, '', '', '', ''] )
+                seq_item = AddressListTreeWidgetItem( [ name, '', '', '', ''] )
                 account_item.addChild(seq_item)
                 if not is_change:
                     seq_item.setExpanded(True)
             else:
                 seq_item = account_item
-            used_item = QTreeWidgetItem( [ _("Used"), '', '', '', ''] )
+            used_item = AddressListTreeWidgetItem( [ _("Used"), '', '', '', ''] )
             used_flag = False
             addr_list = change_addresses if is_change else receiving_addresses
             for address in addr_list:
@@ -90,7 +102,7 @@ class AddressList(MyTreeWidget):
                     rate = fx.exchange_rate()
                     fiat_balance = fx.value_str(balance, rate)
                     columns.insert(3, fiat_balance)
-                address_item = QTreeWidgetItem(columns)
+                address_item = AddressListTreeWidgetItem(columns)
                 address_item.setTextAlignment(2, Qt.AlignRight)
                 address_item.setFont(2, QFont(MONOSPACE_FONT))
                 if fx:
