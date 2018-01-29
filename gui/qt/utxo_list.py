@@ -25,6 +25,7 @@
 from .util import *
 from electroncash.i18n import _
 
+
 class UTXOList(MyTreeWidget):
     filter_columns = [0, 2]  # Address, Label
 
