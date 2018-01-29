@@ -44,6 +44,7 @@ TX_ICONS = [
     "confirmed.png",
 ]
 
+
 class HistoryList(MyTreeWidget):
     filter_columns = [2, 3, 4]  # Date, Description, Amount
 
