@@ -44,21 +44,6 @@ TX_ICONS = [
     "confirmed.png",
 ]
 
-class HistoryTreeWidgetItem(QTreeWidgetItem):
-    def __init__(self, parent=None):
-        QTreeWidgetItem.__init__(self, parent)
-    
-    def __lt__(self, otherItem):
-        column = self.treeWidget().sortColumn()
-        try:
-            if column == 0:
-                return int( self.data(column, Qt.UserRole+1) ) < int( otherItem.data(column, Qt.UserRole+1) )
-            else:
-                return float( self.text(column) ) < float( otherItem.text(column) )
-        except ValueError:
-            return self.text(column) < otherItem.text(column)
-
-
 class HistoryList(MyTreeWidget):
     filter_columns = [2, 3, 4]  # Date, Description, Amount
 
@@ -67,6 +52,7 @@ class HistoryList(MyTreeWidget):
         self.refresh_headers()
         self.setColumnHidden(1, True)
         self.setSortingEnabled(True)
+        self.sortByColumn(0, Qt.AscendingOrder)
 
     def refresh_headers(self):
         headers = ['', '', _('Date'), _('Description') , _('Amount'), _('Balance')]
@@ -102,10 +88,10 @@ class HistoryList(MyTreeWidget):
                 for amount in [value, balance]:
                     text = fx.historical_value_str(amount, date)
                     entry.append(text)
-            item = HistoryTreeWidgetItem(entry)
+            item = SortableTreeWidgetItem(entry)
             item.setIcon(0, icon)
             item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
-            item.setData(0, Qt.UserRole+1, conf+status)
+            item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             if has_invoice:
                 item.setIcon(3, QIcon(":icons/seal"))
             for i in range(len(entry)):
@@ -146,7 +132,7 @@ class HistoryList(MyTreeWidget):
         if items:
             item = items[0]
             item.setIcon(0, icon)
-            item.setData(0, Qt.UserRole+1, conf+status)
+            item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             item.setText(2, status_str)
 
     def create_menu(self, position):
