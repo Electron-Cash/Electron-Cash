@@ -47,7 +47,9 @@ class UTXOList(MyTreeWidget):
             name = self.get_name(x)
             label = self.wallet.get_label(x['prevout_hash'])
             amount = self.parent.format_amount(x['value'])
-            utxo_item = SortableTreeWidgetItem([address, label, amount, '%d'%height, name[0:10] + '...' + name[-2:]])
+            utxo_item = SortableTreeWidgetItem([address_text, label, amount,
+                                         str(height),
+                                         name[0:10] + '...' + name[-2:]])
             utxo_item.setFont(0, QFont(MONOSPACE_FONT))
             utxo_item.setFont(4, QFont(MONOSPACE_FONT))
             utxo_item.setData(0, Qt.UserRole, name)
