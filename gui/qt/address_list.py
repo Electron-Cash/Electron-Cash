@@ -36,6 +36,7 @@ from electroncash.address import Address
 from electroncash.plugins import run_hook
 import electroncash.web as web
 
+
 class AddressList(MyTreeWidget):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
 
