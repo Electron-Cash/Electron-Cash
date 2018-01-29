@@ -25,17 +25,6 @@
 from .util import *
 from electroncash.i18n import _
 
-class UXTOListTreeWidgetItem(QTreeWidgetItem):
-    def __init__(self, parent=None):
-        QTreeWidgetItem.__init__(self, parent)
-    
-    def __lt__(self, otherItem):
-        column = self.treeWidget().sortColumn()
-        try:
-            return float( self.text(column) ) < float( otherItem.text(column) )
-        except ValueError:
-            return self.text(column) < otherItem.text(column)
-
 class UTXOList(MyTreeWidget):
     filter_columns = [0, 2]  # Address, Label
 
@@ -58,9 +47,7 @@ class UTXOList(MyTreeWidget):
             name = self.get_name(x)
             label = self.wallet.get_label(x['prevout_hash'])
             amount = self.parent.format_amount(x['value'])
-            utxo_item = UXTOListTreeWidgetItem([address_text, label, amount,
-                                         str(height),
-                                         name[0:10] + '...' + name[-2:]])
+            utxo_item = SortableTreeWidgetItem([address, label, amount, '%d'%height, name[0:10] + '...' + name[-2:]])
             utxo_item.setFont(0, QFont(MONOSPACE_FONT))
             utxo_item.setFont(4, QFont(MONOSPACE_FONT))
             utxo_item.setData(0, Qt.UserRole, name)
