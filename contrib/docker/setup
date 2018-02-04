@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Get full path of repo (there must be a better way to do this)
+DOCKER_DIR="$(dirname "$(realpath "$0")")"
+REPO_DIR="$(dirname "$(dirname $DOCKER_DIR)")"
+
+# Available build tags
+AVAILABLE_TAGS="slim windows android full"
+
+build() {
+  shift
+
+  if [ "$1" == "--root" ]; then
+    shift
+    sudo=sudo
+  fi
+
+  if [ "$@" ]; then
+    tags="$@"
+  else
+    tags="$AVAILABLE_TAGS"
+  fi
+
+  for tag in $tags; do
+    check_tag $tag
+    $sudo docker build "$DOCKER_DIR/dockerfiles" \
+      -f "$DOCKER_DIR/dockerfiles/$tag.dockerfile" \
+      -t electroncash/build:$tag
+  done
+}
+
+run() {
+  shift
+
+  # Get current user & group
+  UUID="$(id -u)"
+  GUID="$(id -g)"
+
+  if [ $UUID == 0 ]; then
+    echo "WARNING: Use the --root flag instead of sudo"
+  fi
+
+  if [ $1 == "--root" ]; then
+    shift
+    sudo=sudo
+  fi
+
+  check_tag $1
+
+  $sudo docker run --rm -it \
+    -v $REPO_DIR:/repo \
+    -v electroncash:/electroncash \
+    -u $UUID:$GUID \
+    electroncash/build:$1 /bin/bash
+}
+
+contains() {
+  [[ $1 =~ (^|[[:space:]])$2($|[[:space:]]) ]] && return 0 || return 1
+}
+
+check_tag() {
+  if contains "$AVAILABLE_TAGS" "$1"; then
+    return
+  else
+    echo "Invalid parameter"
+    exit 1
+  fi
+}
+
+case "$1" in
+  build) build "$@";;
+  run|start) run "$@";;
+  *) echo "Invalid command";;
+esac

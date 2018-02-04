@@ -63,16 +63,19 @@ android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, C
 #android.sdk = 21
 
 # (str) Android NDK version to use
-#android.ndk = 9
+android.ndk = 10.3.2
 
 # (bool) Use --private data storage (True) or --dir public storage (False)
 android.private_storage = True
 
 # (str) Android NDK directory (if empty, it will be automatically downloaded.)
-android.ndk_path = /home/ubuntu/Downloads/crystax-ndk-10.3.2
+android.ndk_path = /opt/crystax-ndk-10.3.2
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
-#android.sdk_path =
+android.sdk_path = /opt/android-sdk-20
+
+# (str) Android NDK directory (if empty, it will be automatically downloaded.)
+android.ant_path = /opt/apache-ant-1.9.4
 
 # (str) Android entry point, default is ok for Kivy-based app
 #android.entrypoint = org.renpy.android.PythonActivity
@@ -129,7 +132,8 @@ android.manifest.intent_filters = gui/kivy/tools/bitcoin_intent.xml
 android.whitelist = lib-dynload/_csv.so , lib-dynload/_hashlib.so
 
 # local version that merges branch 866
-p4a.source_dir = /home/ubuntu/Downloads/python-for-android
+p4a.source_dir = /opt/python-for-android
+
 #
 # iOS specific
 #
@@ -148,6 +152,8 @@ p4a.source_dir = /home/ubuntu/Downloads/python-for-android
 # (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
 log_level = 2
 
+# (str) Path to build output (i.e. .apk, .ipa) storage
+bin_dir = ./dist
 
 # -----------------------------------------------------------------------------
 # List as sections

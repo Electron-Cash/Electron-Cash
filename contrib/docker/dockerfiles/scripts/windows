@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -ex
+
+# Add wine repository
+curl -fsSL https://dl.winehq.org/wine-builds/Release.key | apt-key add
+apt-add-repository http://dl.winehq.org/wine-builds/ubuntu/
+
+# Install wine
+apt-get update
+apt-get install --no-install-recommends -y \
+  winehq-stable

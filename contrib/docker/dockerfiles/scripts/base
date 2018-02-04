@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -ex
+
+# Install base dependencies
+dpkg --add-architecture i386
+apt-get update
+apt-get upgrade --no-install-recommends -y
+apt-get install --no-install-recommends -y \
+  curl \
+  gettext \
+  git \
+  nano \
+  protobuf-compiler \
+  pyqt5-dev-tools \
+  python3 \
+  python3-pip \
+  python3-requests \
+  python3-setuptools \
+  software-properties-common \
+  sudo \
+  vim \
+  wget
+
+# Upgrade pip
+pip3 install --upgrade pip
+
+# Add user
+useradd -m -d /electroncash -s /bin/bash electroncash
+adduser electroncash sudo
+echo "Defaults:%sudo !authenticate" >> /etc/sudoers
+
+# Change permissions
+chmod -R 1777 /electroncash /opt
+chown -R electroncash:electroncash /opt
