@@ -381,7 +381,7 @@ class SettingsDialog(WindowModalDialog):
             if filename:
                 im = Image.open(str(filename))
                 if im.size != (hs_cols, hs_rows):
-                    raise Exception('Image must be 64 x 128 pixels')
+                    raise Exception('Image must be 128 x 64 pixels')
                 im = im.convert('1')
                 pix = im.load()
                 img = ''
@@ -393,7 +393,7 @@ class SettingsDialog(WindowModalDialog):
                 invoke_client('change_homescreen', img)
 
         def clear_homescreen():
-            invoke_client('change_homescreen', '\x00')
+            invoke_client('change_homescreen', b'\x00')
 
         def set_pin():
             invoke_client('set_pin', remove=False)
