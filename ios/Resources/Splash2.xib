@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="11762" systemVersion="15G19009" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES">
+    <device id="retina4_0" orientation="portrait">
+        <adaptation id="fullscreen"/>
+    </device>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="11757"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="UIWindow">
+            <connections>
+                <outlet property="rootViewController" destination="juL-81-bGt" id="fuF-vo-vYj"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <viewController id="juL-81-bGt">
+            <layoutGuides>
+                <viewControllerLayoutGuide type="top" id="vhj-Tc-SO7"/>
+                <viewControllerLayoutGuide type="bottom" id="mec-7s-pMh"/>
+            </layoutGuides>
+            <view key="view" contentMode="scaleToFill" id="Zx0-e1-7tr">
+                <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
+                <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                <subviews>
+                    <imageView userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="ec_logo.png" translatesAutoresizingMaskIntoConstraints="NO" id="Hxd-NI-mv9">
+                        <rect key="frame" x="6" y="246" width="309.5" height="77.5"/>
+                        <constraints>
+                            <constraint firstAttribute="width" constant="309.5" id="TxL-9A-OEn"/>
+                            <constraint firstAttribute="height" constant="77.5" id="cs2-Jg-eeO"/>
+                        </constraints>
+                    </imageView>
+                    <activityIndicatorView opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" animating="YES" style="whiteLarge" translatesAutoresizingMaskIntoConstraints="NO" id="GKF-hU-V2s">
+                        <rect key="frame" x="142" y="347" width="37" height="37"/>
+                    </activityIndicatorView>
+                </subviews>
+                <color key="backgroundColor" red="0.43137254901960786" green="0.50980392156862742" blue="0.62352941176470589" alpha="1" colorSpace="calibratedRGB"/>
+                <constraints>
+                    <constraint firstItem="Hxd-NI-mv9" firstAttribute="centerY" secondItem="Zx0-e1-7tr" secondAttribute="centerY" id="CJg-30-LtI"/>
+                    <constraint firstItem="GKF-hU-V2s" firstAttribute="centerX" secondItem="Zx0-e1-7tr" secondAttribute="centerX" id="Ym5-8Z-R8x"/>
+                    <constraint firstItem="Hxd-NI-mv9" firstAttribute="centerX" secondItem="Zx0-e1-7tr" secondAttribute="centerX" id="bAF-I4-xk9"/>
+                    <constraint firstItem="GKF-hU-V2s" firstAttribute="top" secondItem="Hxd-NI-mv9" secondAttribute="bottom" constant="23.5" id="kd6-um-Jl5"/>
+                </constraints>
+            </view>
+        </viewController>
+    </objects>
+    <resources>
+        <image name="ec_logo.png" width="619" height="155"/>
+    </resources>
+</document>
