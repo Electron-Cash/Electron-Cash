@@ -355,7 +355,17 @@ def user_dir():
     if 'ANDROID_DATA' in os.environ:
         return android_check_data_dir()
     elif os.name == 'posix':
-        return os.path.join(os.environ["HOME"], ".electron-cash" )
+        # Prefer XDG Base directory spec based condiguration path, but use the legacy dot-directory
+        # configuration path if user has upgraded from a previous installation
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.environ["HOME"], ".config"))
+        config_path_modern = os.path.join(xdg_config_home, "electron-cash")
+        config_path_legacy = os.path.join(os.environ["HOME"], ".electron-cash")
+        if os.path.exists(config_path_modern) and os.listdir(config_path_modern):
+            return config_path_modern
+        elif os.path.exists(config_path_legacy) and os.listdir(config_path_legacy):
+            return config_path_legacy
+        else:
+            return config_path_modern
     elif "APPDATA" in os.environ:
         return os.path.join(os.environ["APPDATA"], "ElectronCash")
     elif "LOCALAPPDATA" in os.environ:
