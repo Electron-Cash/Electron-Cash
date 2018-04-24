@@ -1,0 +1,70 @@
+#!/bin/bash
+
+set -ex
+
+ANT_VERSION="1.9.4"
+CRYSTAX_VERSION="10.3.2"
+SDK_TOOLS_VERSION="3859397"
+
+# Install dependencies for Android build
+dpkg --add-architecture i386
+apt-get update
+apt-get install --no-install-recommends -y \
+    autoconf \
+    automake \
+    build-essential \
+    ccache \
+    dirmngr \
+    file \
+    gnupg \
+    libgtk2.0-0:i386 \
+    libidn11:i386 \
+    libncurses5:i386 \
+    libpangox-1.0-0:i386 \
+    libpangoxft-1.0-0:i386 \
+    libstdc++6:i386 \
+    libtool \
+    openjdk-8-jdk \
+    pkg-config \
+    python \
+    unzip \
+    zlib1g-dev \
+    zlib1g:i386
+
+# Install Kivy
+add-apt-repository ppa:kivy-team/kivy
+apt-get update
+apt-get install --no-install-recommends -y python3-kivy
+
+# Install python dependencies for Android build
+pip3 install \
+  cython \
+  git+https://github.com/fyookball/buildozer.git \
+  image \
+  wheel
+
+# Install python-for-android
+git clone -b ec3 --single-branch https://github.com/fyookball/python-for-android.git /opt/python-for-android
+chmod -R 1777 /opt/python-for-android
+
+# Install CrystaX NDK
+wget "https://us.crystax.net/download/crystax-ndk-$CRYSTAX_VERSION-linux-x86_64.tar.xz" -P /opt
+tar xvf /opt/crystax-ndk-$CRYSTAX_VERSION-linux-x86_64.tar.xz -C /opt
+rm /opt/crystax-ndk-$CRYSTAX_VERSION-linux-x86_64.tar.xz
+
+# Install temporary Android SDK tools
+wget "https://dl.google.com/android/repository/sdk-tools-linux-$SDK_TOOLS_VERSION.zip" -P /opt
+unzip /opt/sdk-tools-linux-$SDK_TOOLS_VERSION.zip -d /opt
+rm /opt/sdk-tools-linux-$SDK_TOOLS_VERSION.zip
+
+# Install Android SDK
+yes | /opt/tools/bin/sdkmanager --sdk_root=/opt/android-sdk-20 "platforms;android-19" "platforms;android-20" "build-tools;27.0.3" "tools"
+chmod -R 1777 /opt/android-sdk-20
+
+# Remove temporary Android SDK tools
+rm -r /opt/tools
+
+# Install Apache Ant
+wget "http://archive.apache.org/dist/ant/binaries/apache-ant-$ANT_VERSION-bin.tar.gz" -P /opt
+tar xzf /opt/apache-ant-$ANT_VERSION-bin.tar.gz -C /opt
+rm /opt/apache-ant-$ANT_VERSION-bin.tar.gz
