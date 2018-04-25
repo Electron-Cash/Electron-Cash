@@ -1,6 +1,6 @@
 #!/bin/bash
 pushd lib
-VERSION=$(python -c "import version; print version.ELECTRUM_VERSION")".0"
+VERSION=$(python -c "import version; print version.PACKAGE_VERSION")".0"
 popd
 echo $VERSION
 echo $VERSION > contrib/apk_version
