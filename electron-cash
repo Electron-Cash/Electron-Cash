@@ -30,7 +30,7 @@ import os
 
 import sys
 
-if sys.version_info < (3, 5):
+if sys.version_info < (3, 5, 2):
     sys.exit("Error: Must be using Python 3.5 or higher")
 
 # from https://gist.github.com/tito/09c42fb4767721dc323d
