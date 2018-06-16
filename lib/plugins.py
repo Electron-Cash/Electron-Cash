@@ -71,6 +71,8 @@ class Plugins(DaemonThread):
     def __init__(self, config, is_local, gui_name):
         DaemonThread.__init__(self)
         if is_local:
+            # Plugins may refer to electroncash package under that name.
+            sys.modules.setdefault("electroncash", sys.modules["lib"])
             find = imp.find_module('plugins')
             internal_plugins_namespace = imp.load_module('electroncash_plugins', *find)
         else:
