@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import *
 from electroncash.i18n import _
 from electroncash_gui.qt.util import *
 from electroncash.util import print_msg
+from electroncash.address import Address
 
 import os, hashlib, websocket, logging, json, copy
 from electroncash_gui.qt.qrcodewidget import QRCodeWidget
@@ -119,6 +120,7 @@ class LedgerAuthDialog(QDialog):
             if len(s) < len(self.idxs):
                 i = self.idxs[len(s)]
                 addr = self.txdata['address']
+                addr = addr.to_string(Address.FMT_LEGACY)
                 addr = addr[:i] + '<u><b>' + addr[i:i+1] + '</u></b>' + addr[i+1:]
                 self.addrtext.setHtml(str(addr))
             else:
