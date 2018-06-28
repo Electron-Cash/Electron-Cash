@@ -389,6 +389,52 @@ class TrezorPlugin(HW_PluginBase):
         return inputs
 
     def tx_outputs(self, derivation, tx, client):
+
+        def create_output_by_derivation(info):
+            index, xpubs, m = info
+            if len(xpubs) == 1:
+                script_type = self.types.OutputScriptType.PAYTOADDRESS
+                address_n = self.client_class.expand_path(derivation + "/%d/%d" % index)
+                txoutputtype = self.types.TxOutputType(
+                    amount=amount,
+                    script_type=script_type,
+                    address_n=address_n,
+                )
+            else:
+                script_type = self.types.OutputScriptType.PAYTOMULTISIG
+                address_n = self.client_class.expand_path("/%d/%d" % index)
+                pubkeys = [self._make_node_path(xpub, address_n) for xpub in xpubs]
+                multisig = self.types.MultisigRedeemScriptType(
+                    pubkeys=pubkeys,
+                    signatures=[b''] * len(pubkeys),
+                    m=m)
+                txoutputtype = self.types.TxOutputType(
+                    multisig=multisig,
+                    amount=amount,
+                    address_n=self.client_class.expand_path(derivation + "/%d/%d" % index),
+                    script_type=script_type)
+            return txoutputtype
+
+        def create_output_by_address():
+            txoutputtype = self.types.TxOutputType()
+            txoutputtype.amount = amount
+            if _type == TYPE_SCRIPT:
+                txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
+                txoutputtype.op_return_data = address.to_ui_string()[2:]
+            elif _type == TYPE_ADDRESS:
+                txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
+                addr_format = address.FMT_LEGACY
+                if client.get_trezor_model() == 'T':
+                    if client.atleast_version(2, 0, 8):
+                        addr_format = address.FMT_UI
+                    elif client.atleast_version(2, 0, 7):
+                        addr_format = address.FMT_CASHADDR
+                else:
+                    if client.atleast_version(1, 6, 2):
+                        addr_format = address.FMT_UI
+                txoutputtype.address = address.to_full_string(addr_format)
+            return txoutputtype
+
         outputs = []
         has_change = False
 
@@ -396,47 +442,9 @@ class TrezorPlugin(HW_PluginBase):
             info = tx.output_info.get(address)
             if info is not None and not has_change:
                 has_change = True # no more than one change address
-                index, xpubs, m = info
-                if len(xpubs) == 1:
-                    script_type = self.types.OutputScriptType.PAYTOADDRESS
-                    address_n = self.client_class.expand_path(derivation + "/%d/%d"%index)
-                    txoutputtype = self.types.TxOutputType(
-                        amount = amount,
-                        script_type = script_type,
-                        address_n = address_n,
-                    )
-                else:
-                    script_type = self.types.OutputScriptType.PAYTOMULTISIG
-                    address_n = self.client_class.expand_path("/%d/%d"%index)
-                    pubkeys = [self._make_node_path(xpub, address_n) for xpub in xpubs]
-                    multisig = self.types.MultisigRedeemScriptType(
-                        pubkeys = pubkeys,
-                        signatures = [b''] * len(pubkeys),
-                        m = m)
-                    txoutputtype = self.types.TxOutputType(
-                        multisig = multisig,
-                        amount = amount,
-                        address_n = self.client_class.expand_path(derivation + "/%d/%d"%index),
-                        script_type = script_type)
+                txoutputtype = create_output_by_derivation(info)
             else:
-                txoutputtype = self.types.TxOutputType()
-                txoutputtype.amount = amount
-                if _type == TYPE_SCRIPT:
-                    txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
-                    txoutputtype.op_return_data = address.to_ui_string()[2:]
-                elif _type == TYPE_ADDRESS:
-                    txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
-                    addr_format = address.FMT_LEGACY
-                    if client.get_trezor_model() == 'T':
-                        if client.atleast_version(2, 0, 8):
-                            addr_format = address.FMT_UI
-                        elif client.atleast_version(2, 0, 7):
-                            addr_format = address.FMT_CASHADDR
-                    else:
-                        if client.atleast_version(1, 6, 2):
-                            addr_format = address.FMT_UI
-                    txoutputtype.address = address.to_full_string(addr_format)
-
+                txoutputtype = create_output_by_address()
             outputs.append(txoutputtype)
 
         return outputs
