@@ -4,6 +4,7 @@ import threading
 from PyQt5.Qt import Qt
 from PyQt5.Qt import QGridLayout, QInputDialog, QPushButton
 from PyQt5.Qt import QVBoxLayout, QLabel
+
 from electroncash_gui.qt.util import *
 from electroncash.i18n import _
 from electroncash.plugins import hook, DeviceMgr
@@ -34,6 +35,7 @@ MATRIX_RECOVERY = _(
     "Enter the recovery words by pressing the buttons according to what "
     "the device shows on its display.  You can also use your NUMPAD.\n"
     "Press BACKSPACE to go back a choice or word.\n")
+
 
 class MatrixDialog(WindowModalDialog):
 
@@ -170,7 +172,7 @@ class QtPlugin(QtPluginBase):
         for keystore in wallet.get_keystores():
             if type(keystore) == self.keystore_class:
                 def show_address():
-                    keystore.thread.add(partial(self.show_address, wallet, addrs[0]))
+                    keystore.thread.add(partial(self.show_address, wallet, addrs[0], keystore))
                 menu.addAction(_("Show on {}").format(self.device), show_address)
                 break
 

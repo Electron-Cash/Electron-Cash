@@ -3,15 +3,16 @@ import traceback
 import sys
 
 from electroncash.util import bfh, bh2u, versiontuple, UserCancelled
-from electroncash.bitcoin import (b58_address_to_hash160, xpub_from_pubkey,
+from electroncash.bitcoin import (b58_address_to_hash160, xpub_from_pubkey, deserialize_xpub,
                                   TYPE_ADDRESS, TYPE_SCRIPT)
 from electroncash.i18n import _
 from electroncash.networks import NetworkConstants
-from electroncash.plugins import (BasePlugin, Device)
+from electroncash.plugins import BasePlugin, Device
 from electroncash.transaction import deserialize
 from electroncash.keystore import Hardware_KeyStore, is_xpubkey, parse_xpubkey
 
 from ..hw_wallet import HW_PluginBase
+
 
 # TREZOR initialization methods
 TIM_NEW, TIM_RECOVER, TIM_MNEMONIC, TIM_PRIVKEY = range(0, 4)
@@ -70,6 +71,7 @@ class TrezorPlugin(HW_PluginBase):
 
     def __init__(self, parent, config, name):
         HW_PluginBase.__init__(self, parent, config, name)
+
         try:
             # Minimal test if python-trezor is installed
             import trezorlib
@@ -90,6 +92,7 @@ class TrezorPlugin(HW_PluginBase):
         except ImportError:
             self.libraries_available = False
             return
+
         from . import client
         from . import transport
         import trezorlib.messages
@@ -241,6 +244,17 @@ class TrezorPlugin(HW_PluginBase):
             client.load_device_by_xprv(item, pin, passphrase_protection,
                                        label, language)
 
+    def _make_node_path(self, xpub, address_n):
+        _, depth, fingerprint, child_num, chain_code, key = deserialize_xpub(xpub)
+        node = self.types.HDNodeType(
+            depth=depth,
+            fingerprint=int.from_bytes(fingerprint, 'big'),
+            child_num=int.from_bytes(child_num, 'big'),
+            chain_code=chain_code,
+            public_key=key,
+        )
+        return self.types.HDNodePathType(node=node, address_n=address_n)
+
     def setup_device(self, device_info, wizard):
         '''Called when creating a new wallet.  Select the device to use.  If
         the device is uninitialized, go through the intialization
@@ -266,6 +280,12 @@ class TrezorPlugin(HW_PluginBase):
         client.used()
         return xpub
 
+    def get_trezor_input_script_type(self, is_multisig):
+        if is_multisig:
+            return self.types.InputScriptType.SPENDMULTISIG
+        else:
+            return self.types.InputScriptType.SPENDADDRESS
+
     def sign_transaction(self, keystore, tx, prev_tx, xpub_path):
         self.prev_tx = prev_tx
         self.xpub_path = xpub_path
@@ -276,17 +296,35 @@ class TrezorPlugin(HW_PluginBase):
         raw = bh2u(signed_tx)
         tx.update_signatures(raw)
 
-    def show_address(self, wallet, address):
-        client = self.get_client(wallet.keystore)
+    def show_address(self, wallet, address, keystore=None):
+        if keystore is None:
+            keystore = wallet.get_keystore()
+        client = self.get_client(keystore)
         if not client.atleast_version(1, 3):
-            wallet.keystore.handler.show_error(_("Your device firmware is too old"))
+            keystore.handler.show_error(_("Your device firmware is too old"))
             return
         change, index = wallet.get_address_index(address)
-        derivation = wallet.keystore.derivation
+        derivation = keystore.derivation
         address_path = "%s/%d/%d"%(derivation, change, index)
         address_n = client.expand_path(address_path)
-        script_type = self.types.InputScriptType.SPENDADDRESS
-        client.get_address(self.get_coin_name(), address_n, True, script_type=script_type)
+        xpubs = wallet.get_master_public_keys()
+        if len(xpubs) == 1:
+            script_type = self.get_trezor_input_script_type(is_multisig=False)
+            client.get_address(self.get_coin_name(), address_n, True, script_type=script_type)
+        else:
+            def f(xpub):
+                return self._make_node_path(xpub, [change, index])
+            pubkeys = wallet.get_public_keys(address)
+            # sort xpubs using the order of pubkeys
+            sorted_pubkeys, sorted_xpubs = zip(*sorted(zip(pubkeys, xpubs)))
+            pubkeys = list(map(f, sorted_xpubs))
+            multisig = self.types.MultisigRedeemScriptType(
+               pubkeys=pubkeys,
+               signatures=[b''] * wallet.n,
+               m=wallet.m,
+            )
+            script_type = self.get_trezor_input_script_type(is_multisig=True)
+            client.get_address(self.get_coin_name(), address_n, True, multisig=multisig, script_type=script_type)
 
     def tx_inputs(self, tx, for_sig=False):
         inputs = []
@@ -303,7 +341,7 @@ class TrezorPlugin(HW_PluginBase):
                         xpub, s = parse_xpubkey(x_pubkey)
                         xpub_n = self.client_class.expand_path(self.xpub_path[xpub])
                         txinputtype._extend_address_n(xpub_n + s)
-                        txinputtype.script_type = self.types.InputScriptType.SPENDADDRESS
+                        txinputtype.script_type = self.get_trezor_input_script_type(is_multisig=False)
                     else:
                         def f(x_pubkey):
                             if is_xpubkey(x_pubkey):
@@ -311,15 +349,14 @@ class TrezorPlugin(HW_PluginBase):
                             else:
                                 xpub = xpub_from_pubkey('standard', bfh(x_pubkey))
                                 s = []
-                            node = self.ckd_public.deserialize(xpub)
-                            return self.types.HDNodePathType(node=node, address_n=s)
-                        pubkeys = map(f, x_pubkeys)
+                            return self._make_node_path(xpub, s)
+                        pubkeys = list(map(f, x_pubkeys))
                         multisig = self.types.MultisigRedeemScriptType(
                             pubkeys=pubkeys,
-                            signatures=map(lambda x: bfh(x)[:-1] if x else b'', txin.get('signatures')),
+                            signatures=list(map(lambda x: bfh(x)[:-1] if x else b'', txin.get('signatures'))),
                             m=txin.get('num_sig'),
                         )
-                        script_type = self.types.InputScriptType.SPENDMULTISIG
+                        script_type = self.get_trezor_input_script_type(is_multisig=True)
                         txinputtype = self.types.TxInputType(
                             script_type=script_type,
                             multisig=multisig
@@ -371,8 +408,7 @@ class TrezorPlugin(HW_PluginBase):
                 else:
                     script_type = self.types.OutputScriptType.PAYTOMULTISIG
                     address_n = self.client_class.expand_path("/%d/%d"%index)
-                    nodes = map(self.ckd_public.deserialize, xpubs)
-                    pubkeys = [ self.types.HDNodePathType(node=node, address_n=address_n) for node in nodes]
+                    pubkeys = [self._make_node_path(xpub, address_n) for xpub in xpubs]
                     multisig = self.types.MultisigRedeemScriptType(
                         pubkeys = pubkeys,
                         signatures = [b''] * len(pubkeys),
@@ -390,10 +426,16 @@ class TrezorPlugin(HW_PluginBase):
                     txoutputtype.op_return_data = address.to_ui_string()[2:]
                 elif _type == TYPE_ADDRESS:
                     txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
-                    FMT = address.FMT_LEGACY
-                    if client.atleast_version(1, 6, 2):
-                        FMT = address.FMT_UI
-                    txoutputtype.address = address.to_full_string(FMT)
+                    addr_format = address.FMT_LEGACY
+                    if client.get_trezor_model() == 'T':
+                        if client.atleast_version(2, 0, 8):
+                            addr_format = address.FMT_UI
+                        elif client.atleast_version(2, 0, 7):
+                            addr_format = address.FMT_CASHADDR
+                    else:
+                        if client.atleast_version(1, 6, 2):
+                            addr_format = address.FMT_UI
+                    txoutputtype.address = address.to_full_string(addr_format)
 
             outputs.append(txoutputtype)
 
