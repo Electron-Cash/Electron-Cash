@@ -10,6 +10,7 @@ from electroncash.networks import NetworkConstants
 from electroncash.plugins import BasePlugin, Device
 from electroncash.transaction import deserialize
 from electroncash.keystore import Hardware_KeyStore, is_xpubkey, parse_xpubkey
+from electroncash.address import ScriptOutput
 
 from ..hw_wallet import HW_PluginBase
 
@@ -419,8 +420,15 @@ class TrezorPlugin(HW_PluginBase):
             txoutputtype = self.types.TxOutputType()
             txoutputtype.amount = amount
             if _type == TYPE_SCRIPT:
-                txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
-                txoutputtype.op_return_data = address.to_ui_string()[2:]
+                script = address.to_script()
+                # We only support OP_RETURN with one constant push
+                if (script[0] == 0x6a and amount == 0 and
+                    script[1] == len(script) - 2 and
+                    script[1] <= 75):
+                    txoutputtype.script_type = self.types.OutputScriptType.PAYTOOPRETURN
+                    txoutputtype.op_return_data = script[2:]
+                else:
+                    raise Exception(_("Unsupported output script."))
             elif _type == TYPE_ADDRESS:
                 txoutputtype.script_type = self.types.OutputScriptType.PAYTOADDRESS
                 addr_format = address.FMT_LEGACY
