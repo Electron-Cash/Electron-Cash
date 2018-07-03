@@ -288,7 +288,7 @@ class SimpleConfig(PrintError):
         return len(self.fee_estimates)==4
 
     def fee_per_kb(self):
-        return self.get('fee_per_kb', self.max_fee_rate()/2)
+        return self.get('fee_per_kb', self.fee_rates[0])
 
     def estimate_fee(self, size):
         return int(self.fee_per_kb() * size / 1000.)
