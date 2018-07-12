@@ -879,7 +879,7 @@ class ElectrumGui(PrintError):
             self.wallet.use_change = usechange_result
             self.wallet.storage.put('use_change', self.wallet.use_change)        
    
-    def prefs_get_multiple_change(self) -> list:
+    def prefs_get_multiple_change(self) -> tuple:
         if not self.wallet: return False, False
         multiple_change = self.wallet.multiple_change
         enabled = self.wallet.use_change
