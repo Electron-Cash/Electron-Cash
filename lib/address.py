@@ -256,10 +256,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
                     def lookup(x):
                         return OpCodes.reverseLookup.get(x, ('('+str(x)+')'))
                     if isinstance(op, tuple):
-                        try:
-                            opData = op[1].decode('utf-8')
-                        except:
-                            opData = op[1].hex() if isinstance(op[1], bytes) else str(op[1])
+                        opData = op[1].decode(errors='replace') if isinstance(op[1], bytes) else str(op[1])
                         ret += lookup(op[0]) + " " + opData
                     elif isinstance(op, int):
                         ret += lookup(op)
