@@ -244,7 +244,8 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
         return ScriptOutput(bytes(script))
 
     def to_ui_string(self, hex_only = False):
-        '''Convert to user-readable OP-codes (plus text), or to a hexadecimal string if that fails.
+        '''Convert to user-readable OP-codes (plus text), eg OP_RETURN (12) Hello there!
+           Or, to a hexadecimal string if that fails.
            Note that this function is the inverse of from_string() only if called with hex_only = True!'''
         if self.script and not hex_only:
             try:
@@ -255,11 +256,15 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
                     def lookup(x):
                         return OpCodes.reverseLookup.get(x, ('('+str(x)+')'))
                     if isinstance(op, tuple):
-                        ret += lookup(op[0]) + " " + op[1].decode('utf-8')
+                        try:
+                            opData = op[1].decode('utf-8')
+                        except:
+                            opData = op[1].hex() if isinstance(op[1], bytes) else str(op[1])
+                        ret += lookup(op[0]) + " " + opData
                     elif isinstance(op, int):
                         ret += lookup(op)
                     else:
-                        ret += '[' + str(op) + ']'
+                        ret += '[' + (op.hex() if isinstance(op, bytes) else str(op)) + ']'
                 return ret
             except ScriptError:
                 # Truncated script -- so just default to normal 'hex' encoding below.
