@@ -171,14 +171,14 @@ def script_GetOp(_bytes):
         vch = None
         opcode = _bytes[i]
         i += 1
-        if i >= blen: continue
         if opcode >= opcodes.OP_SINGLEBYTE_END:
             opcode <<= 8
+            if i >= blen: continue
             opcode |= _bytes[i]
             i += 1
 
-        if i >= blen: continue
         if opcode <= opcodes.OP_PUSHDATA4:
+            if i >= blen: continue
             nSize = opcode
             if opcode == opcodes.OP_PUSHDATA1:
                 nSize = _bytes[i]
