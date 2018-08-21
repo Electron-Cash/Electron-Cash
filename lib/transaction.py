@@ -178,15 +178,17 @@ def script_GetOp(_bytes):
             i += 1
 
         if opcode <= opcodes.OP_PUSHDATA4:
-            if i >= blen: continue
             nSize = opcode
             if opcode == opcodes.OP_PUSHDATA1:
+                if i >= blen: continue
                 nSize = _bytes[i]
                 i += 1
             elif opcode == opcodes.OP_PUSHDATA2:
+                if i >= blen: continue
                 (nSize,) = struct.unpack_from('<H', _bytes, i)
                 i += 2
             elif opcode == opcodes.OP_PUSHDATA4:
+                if i >= blen: continue
                 (nSize,) = struct.unpack_from('<I', _bytes, i)
                 i += 4
             vch = _bytes[i:i + nSize]
