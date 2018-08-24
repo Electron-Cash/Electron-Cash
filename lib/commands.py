@@ -276,7 +276,7 @@ class Commands:
     def deserialize(self, tx):
         """Deserialize a serialized transaction"""
         tx = Transaction(tx)
-        return Commands._EnsureDictNamedTuplesAreJSONSafe(tx.deserialize())
+        return self._EnsureDictNamedTuplesAreJSONSafe(tx.deserialize().copy())
 
     @command('n')
     def broadcast(self, tx):
