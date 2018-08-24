@@ -253,7 +253,7 @@ class Commands:
                 txin['signatures'] = [None]
                 txin['num_sig'] = 1
 
-        outputs = [(TYPE_ADDRESS, x['address'], int(x['value'])) for x in outputs]
+        outputs = [(TYPE_ADDRESS, Address.from_string(x['address']), int(x['value'])) for x in outputs]
         tx = Transaction.from_io(inputs, outputs, locktime=locktime)
         tx.sign(keypairs)
         return tx.as_dict()
