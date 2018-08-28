@@ -2059,10 +2059,13 @@ class ElectrumGui(PrintError):
             completion(wallet_name, password)
         
     
-    def set_wallet_use_touchid(self, wallet_name : str, wallet_pass_or_none : str, completion : Callable[[bool],None] = None) -> None:
+    def set_wallet_use_touchid(self, wallet_name : str, wallet_pass_or_none : str, completion : Callable[[bool],None] = None,
+                               clear_asked : bool = False) -> None:
         if not callable(completion): completion = lambda x: None
         if wallet_pass_or_none is None:
             self.encPasswords.pop(wallet_name)
+            if clear_asked:
+                self.touchIdAsked.pop(wallet_name)
             completion(True)
             return
         wallet_pass = wallet_pass_or_none
