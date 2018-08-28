@@ -1664,6 +1664,10 @@ class boilerplate:
     # iOS weirdness. Buttons don't always flash to highlighted state on tap.. so we have to force it using this hack.
     @staticmethod
     def vc_highlight_button_then_do(vc : UIViewController,  but : UIButton, func : Callable[[],None]) -> None:
+        if not but or not vc:
+            # Defensive programming...
+            func()
+            return
         #if not isinstance(vc, UIViewController) or not isinstance(but, UIButton) or not callable(func):
         #    raise ValueError('One of the arguments passed to vc_highlight_button_then_do is invalid!')
         but.retain()
