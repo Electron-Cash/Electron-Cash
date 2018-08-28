@@ -103,7 +103,7 @@ class AddressDetail(AddressDetailBase):
         
             text = str(text).strip()
             new_label = text
-            print ("new label for address %s = %s"%(entry.address.to_storage_string(), new_label))
+            utils.NSLog("new label for address %s = %s", entry.address.to_storage_string(), new_label)
             gui.ElectrumGui.gui.on_label_edited(entry.address, new_label)
             # Note that above should implicitly refresh us due to sigAddresses signal
             self.doRefreshIfNeeded() # just in case we had a blocked refresh and electrumgui didn't signal.
