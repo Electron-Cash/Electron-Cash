@@ -183,10 +183,10 @@ def script_GetOp(_bytes):
                 nSize = _bytes[i] if i < blen else 0
                 i += 1
             elif opcode == opcodes.OP_PUSHDATA2:
-                (nSize,) = struct.unpack_from('<H', _bytes, i) if i+2 <= blen else (blen-i,) # tolerate truncated script
+                (nSize,) = struct.unpack_from('<H', _bytes, i) if i+2 <= blen else (0,) # tolerate truncated script
                 i += 2
             elif opcode == opcodes.OP_PUSHDATA4:
-                (nSize,) = struct.unpack_from('<I', _bytes, i) if i+4 <= blen else (blen-i,) # tolerate
+                (nSize,) = struct.unpack_from('<I', _bytes, i) if i+4 <= blen else (0,)
                 i += 4
             vch = _bytes[i:i + nSize] # array slicing here never throws exception even if truncated script
             i += nSize
