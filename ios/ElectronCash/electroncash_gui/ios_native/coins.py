@@ -684,7 +684,6 @@ class CoinsMgr(utils.DataMgr):
         c = get_coins(key)
         elapsed = time.time()-t0
         utils.NSLog("CoinsMgr: Fetched %d utxo entries [domain=%s] in %f ms", len(c), str(key)[:16], elapsed*1e3)
-        gui.ElectrumGui.gui.refresh_cost('coins', elapsed)
         return c
 
 def get_coin_counts(domain : list, exclude_frozen : bool = False, mature : bool = False, confirmed_only : bool = False) -> int:
