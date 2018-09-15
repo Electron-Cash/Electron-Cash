@@ -694,31 +694,28 @@ class ElectrumGui(PrintError):
                 return
 
             def do_notify_cb():
+                n_ok = 0
                 if self.wallet and self.daemon.network and self.daemon.network.is_connected(): # check for spurious call or walled closed.
-                    self.print_error("Notifying GUI")
-                    # Combine the transactions if there are at least 2
                     num_txns = len(self.tx_notifications)
-                    n_ok = 0
-                    if num_txns >= 2:
+                    if num_txns:
+                        # Combine the transactions if there are at least 2
                         total_amount = 0
-                        for tx in self.tx_notifications:
-                            if not tx: continue
-                            is_relevant, is_mine, v, fee = self.wallet.get_wallet_delta(tx)
-                            if v > 0 and is_relevant:
-                                total_amount += v
-                                n_ok += 1
-                        if n_ok:
-                            self.notify(_("{} new transactions received: Total amount received in the new transactions {}")
-                                        .format(n_ok, self.format_amount_and_units(total_amount)))
-                    else:
                         for tx in self.tx_notifications:
                             if tx:
                                 is_relevant, is_mine, v, fee = self.wallet.get_wallet_delta(tx)
                                 if v > 0 and is_relevant:
-                                    self.notify(_("New transaction received: {}").format(self.format_amount_and_units(v)))
+                                    total_amount += v
+                                    n_ok += 1
+                        if n_ok:
+                            self.print_error("Notifying GUI %d tx"%(n_ok))
+                            if n_ok > 1:
+                                self.notify(_("{} new transactions received: Total amount received in the new transactions {}")
+                                            .format(n_ok, self.format_amount_and_units(total_amount)))
+                            else:
+                                self.notify(_("New transaction received: {}").format(self.format_amount_and_units(total_amount)))
                 self.tx_notify_timer = None
                 self.tx_notifications = list()
-                self.tx_notify_last_ts = time.time()
+                self.tx_notify_last_ts = time.time() if n_ok else self.tx_notify_last_ts
             # end do_notify_cb
 
             elapsed_since_last_notify = time.time() - self.tx_notify_last_ts
