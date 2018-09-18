@@ -63,6 +63,9 @@ def is_landscape() -> bool:
 def is_portrait() -> bool:
     return not is_landscape()
 
+def is_debug_build() -> bool:
+    return bool(HelpfulGlue.isDebugBuild())
+
 def get_fn_and_ext(fileName: str) -> tuple:
     *p1, ext = fileName.split('.')
     fn=''
@@ -742,8 +745,15 @@ def dismiss_notification(cw_notif : ObjCInstance) -> None:
  #######################################################
  ### NSLog emulation -- python wrapper for NSLog
  #######################################################
+NSLOG_SUPPRESS = False
+
+def NSLogSuppress(b : bool) -> None:
+    global NSLOG_SUPPRESS
+    NSLOG_SUPPRESS = b 
 
 def NSLog(fmt : str, *args) -> int:
+    if NSLOG_SUPPRESS:
+        return
     args = list(args)
     if isinstance(fmt, ObjCInstance):
         fmt = str(py_from_ns(fmt))

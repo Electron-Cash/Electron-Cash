@@ -1769,6 +1769,7 @@ class ElectrumGui(PrintError):
                 if not self.wallet:
                     # hide sensitive information
                     self.walletsVC.setAmount_andUnits_unconf_('-', '', '')
+                    self.refresh_all()
                 self.prompt_password_if_needed_asynch(callBack = gotpw, prompt = msg, onCancel = cancelled,
                                                       onForcedDismissal = forciblyDismissed,
                                                       usingStorage = path)
