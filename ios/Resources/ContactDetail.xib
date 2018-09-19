@@ -116,12 +116,12 @@
             <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
             <constraints>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="trailing" secondItem="qwN-Z0-W3u" secondAttribute="trailing" id="1ga-jt-dXT"/>
-                <constraint firstAttribute="trailing" secondItem="3WW-S2-Z6u" secondAttribute="trailing" id="2ge-6a-ydM"/>
+                <constraint firstAttribute="trailingMargin" secondItem="3WW-S2-Z6u" secondAttribute="trailing" constant="-16" id="2ge-6a-ydM"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="qwN-Z0-W3u" secondAttribute="leading" id="DuS-yZ-hks"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="top" secondItem="vc2-GA-rdq" secondAttribute="top" id="aMy-fu-5s2"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="centerX" secondItem="vc2-GA-rdq" secondAttribute="centerX" id="dbc-kd-m1q"/>
                 <constraint firstAttribute="bottom" secondItem="3WW-S2-Z6u" secondAttribute="bottom" id="lWX-Et-q4W"/>
-                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="vc2-GA-rdq" secondAttribute="leading" id="rnK-cz-d7m"/>
+                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="vc2-GA-rdq" secondAttribute="leadingMargin" constant="-16" id="rnK-cz-d7m"/>
             </constraints>
             <simulatedNavigationBarMetrics key="simulatedTopBarMetrics" translucent="NO" prompted="NO"/>
             <simulatedTabBarMetrics key="simulatedBottomBarMetrics" translucent="NO"/>

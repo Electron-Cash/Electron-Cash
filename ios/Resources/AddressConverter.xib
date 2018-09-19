@@ -220,9 +220,9 @@ You are encouraged to use the 'Cash address' format.</string>
                 </view>
             </subviews>
             <constraints>
-                <constraint firstItem="iN0-l3-epB" firstAttribute="trailing" secondItem="rs4-A6-TkR" secondAttribute="trailing" id="5gf-oc-C1H"/>
+                <constraint firstItem="iN0-l3-epB" firstAttribute="trailing" secondItem="rs4-A6-TkR" secondAttribute="trailingMargin" constant="16" id="5gf-oc-C1H"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="top" secondItem="rs4-A6-TkR" secondAttribute="top" id="ddB-tn-cW2"/>
-                <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="rs4-A6-TkR" secondAttribute="leading" id="f6C-eb-jv8"/>
+                <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="rs4-A6-TkR" secondAttribute="leadingMargin" constant="-16" id="f6C-eb-jv8"/>
                 <constraint firstItem="W51-1Q-CTu" firstAttribute="trailing" secondItem="iN0-l3-epB" secondAttribute="trailing" id="jiF-YR-NnX"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="centerX" secondItem="rs4-A6-TkR" secondAttribute="centerX" id="mZx-pA-TjV"/>
                 <constraint firstAttribute="bottom" secondItem="iN0-l3-epB" secondAttribute="bottom" id="pLS-qM-Qdi"/>

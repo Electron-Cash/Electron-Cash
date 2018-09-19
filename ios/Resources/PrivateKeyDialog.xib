@@ -236,9 +236,9 @@
             </subviews>
             <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
             <constraints>
-                <constraint firstItem="iN0-l3-epB" firstAttribute="trailing" secondItem="0gb-DM-Qsx" secondAttribute="trailing" id="Gfy-Dj-Mxp"/>
+                <constraint firstItem="iN0-l3-epB" firstAttribute="trailing" secondItem="0gb-DM-Qsx" secondAttribute="trailingMargin" constant="16" id="Gfy-Dj-Mxp"/>
                 <constraint firstItem="DIp-op-7kT" firstAttribute="trailing" secondItem="iN0-l3-epB" secondAttribute="trailing" id="H0R-8E-gDp"/>
-                <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="0gb-DM-Qsx" secondAttribute="leading" id="I8p-A5-WCv"/>
+                <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="0gb-DM-Qsx" secondAttribute="leadingMargin" constant="-16" id="I8p-A5-WCv"/>
                 <constraint firstAttribute="bottom" secondItem="iN0-l3-epB" secondAttribute="bottom" id="bLE-3Z-ptq"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="DIp-op-7kT" secondAttribute="leading" id="fIX-P3-YkI"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="centerX" secondItem="0gb-DM-Qsx" secondAttribute="centerX" id="haZ-1i-Yve"/>

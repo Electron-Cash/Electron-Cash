@@ -227,9 +227,9 @@
             <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
             <constraints>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="trailing" secondItem="9mt-3j-zvg" secondAttribute="trailing" id="3y8-ae-cfc"/>
-                <constraint firstAttribute="trailing" secondItem="iN0-l3-epB" secondAttribute="trailing" id="H0R-8E-gDp"/>
+                <constraint firstAttribute="trailingMargin" secondItem="iN0-l3-epB" secondAttribute="trailing" constant="-16" id="H0R-8E-gDp"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="9mt-3j-zvg" secondAttribute="leading" id="I8p-A5-WCv"/>
-                <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="0gb-DM-Qsx" secondAttribute="leading" id="aNQ-Nt-kal"/>
+                <constraint firstItem="iN0-l3-epB" firstAttribute="leading" secondItem="0gb-DM-Qsx" secondAttribute="leadingMargin" constant="-16" id="aNQ-Nt-kal"/>
                 <constraint firstAttribute="bottom" secondItem="iN0-l3-epB" secondAttribute="bottom" id="bLE-3Z-ptq"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="centerX" secondItem="0gb-DM-Qsx" secondAttribute="centerX" id="haZ-1i-Yve"/>
                 <constraint firstItem="iN0-l3-epB" firstAttribute="top" secondItem="0gb-DM-Qsx" secondAttribute="top" id="uM5-P0-5Wn"/>

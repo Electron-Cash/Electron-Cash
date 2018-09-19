@@ -275,9 +275,9 @@
             <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
             <constraints>
                 <constraint firstItem="cis-z9-nUN" firstAttribute="trailing" secondItem="3WW-S2-Z6u" secondAttribute="trailing" id="2ge-6a-ydM"/>
-                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="vc2-GA-rdq" secondAttribute="leading" id="OBv-x6-UFj"/>
+                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="vc2-GA-rdq" secondAttribute="leadingMargin" constant="-16" id="OBv-x6-UFj"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="top" secondItem="vc2-GA-rdq" secondAttribute="top" id="aMy-fu-5s2"/>
-                <constraint firstItem="3WW-S2-Z6u" firstAttribute="trailing" secondItem="vc2-GA-rdq" secondAttribute="trailing" id="dA5-z7-uca"/>
+                <constraint firstItem="3WW-S2-Z6u" firstAttribute="trailing" secondItem="vc2-GA-rdq" secondAttribute="trailingMargin" constant="16" id="dA5-z7-uca"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="centerX" secondItem="vc2-GA-rdq" secondAttribute="centerX" id="dbc-kd-m1q"/>
                 <constraint firstAttribute="bottom" secondItem="3WW-S2-Z6u" secondAttribute="bottom" id="lWX-Et-q4W"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="cis-z9-nUN" secondAttribute="leading" id="rnK-cz-d7m"/>
