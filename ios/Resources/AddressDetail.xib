@@ -35,7 +35,7 @@
             </connections>
         </placeholder>
         <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
-        <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" ambiguous="YES" id="vc2-GA-rdq">
+        <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" id="vc2-GA-rdq">
             <rect key="frame" x="0.0" y="0.0" width="375" height="554"/>
             <autoresizingMask key="autoresizingMask"/>
             <subviews>
@@ -258,11 +258,13 @@
             </subviews>
             <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
             <constraints>
-                <constraint firstItem="kxn-Iy-Y75" firstAttribute="trailing" secondItem="3WW-S2-Z6u" secondAttribute="trailing" id="2ge-6a-ydM"/>
+                <constraint firstItem="3WW-S2-Z6u" firstAttribute="trailing" secondItem="kxn-Iy-Y75" secondAttribute="trailing" id="0sX-5J-i8k"/>
+                <constraint firstAttribute="trailing" secondItem="3WW-S2-Z6u" secondAttribute="trailing" id="2ge-6a-ydM"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="top" secondItem="vc2-GA-rdq" secondAttribute="top" id="aMy-fu-5s2"/>
                 <constraint firstItem="3WW-S2-Z6u" firstAttribute="centerX" secondItem="vc2-GA-rdq" secondAttribute="centerX" id="dbc-kd-m1q"/>
+                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="kxn-Iy-Y75" secondAttribute="leading" id="hio-NC-0dh"/>
                 <constraint firstAttribute="bottom" secondItem="3WW-S2-Z6u" secondAttribute="bottom" id="lWX-Et-q4W"/>
-                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="kxn-Iy-Y75" secondAttribute="leading" id="rnK-cz-d7m"/>
+                <constraint firstItem="3WW-S2-Z6u" firstAttribute="leading" secondItem="vc2-GA-rdq" secondAttribute="leading" id="rnK-cz-d7m"/>
             </constraints>
             <simulatedNavigationBarMetrics key="simulatedTopBarMetrics" translucent="NO" prompted="NO"/>
             <simulatedTabBarMetrics key="simulatedBottomBarMetrics" translucent="NO"/>
