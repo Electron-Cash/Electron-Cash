@@ -331,9 +331,13 @@ class ContactsHistorySynchronizer(utils.PySig):
     @profiler
     def _synch_full(self, wallet):
         c = self._get_contacts(wallet)
+        if not c:
+            # short-circuit abort function early if no contacts exist.
+            return dict()
         h = self._get_history(wallet)
         seen = dict() # Address -> dict of tx_hash_str -> hitem tuple
         for hitem in h:
+            # loop through ALL the history and see if relevant tx's exist for contacts we care about
             tx_hash = hitem[0]
             tx = wallet.transactions.get(tx_hash)
             if tx:
