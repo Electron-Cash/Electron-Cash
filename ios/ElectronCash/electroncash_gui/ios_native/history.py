@@ -255,7 +255,7 @@ class ContactsHistorySynchronizer(utils.PySig):
         return ret    
     def synchronizer(self):
         self.print_error("Started (wallet=%s)..." % self.wallet_name())
-        last_seen, announce = (None, False)
+        last_seen_len, announce = (0, False)
         while not self.stopFlag.is_set():
             if self.eventFlag.wait():
                 if self.stopFlag.is_set():
@@ -273,13 +273,14 @@ class ContactsHistorySynchronizer(utils.PySig):
                                 storage.put(k, d)
                                 announce = True
                                 self.print_error('Wrote %s...' % k)
-                if announce or (last_seen and len(last_seen) != len(full)):
+                full_len = len(full) if full else 0
+                if announce or last_seen_len != full_len:
                     self.print_error("Contact history updated, announcing...")
                     self.emit()
                     announce = False
                 else:
                     self.print_error("No new contact history.")
-                last_seen = full
+                last_seen_len = full_len
                 self.eventFlag.clear()
         self.print_error("Stopping! (wallet=%s)" % self.wallet_name())
     def notify_needs_synch(self):
@@ -292,6 +293,7 @@ class ContactsHistorySynchronizer(utils.PySig):
         if not self.thread:
             self.thread = threading.Thread(name='ContactsHistorySynchronizer', target=self.synchronizer)
         if not self.thread.is_alive():
+            self.stopFlag.clear()
             self.thread.start()
             self.parent.sigHistory.connect(self.notify_needs_synch)
             self.parent.sigContacts.connect(self.notify_needs_synch)
