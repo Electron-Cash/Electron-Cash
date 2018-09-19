@@ -238,7 +238,7 @@ def nsurl_read_local_file(url : ObjCInstance, binary = False) -> tuple:
             #print("File data:\n",data)
         return data, filename
     except:
-        NSLog("nsurl_read_local_file got exception: %s",str(sys.exc_info[1]))
+        NSLog("nsurl_read_local_file got exception: %s",str(sys.exc_info()[1]))
         return None, None        
 
 _threading_original__init__ = None
