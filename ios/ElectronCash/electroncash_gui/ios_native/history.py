@@ -7,11 +7,11 @@
 from . import utils
 from . import gui
 from electroncash import WalletStorage, Wallet
-from electroncash.address import Address
-from electroncash.util import timestamp_to_datetime
+from electroncash.address import Address, PublicKey
+from electroncash.util import timestamp_to_datetime, PrintError, profiler
 from electroncash.i18n import _, language
 
-import time, math, sys
+import time, math, sys, os
 from collections import namedtuple
 
 from .uikit_bindings import *
@@ -204,10 +204,9 @@ class HistoryMgr(utils.DataMgr):
         if isinstance(key, (type(None), list)):
             # the common case, 'None' or [Address]
             hist = get_history(domain = key)
-        # contacts entires store history entries within themselves.. so just return that
+        # contacts entires 
         elif isinstance(key, contacts.ContactsEntry):
-            # force refresh of tx's from wallet -- this will call us again with 'None'
-            hist = contacts.build_contact_tx_list(key.address)
+            hist = get_contact_history(key.address)
         elif isinstance(key, Address):
             # support for list-less single Address.. call self again with the proper format
             hist = self.get([key])
@@ -236,6 +235,154 @@ class HistoryMgr(utils.DataMgr):
             utils.NSLog("HistoryMgr: refresh %d entries for domain=%s in %f ms%s (hist result type=%s)", len(hist), dstr[:80],time_taken*1e3,duped,''.join(list(str(type(hist)))[-19:-2]))
             gui.ElectrumGui.gui.refresh_cost('history', time_taken)
         return hist
+
+import threading
+class ContactsHistorySynchronizer(utils.PySig):
+    def __init__(self, parent): # parent must be a gui.ElectrumGui object
+        super().__init__()
+        self.parent = parent
+        self.eventFlag = threading.Event()
+        self.stopFlag = threading.Event()
+        self.lock = threading.RLock()
+        self.thread = None
+    def __del__(self):
+        self.stop()
+        super().__del__()
+    def wallet_name(self):
+        ret = '<None>'
+        if self.parent.wallet and self.parent.wallet.storage:
+            ret = os.path.split(self.parent.wallet.storage.path)[1]
+        return ret    
+    def synchronizer(self):
+        self.print_error("Started (wallet=%s)..." % self.wallet_name())
+        last_seen, announce = (None, False)
+        while not self.stopFlag.is_set():
+            if self.eventFlag.wait():
+                if self.stopFlag.is_set():
+                    break
+                wallet = self.parent.wallet
+                storage = wallet.storage if wallet else None
+                full = None
+                if wallet and storage:
+                    self.print_error("Woke Up...")
+                    with self.lock:
+                        full = self._synch_full(wallet)
+                        for addrstr, d in full.items():
+                            k = 'contact_history_%s' % (addrstr)
+                            if storage.get(k) != d:
+                                storage.put(k, d)
+                                announce = True
+                                self.print_error('Wrote %s...' % k)
+                if announce or (last_seen and len(last_seen) != len(full)):
+                    self.print_error("Contact history updated, announcing...")
+                    self.emit()
+                    announce = False
+                else:
+                    self.print_error("No new contact history.")
+                last_seen = full
+                self.eventFlag.clear()
+        self.print_error("Stopping! (wallet=%s)" % self.wallet_name())
+    def notify_needs_synch(self):
+        if not self.eventFlag.is_set():
+            self.eventFlag.set()
+    def restart(self):
+        self.stop()
+        self.start()
+    def start(self):
+        if not self.thread:
+            self.thread = threading.Thread(name='ContactsHistorySynchronizer', target=self.synchronizer)
+        if not self.thread.is_alive():
+            self.thread.start()
+            self.parent.sigHistory.connect(self.notify_needs_synch)
+            self.parent.sigContacts.connect(self.notify_needs_synch)
+    def stop(self):
+        if self.thread and self.thread.is_alive():
+            self.parent.sigHistory.disconnect(self.notify_needs_synch)
+            self.parent.sigContacts.disconnect(self.notify_needs_synch)
+            self.stopFlag.set()
+            self.eventFlag.set()
+            self.thread.join()
+            self.thread = None
+            self.stopFlag.clear()
+            self.eventFlag.clear()
+    def get_history(self, address : Address) -> list:
+        ret = list()
+        if isinstance(address, str) and Address.is_valid(address):
+            address = Address.from_string(address)
+        storage = self.parent.wallet.storage if self.parent.wallet else None
+        if storage:
+            addrstr = address.to_storage_string()
+            k = 'contact_history_%s' % (addrstr)
+            hdict = storage.get(k)
+            if hdict:
+                ret = list(hdict.values())
+                ret.sort(key=lambda x: x[1], reverse=True)
+        return ret
+    def delete_history(self, address : Address) -> None:
+        if isinstance(address, str) and Address.is_valid(address):
+            address = Address.from_string(address)
+        storage = self.parent.wallet.storage if self.parent.wallet else None
+        if storage:        
+            with self.lock:
+                addrstr = address.to_storage_string()
+                k = 'contact_history_%s' % (addrstr)
+                storage.put(k, None)
+                self.print_error("Deleted %s" % addrstr)
+    @profiler
+    def _synch_full(self, wallet):
+        c = self._get_contacts(wallet)
+        h = self._get_history(wallet)
+        seen = dict() # Address -> dict of tx_hash_str -> hitem tuple
+        for hitem in h:
+            tx_hash = hitem[0]
+            tx = wallet.transactions.get(tx_hash)
+            if tx:
+                tx.deserialize()
+                ins = tx.inputs()
+                for x in ins:
+                    xa = x['address']
+                    if isinstance(xa, PublicKey):
+                        xa = xa.toAddress()
+                    if isinstance(xa, Address) and xa in c:
+                        dct = seen.get(xa, dict())
+                        wasEmpty = not dct
+                        if tx_hash not in dct:
+                            dct[tx_hash] = hitem
+                            if wasEmpty: seen[xa] = dct
+                outs = tx.get_outputs()
+                for x in outs:
+                    xa, dummy = x
+                    if isinstance(xa, Address) and xa in c:
+                        dct = seen.get(xa, dict())
+                        wasEmpty = not dct
+                        if tx_hash not in dct:
+                            dct[tx_hash] = hitem
+                            if wasEmpty: seen[xa] = dct
+        storable = dict()
+        for addr,d in seen.items():
+            addrstr = addr.to_storage_string()
+            storable[addrstr] = d
+        return storable
+    def _get_contacts(self, wallet):
+        conts = contacts.get_contacts(wallet=wallet,sort=False)
+        ret = dict()
+        for c in conts:
+            ret[c.address] = c
+        return ret
+    def _get_history(self, wallet):
+        h = wallet.get_history(None)
+        h.reverse()
+        return h
+        
+def get_contact_history(address : Address) -> list:
+    hitems = gui.ElectrumGui.gui.contactHistSync.get_history(address)
+    ret = _HistoryListProxy()
+    ret.set_hitems(hitems)
+    #utils.NSLog("get_contact_history: Returning history of size %d for %s",len(ret),address.to_storage_string())
+    return ret
+
+def delete_contact_history(address : Address) -> None:
+    gui.ElectrumGui.gui.contactHistSync.delete_history(address)
 
 _tx_cell_height = 76.0 # TxHistoryCell height in points
 _date_width = None

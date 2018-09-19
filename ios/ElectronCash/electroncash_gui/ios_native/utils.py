@@ -33,6 +33,7 @@ from .uikit_bindings import *
 from .custom_objc import *
 
 from electroncash.i18n import _
+from electroncash.util import PrintError
 
 
 def is_2x_screen() -> bool:
@@ -1092,7 +1093,7 @@ def nspy_pop_byname(ns : ObjCInstance, name : str) -> Any:
 ####################################################################
 # Another take on signals/slots -- Python-only signal/slot mechanism
 ####################################################################
-class PySig:
+class PySig(PrintError):
     
     Entry = namedtuple('Entry', 'func key is_ns')
     
@@ -1130,11 +1131,14 @@ class PySig:
                 key = key.ptr.value
                 removeAll = True
         removeCt = 0
+        keep = list()
         for i,entry in enumerate(self.entries):
-            if (key is not None and key == entry.key) or (func is not None and func == entry.func):
-                self.entries.pop(i)
+            if (removeCt == 0 or removeAll) and ((key is not None and key == entry.key) or (func is not None and func == entry.func)):
                 removeCt += 1
-                if not removeAll: return
+            else:
+                keep.append(entry)
+        self.entries = keep
+        #NSLog("Remove %d connections", removeCt)
         if removeCt: return
         name = "<Unknown NSObject>"
         try:
