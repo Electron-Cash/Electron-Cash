@@ -56,7 +56,6 @@ IPHONE_X_SIZES = [
     ( 1242.0, 2688.0 ), # iPhone XS Max
 ]
 def is_iphoneX() -> bool:
-    # iphone X has 2436 pix height
     if is_iphone():
         size = UIScreen.mainScreen.nativeBounds.size
         for s in IPHONE_X_SIZES:
@@ -119,9 +118,10 @@ def cleanup_tmp_dir():
                 os.remove(f)
                 ct += 1
             except:
+                #NSLog("Cleanup Tmp Dir: failed to remove tmp file: %s", f)
                 pass
     if tot:
-        NSLog("Cleaned up %d/%d files from tmp dir in %f ms",ct,tot,(time.time()-t0)*1e3)
+        NSLog("Cleanup Tmp Dir: removed %d/%d files from tmp dir in %f ms",ct,tot,(time.time()-t0)*1e3)
 
 def ios_version_string() -> str:
     dev = UIDevice.currentDevice

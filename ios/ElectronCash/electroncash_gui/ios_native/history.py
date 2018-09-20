@@ -111,6 +111,7 @@ class _HistoryListProxy:
         self.hitems.append(None) # null hitem is ok here, because if hentry exists for a particular index, hitems are ignored anyway
         ln = len(self.hentries)
         self[ln-1] = hentry
+        NSLog("_HistoryListProxy.append() called -- this isn't really supported. FIXME!")
     def __contains__(self,hentry):
         if not isinstance(hentry,HistoryEntry):
             return False
@@ -253,7 +254,7 @@ class ContactsHistorySynchronizer(utils.PySig):
         if self.parent.wallet and self.parent.wallet.storage:
             ret = os.path.split(self.parent.wallet.storage.path)[1]
         return ret    
-    def synchronizer(self):
+    def _synchronizer(self):
         self.print_error("Started (wallet=%s)..." % self.wallet_name())
         last_seen_len, announce = (0, False)
         while not self.stopFlag.is_set():
@@ -283,7 +284,7 @@ class ContactsHistorySynchronizer(utils.PySig):
                 last_seen_len = full_len
                 self.eventFlag.clear()
         self.print_error("Stopping! (wallet=%s)" % self.wallet_name())
-    def notify_needs_synch(self):
+    def _notify_needs_synch(self):
         if not self.eventFlag.is_set():
             self.eventFlag.set()
     def restart(self):
@@ -291,16 +292,16 @@ class ContactsHistorySynchronizer(utils.PySig):
         self.start()
     def start(self):
         if not self.thread:
-            self.thread = threading.Thread(name='ContactsHistorySynchronizer', target=self.synchronizer)
+            self.thread = threading.Thread(name='ContactsHistorySynchronizer', target=self._synchronizer)
         if not self.thread.is_alive():
             self.stopFlag.clear()
             self.thread.start()
-            self.parent.sigHistory.connect(self.notify_needs_synch)
-            self.parent.sigContacts.connect(self.notify_needs_synch)
+            self.parent.sigHistory.connect(self._notify_needs_synch)
+            self.parent.sigContacts.connect(self._notify_needs_synch)
     def stop(self):
         if self.thread and self.thread.is_alive():
-            self.parent.sigHistory.disconnect(self.notify_needs_synch)
-            self.parent.sigContacts.disconnect(self.notify_needs_synch)
+            self.parent.sigHistory.disconnect(self._notify_needs_synch)
+            self.parent.sigContacts.disconnect(self._notify_needs_synch)
             self.stopFlag.set()
             self.eventFlag.set()
             self.thread.join()
@@ -315,7 +316,8 @@ class ContactsHistorySynchronizer(utils.PySig):
         if storage:
             addrstr = address.to_storage_string()
             k = 'contact_history_%s' % (addrstr)
-            hdict = storage.get(k)
+            with self.lock:
+                hdict = storage.get(k)
             if hdict:
                 ret = list(hdict.values())
                 ret.sort(key=lambda x: x[1], reverse=True)
@@ -568,7 +570,10 @@ class TxHistoryHelper(TxHistoryHelperBase):
         tx = None
         try:
             entry = _GetTxs(self)[indexPath.row]
-            tx = parent.wallet.transactions.get(entry.tx_hash, None)
+            if entry.tx:
+                tx = entry.tx
+            else:
+                tx = parent.wallet.transactions.get(entry.tx_hash, None)
         except:
             return        
         if tx is None:
