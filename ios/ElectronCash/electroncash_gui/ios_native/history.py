@@ -264,8 +264,8 @@ class ContactsHistorySynchronizer(utils.PySig):
                 wallet = self.parent.wallet
                 storage = wallet.storage if wallet else None
                 full = None
+                self.print_error("Woke Up...")
                 if wallet and storage:
-                    self.print_error("Woke Up...")
                     with self.lock:
                         full = self._synch_full(wallet)
                         for addrstr, d in full.items():
@@ -316,8 +316,7 @@ class ContactsHistorySynchronizer(utils.PySig):
         if storage:
             addrstr = address.to_storage_string()
             k = 'contact_history_%s' % (addrstr)
-            with self.lock:
-                hdict = storage.get(k)
+            hdict = storage.get(k)
             if hdict:
                 ret = list(hdict.values())
                 ret.sort(key=lambda x: x[1], reverse=True)
