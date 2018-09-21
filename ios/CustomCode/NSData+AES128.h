@@ -1,5 +1,5 @@
 //
-//  NSData+AES256.h
+//  NSData+AES128.h
 //  Electron-Cash
 //
 //  Created by calin on 9/20/18.

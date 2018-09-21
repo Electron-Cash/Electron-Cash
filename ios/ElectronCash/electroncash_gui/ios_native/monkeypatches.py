@@ -30,7 +30,7 @@ class MonkeyPatches:
         
         cls._Patch_SSL.patch()
         cls._Patch_AES.patch()
-        
+
         cls.patched = True
         NSLog("MonkeyPatches Applied")
     
@@ -42,7 +42,7 @@ class MonkeyPatches:
         
         cls._Patch_AES.unpatch()
         cls._Patch_SSL.unpatch()
-        
+
         cls.patched = False
         NSLog("MonkeyPatches Disabled")
     
@@ -86,6 +86,7 @@ class MonkeyPatches:
             if cls.origs:
                 ssl._create_default_https_context, ssl.create_default_context = cls.origs
                 cls.patched = False
+                NSLog("*** SSL *** Allow Unverfied Context: Disabled")
             return not cls.patched
         
     class _Patch_AES:
@@ -104,6 +105,7 @@ class MonkeyPatches:
             ec_bitcoin.aes_decrypt_with_iv = cls._orig_aes_decrypt_with_iv
             ec_bitcoin.aes_encrypt_with_iv = cls._orig_aes_encrypt_with_iv
             cls.patched = False
+            NSLog("*** AES *** Use iOS CommonCrypto: Disabled")
             return True
 
         _orig_aes_encrypt_with_iv = ec_bitcoin.aes_encrypt_with_iv
