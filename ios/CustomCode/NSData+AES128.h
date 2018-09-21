@@ -1,0 +1,21 @@
+//
+//  NSData+AES256.h
+//  Electron-Cash
+//
+//  Created by calin on 9/20/18.
+//  Copyright © 2018 Calin Culianu. All rights reserved.
+//
+//  MIT License
+#import <Foundation/Foundation.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface NSData (AES128)
+- (NSData *)AES128EncryptWithKey:(NSData * __nonnull)key initializationVector:(NSData * __nullable)iv;
+- (NSData *)AES128DecryptWithKey:(NSData * __nonnull)key initializationVector:(NSData * __nullable)iv;
+
+
+- (NSData *)AES128DecryptWithKey:(NSData * __nonnull)key initializationVector:(NSData * __nullable)iv keepPadding:(BOOL)keepPadding;
+@end
+
+NS_ASSUME_NONNULL_END
