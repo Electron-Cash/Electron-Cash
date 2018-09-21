@@ -13,9 +13,9 @@ from electroncash.simple_config import SimpleConfig
 
 def main():
     cleanup_tmp_dir()
-    
+
     config_options = {
-            'verbose': is_debug_build(), 
+            'verbose': is_debug_build(),
             'cmd': 'gui',
             'gui': 'ios_native',
             'cwd': os.getcwd(),
@@ -25,7 +25,7 @@ def main():
     NSLogSuppress(not config_options.get('verbose'))
 
     MonkeyPatches.patch()
-    
+
     #for k,v in config_options.items():
     #    print("config[%s] = %s"%(str(k),str(v)))
 

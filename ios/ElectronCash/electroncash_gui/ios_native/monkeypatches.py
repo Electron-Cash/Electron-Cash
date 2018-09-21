@@ -19,7 +19,7 @@ from electroncash_gui.ios_native.utils import NSLog
 import sys, ssl
 
 class MonkeyPatches:
-    
+
     patched = False # don't write to this. Instead use patch() and unpatch()
 
     @classmethod
@@ -27,32 +27,32 @@ class MonkeyPatches:
         if cls.patched:
             print('*** WARNING: MonkeyPatches are already applied!')
             return
-        
+
         cls._Patch_SSL.patch()
         cls._Patch_AES.patch()
 
         cls.patched = True
         NSLog("MonkeyPatches Applied")
-    
+
     @classmethod
     def unpatch(cls):
         if not cls.patched:
             print('*** WARNING: MonkeyPatches was not active!')
             return
-        
+
         cls._Patch_AES.unpatch()
         cls._Patch_SSL.unpatch()
 
         cls.patched = False
         NSLog("MonkeyPatches Disabled")
-    
+
     #
     # Private.. Don't directly use the stuff below.
     #
     class _Patch_SSL:
         patched = False
         origs = tuple()
-        
+
         @classmethod
         def patch(cls):
             if cls.patched:
@@ -73,13 +73,13 @@ class MonkeyPatches:
                     ssl.create_default_context = ssl._create_unverified_context
                     NSLog("*** SSL *** Allow Unverfied Context: ENABLED")
                 else:
-                    raise Exception("pyOpenSSL seems to be missing the '_create_unverified_context' function") 
+                    raise Exception("pyOpenSSL seems to be missing the '_create_unverified_context' function")
             except:
                 NSLog("*** SSL *** Allow Unverified Context: FAILED (%s)"%(str(sys.exc_info()[1])))
                 return False
             cls.patched = True
             return True
-        
+
         @classmethod
         def unpatch(cls):
             if not cls.patched: return False
@@ -88,10 +88,10 @@ class MonkeyPatches:
                 cls.patched = False
                 NSLog("*** SSL *** Allow Unverfied Context: Disabled")
             return not cls.patched
-        
+
     class _Patch_AES:
         patched = False
-        
+
         @classmethod
         def patch(cls):
             ec_bitcoin.aes_decrypt_with_iv = cls._aes_decrypt_with_iv
@@ -110,7 +110,7 @@ class MonkeyPatches:
 
         _orig_aes_encrypt_with_iv = ec_bitcoin.aes_encrypt_with_iv
         _orig_aes_decrypt_with_iv = ec_bitcoin.aes_decrypt_with_iv
-        
+
         @classmethod
         @profiler
         def _aes_encrypt_with_iv(cls, key, iv, data):
@@ -122,8 +122,8 @@ class MonkeyPatches:
                 return cls._orig_aes_encrypt_with_iv(key, iv, data)
             e = py_from_ns(e)
             return e
-    
-        
+
+
         @classmethod
         @profiler
         def _aes_decrypt_with_iv(cls, key, iv, data):
