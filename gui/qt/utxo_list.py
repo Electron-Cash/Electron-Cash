@@ -115,16 +115,16 @@ class UTXOList(MyTreeWidget):
         else:
             # multi-selection
             menu.addSeparator()
-            if any([True for flags in selected.values() if 'c' not in flags]):
+            if any(['c' not in flags for flags in selected.values()]):
                 # they have some coin-level non-frozen in the selection, so add the menu action "Freeze coins"
                 menu.addAction(_("Freeze Coins"), lambda: self.set_frozen_coins(list(selected.keys()), True))
-            if any([True for flags in selected.values() if 'c' in flags]):
+            if any(['c' in flags for flags in selected.values()]):
                 # they have some coin-level frozen in the selection, so add the menu action "Unfreeze coins"
                 menu.addAction(_("Unfreeze Coins"), lambda: self.set_frozen_coins(list(selected.keys()), False))
-            if any([True for flags in selected.values() if 'a' not in flags]):
+            if any(['a' not in flags for flags in selected.values()]):
                 # they have some address-level non-frozen in the selection, so add the menu action "Freeze addresses"
                 menu.addAction(_("Freeze Addresses"), lambda: self.set_frozen_addresses_for_coins(list(selected.keys()), True))
-            if any([True for flags in selected.values() if 'a' in flags]):
+            if any(['a' in flags for flags in selected.values()]):
                 # they have some address-level frozen in the selection, so add the menu action "Unfreeze addresses"
                 menu.addAction(_("Unfreeze Addresses"), lambda: self.set_frozen_addresses_for_coins(list(selected.keys()), False))
 
