@@ -60,7 +60,7 @@ class UTXOList(MyTreeWidget):
             utxo_item.setFont(4, QFont(MONOSPACE_FONT))
             utxo_item.setData(0, Qt.UserRole, name)
             a_frozen = self.wallet.is_frozen(address)
-            c_frozen = x.get('is_frozen_coin', False)
+            c_frozen = self.wallet.is_frozen_coin(x)
             if a_frozen and not c_frozen:
                 # address is frozen, coin is not frozen
                 # emulate the "Look" off the address_list .py's frozen entry
@@ -86,7 +86,7 @@ class UTXOList(MyTreeWidget):
         if not selected:
             return
         menu = QMenu()
-        coins = list(filter(lambda x: self.get_name(x) in selected, self.utxos))
+        coins = filter(lambda x: self.get_name(x) in selected, self.utxos)
         spendable_coins = list(filter(lambda x: not selected.get(self.get_name(x), ''), coins))
         # Unconditionally add the "Spend" option but leave it disabled if there are no spendable_coins
         menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins)).setEnabled(bool(spendable_coins))
