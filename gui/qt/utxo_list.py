@@ -136,7 +136,7 @@ class UTXOList(MyTreeWidget):
 
     def set_frozen_coins(self, coins, b):
         if self.parent:
-            self.parent.set_frozen_coins_state(coins, b)
+            self.parent.set_frozen_coin_state(coins, b)
 
     def set_frozen_addresses_for_coins(self, coins, b):
         if not self.parent: return

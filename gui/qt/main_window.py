@@ -1730,9 +1730,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.utxo_list.update()
         self.update_fee()
 
-    def set_frozen_coins_state(self, utxos, freeze):
+    def set_frozen_coin_state(self, utxos, freeze):
         self.wallet.set_frozen_coin_state(utxos, freeze)
-        self.address_list.update()
         self.utxo_list.update()
         self.update_fee()
 
