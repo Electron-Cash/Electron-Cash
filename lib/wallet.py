@@ -179,8 +179,7 @@ class Abstract_Wallet(PrintError):
         # Frozen coins (UTXOs) -- note that we have 2 independent levels of "freezing": address-level and coin-level.
         # The two types of freezing are flagged independently of each other and 'spendable' is defined as a coin that satisfies
         # BOTH levels of freezing.
-        frozen_coins = storage.get('frozen_coins', [])
-        self.frozen_coins = set(frozen_coins)
+        self.frozen_coins = set(storage.get('frozen_coins', []))
         # address -> list(txid, height)
         history = storage.get('addr_history',{})
         self._history = self.to_Address_dict(history)
