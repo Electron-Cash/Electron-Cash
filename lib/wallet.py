@@ -1057,6 +1057,7 @@ class Abstract_Wallet(PrintError):
             ret = ("{}:{}".format(utxo['prevout_hash'], utxo['prevout_n'])) in self.frozen_coins
             if ret != utxo['is_frozen_coin']:
                 self.print_error("*** WARNING: utxo has stale is_frozen_coin flag")
+                utxo['is_frozen_coin'] = ret # update stale flag
             return ret
         return utxo in self.frozen_coins
 
