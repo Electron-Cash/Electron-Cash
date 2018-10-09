@@ -60,7 +60,7 @@ class UTXOList(MyTreeWidget):
             utxo_item.setFont(4, QFont(MONOSPACE_FONT))
             utxo_item.setData(0, Qt.UserRole, name)
             a_frozen = self.wallet.is_frozen(address)
-            c_frozen = self.wallet.is_frozen_coin(x)
+            c_frozen = x['is_frozen_coin']
             if a_frozen and not c_frozen:
                 # address is frozen, coin is not frozen
                 # emulate the "Look" off the address_list .py's frozen entry
