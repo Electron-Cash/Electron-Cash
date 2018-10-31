@@ -1,60 +1,68 @@
 {
-    "abc1.hsmiths.com": {
+    "94.1.159.183": {
         "pruning": "-",
-        "version": "1.1",
-        "t": "60001",
-        "s": "60002"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
     },
-    "electroncash.checksum0.com": {
+    "bch.crypto.mldlabs.com": {
         "pruning": "-",
-        "version": "1.1",
-        "t": "50001"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
     },
-    "35.157.238.5": {
+    "bch.electrumx.cash": {
         "pruning": "-",
-        "version": "1.1",
-        "t":"51001",
-        "s":"51002"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
     },
-    "electrumx-cash.1209k.com": {
+    "bch.imaginary.cash": {
         "pruning": "-",
-        "version": "1.1",
-        "t":"51001",
-        "s":"51002"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
     },
-    "shsmithgoggryfbx.onion": {
+    "bitcoincash.quangld.com": {
         "pruning": "-",
-        "version": "1.1",
-        "t": "60001",
-        "s": "60002"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
     },
-    "bch.curalle.ovh": {
+    "blackie.c3-soft.com": {
         "pruning": "-",
-        "version": "1.1",
-        "t":"51001",
-        "s":"51002"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
+    },
+    "electron.jochen-hoenicke.de": {
+        "pruning": "-",
+        "s": "51002",
+        "t": "51001",
+        "version": "1.4"
     },
     "electroncash.ueo.ch": {
         "pruning": "-",
-        "version": "1.4.3",
-        "t":"51001",
-        "s":"51002"
-    },
-    "electron-cash.dragon.zone": {
-        "pruning": "-",
-        "version": "1.1",
-        "t":"50001",
-        "s":"50002"
-    },
-    "electroncash.cascharia.com": {
-        "pruning": "-",
-        "version": "1.1",
-        "s": "50002"
+        "s": "51002",
+        "t": "51001",
+        "version": "1.4"
     },
     "electrum.imaginary.cash": {
         "pruning": "-",
-        "version": "1.2.1",
-        "t":"50001",
-        "s":"50002"
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
+    },
+    "electrum.leblancnet.us": {
+        "pruning": "-",
+        "s": "50012",
+        "t": "50011",
+        "version": "1.4"
+    },
+    "wallet.satoshiscoffeehouse.com": {
+        "pruning": "-",
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
     }
 }
