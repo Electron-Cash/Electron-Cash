@@ -21,26 +21,26 @@ cd tmp
 
 for repo in Electron-Cash; do
     if [ -d $repo ]; then
-	cd $repo
-	git pull
-	git checkout 3.3.1
-	cd ..
+        cd $repo
+        git pull
+        git checkout 3.3.1
+        cd ..
     else
-	URL=https://github.com/Electron-Cash/$repo
-	git clone -b master $URL electrum # rest of script assumes the dir is called 'electrum'
+        URL=https://github.com/Electron-Cash/$repo
+        git clone -b master $URL electrum # rest of script assumes the dir is called 'electrum'
     fi
 done
 
 
 for repo in electrum-locale electrum-icons; do
     if [ -d $repo ]; then
-	cd $repo
-	git pull
-	git checkout master
-	cd ..
+        cd $repo
+        git pull
+        git checkout master
+        cd ..
     else
-	URL=https://github.com/Electron-Cash/$repo
-	git clone -b master $URL $repo
+        URL=https://github.com/Electron-Cash/$repo
+        git clone -b master $URL $repo
     fi
 done
 
