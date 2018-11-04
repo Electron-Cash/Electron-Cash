@@ -103,4 +103,3 @@ python3 setup.py sdist --format=zip,gztar
 
 
 echo "Done."
-md5sum dist/electrum*exe
