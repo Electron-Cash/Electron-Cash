@@ -35,8 +35,8 @@ done
 for repo in electrum-locale electrum-icons; do
     if [ -d $repo ]; then
         cd $repo
-        git pull
         git checkout master
+        git pull
         cd ..
     else
         URL=https://github.com/Electron-Cash/$repo
