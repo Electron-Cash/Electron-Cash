@@ -23,6 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import codecs
+import importlib.util
 import json
 import os
 import pkgutil
@@ -135,8 +136,16 @@ class Plugins(DaemonThread):
             # do not load deprecated plugins
             if name in ['plot', 'exchange_rate']:
                 continue
-            m = loader.find_module(name).load_module(name)
-            d = m.__dict__
+            full_name = f'electroncash_plugins.{name}'
+            spec = importlib.util.find_spec(full_name)
+            if spec is None:  # pkgutil found it but importlib can't ?!
+                raise Exception(f"Error pre-loading {full_name}: no spec")
+            try:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            except Exception as e:
+                raise Exception(f"Error pre-loading {full_name}: {repr(e)}") from e
+            d = module.__dict__
             if not self.register_plugin(name, d):
                 continue
             self.internal_plugin_metadata[name] = d
@@ -208,13 +217,14 @@ class Plugins(DaemonThread):
         if name in self.internal_plugins:
             return self.internal_plugins[name]
 
-        full_name = 'electroncash_plugins.' + name + '.' + self.gui_name
-        loader = pkgutil.find_loader(full_name)
-        if not loader:
+        full_name = f'electroncash_plugins.{name}.{self.gui_name}'
+        spec = importlib.util.find_spec(full_name)
+        if spec is None:
             raise RuntimeError("%s implementation for %s plugin not found"
                                % (self.gui_name, name))
-        p = loader.load_module(full_name)
-        plugin = p.Plugin(self, self.config, name)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        plugin = module.Plugin(self, self.config, name)
         plugin.set_enabled_prefix(INTERNAL_USE_PREFIX)
         self.add_jobs(plugin.thread_jobs())
         self.internal_plugins[name] = plugin
@@ -246,13 +256,14 @@ class Plugins(DaemonThread):
 
         sys.modules['electroncash_external_plugins.'+ name] = module
 
-        full_name = 'electroncash_external_plugins.' + name + '.' + self.gui_name
-        loader = pkgutil.find_loader(full_name)
-        if not loader:
+        full_name = f'electroncash_external_plugins.{name}.{self.gui_name}'
+        spec = importlib.util.find_spec(full_name)
+        if spec is None:
             raise RuntimeError("%s implementation for %s plugin not found"
                                % (self.gui_name, name))
-        p = loader.load_module(full_name)
-        plugin = p.Plugin(self, self.config, name)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        plugin = module.Plugin(self, self.config, name)
         plugin.set_enabled_prefix(EXTERNAL_USE_PREFIX)
         self.add_jobs(plugin.thread_jobs())
         self.external_plugins[name] = plugin
