@@ -288,7 +288,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
         return self.script
 
     def __str__(self):
-        return self.to_ui_string(True)
+        return self.to_ui_string()
 
     def __repr__(self):
         return '<ScriptOutput {}>'.format(self.__str__())
