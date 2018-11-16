@@ -2385,7 +2385,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # Older saved transaction do not include this key.
         if 'input_values' in tx_file_dict and len(tx_file_dict['input_values']) >= len(tx.inputs()):
             for i in range(len(tx.inputs())):
-                tx._inputs[i]['value'] = tx_file_dict['input_values'][i]
+                value = tx_file_dict['input_values'][i]
+                if value is not None:
+                    tx._inputs[i]['value'] = value
         return tx
 
     def do_process_from_text(self):
