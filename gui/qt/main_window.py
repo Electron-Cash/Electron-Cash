@@ -1698,6 +1698,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         amount = out.get('amount')
         label = out.get('label')
         message = out.get('message')
+        op_return = out.get('op_return')
         # use label as description (not BIP21 compliant)
         if label and not message:
             message = label
@@ -1708,7 +1709,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if amount:
             self.amount_e.setAmount(amount)
             self.amount_e.textEdited.emit("")
-
+        if op_return:
+            self.message_opreturn_e.setText(op_return)
+            self.message_opreturn_e.setHidden(False)
+            self.opreturn_label.setHidden(False)
 
     def do_clear(self):
         self.is_max = False
