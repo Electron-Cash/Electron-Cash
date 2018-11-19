@@ -1713,6 +1713,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.message_opreturn_e.setText(op_return)
             self.message_opreturn_e.setHidden(False)
             self.opreturn_label.setHidden(False)
+        elif not self.config.get('enable_opreturn'): 
+            self.message_opreturn_e.setText('')
+            self.message_opreturn_e.setHidden(True)
+            self.opreturn_label.setHidden(True)
 
     def do_clear(self):
         self.is_max = False
