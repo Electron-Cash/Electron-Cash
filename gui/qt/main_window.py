@@ -1450,7 +1450,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         try:
             # handle op_return if specified and enabled
-            opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
+            opreturn_message = self.message_opreturn_e.text()
             if opreturn_message:
                 outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
         except OPReturnTooLarge as e:
@@ -1726,6 +1726,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.max_button.setDisabled(False)
         self.set_pay_from([])
         self.tx_external_keypairs = {}
+        self.message_opreturn_e.setVisible(self.config.get('enable_opreturn'))
+        self.opreturn_label.setVisible(self.config.get('enable_opreturn'))
         self.update_status()
         run_hook('do_clear', self)
 
