@@ -30,14 +30,16 @@ MSG_NEEDS_FW_UPDATE_CASHADDR = _('Firmware version (or "Bitcoin Cash" app) too o
                                _('Please update at https://www.ledgerwallet.com')
 MSG_NEEDS_SW_UPDATE_CASHADDR = _('python-btchip is too old for CashAddr support. ') + \
                                _('Please update to v0.1.27 or greater')
-BITCOIN_CASH_SUPPORT = (1, 0, 4)
+BITCOIN_CASH_SUPPORT_HW1 = (1, 0, 4)
+BITCOIN_CASH_SUPPORT = (1, 1, 8)
 CASHADDR_SUPPORT = (1, 2, 5)
 
 class Ledger_Client():
 
-    def __init__(self, hidDevice):
+    def __init__(self, hidDevice, isHW1=False):
         self.dongleObject = btchip(hidDevice)
         self.preflightDone = False
+        self.isHW1 = isHW1
 
     def is_pairable(self):
         return True
@@ -53,6 +55,9 @@ class Ledger_Client():
 
     def label(self):
         return ""
+
+    def is_hw1(self):
+        return self.isHW1
 
     def i4b(self, x):
         return pack('>I', x)
@@ -146,7 +151,8 @@ class Ledger_Client():
         try:
             firmwareInfo = self.dongleObject.getFirmwareVersion()
             firmware = firmwareInfo['version']
-            self.bitcoinCashSupported = versiontuple(firmware) >= BITCOIN_CASH_SUPPORT
+            self.bitcoinCashSupported = versiontuple(firmware) >= BITCOIN_CASH_SUPPORT or \
+                self.is_hw1() and versiontuple(firmware) >= BITCOIN_CASH_SUPPORT_HW1
             self.cashaddrFWSupported = versiontuple(firmware) >= CASHADDR_SUPPORT
 
             if not checkFirmware(firmwareInfo) or not self.supports_bitcoin_cash():
@@ -518,8 +524,9 @@ class LedgerPlugin(HW_PluginBase):
         self.handler = handler
 
         client = self.get_btchip_device(device)
+        ishw1 = device.product_key[0] == 0x2581
         if client is not None:
-            client = Ledger_Client(client)
+            client = Ledger_Client(client, ishw1)
         return client
 
     def setup_device(self, device_info, wizard):
