@@ -61,6 +61,7 @@ from . import paymentrequest
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .paymentrequest import InvoiceStore
 from .contacts import Contacts
+from binascii import hexlify
 
 TX_STATUS = [
     _('Unconfirmed parent'),
@@ -285,7 +286,7 @@ class Abstract_Wallet(PrintError):
             self.storage.put('verified_tx3', self.verified_tx)
             if write:
                 self.storage.write()
-                
+
     def clear_history(self):
         with self.transaction_lock:
             self.txi = {}
@@ -769,7 +770,26 @@ class Abstract_Wallet(PrintError):
 
     def add_transaction(self, tx_hash, tx):
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
+
         with self.transaction_lock:
+            # extract potential forfeit address from TXN
+            print("Add tx: %s" % tx_hash)
+            for txo in tx.outputs():
+                _type, addr, v = txo
+                underlying, forfeit_script_bin = self.deref_forfeit(addr, tx)
+
+                if underlying is not None:
+                    forfeit_script_hex = hexlify(forfeit_script_bin).decode("ascii")
+                    if addr not in self.forfeit_addresses:
+                        self.forfeit_addresses.append(addr)
+                        self.forfeit_map[addr] = underlying
+                        self.forfeit_scripts[addr] = forfeit_script_hex
+                        print("Add forfeit: %s -> %s" % (repr(addr), repr(underlying)))
+                    else:
+                        print("Already forfeit: %s -> %s" % (repr(addr), repr(underlying)))
+                else:
+                    print("Not forfeit: %s" % repr(addr))
+
             # add inputs
             self.txi[tx_hash] = d = {}
             for txi in tx.inputs():
@@ -866,7 +886,7 @@ class Abstract_Wallet(PrintError):
 
         # Store fees
         self.tx_fees.update(tx_fees)
-        
+
         if self.network:
             self.network.trigger_callback('on_history')
 
@@ -1669,7 +1689,7 @@ class ImportedWalletBase(Simple_Wallet):
                 # FIXME: what about pruned_txo?
 
             self.storage.put('verified_tx3', self.verified_tx)
-            
+
         self.save_transactions()
 
         self.set_label(address.to_storage_string(), None)
