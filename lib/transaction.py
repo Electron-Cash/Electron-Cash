@@ -577,6 +577,13 @@ class Transaction:
             script += push_script(redeem_script)
         elif _type == 'p2pkh':
             script += push_script(pubkeys[0])
+        elif _type == 'forfeit_p2pkh':
+            print("Returning input script for FORFEIT p2pkh.", txin['forfeit_underlying_address'])
+            # forfeit_p2pkh is like P2PKH, but needs the forfeit script itself as the last
+            # data push
+            script += push_script(pubkeys[0])
+            script += push_script(
+                txin['forfeit_script'])
         elif _type == 'unknown':
             return txin['scriptSig']
         return script
