@@ -265,11 +265,18 @@ def parse_scriptSig(d, _bytes):
         d['address'] = address
         return
 
+
+    # FIXME: What is called 'P2SH' here should be more aptly called P2SH multisig
     # p2sh transaction, m of n
     match = [ opcodes.OP_0 ] + [ opcodes.OP_PUSHDATA4 ] * (len(decoded) - 1)
     if not match_decoded(decoded, match):
-        print_error("cannot find address in input script", bh2u(_bytes))
+        # FIXME: properly detect forfeit spends here
+        # FIXME2: handle non-standard transactions correctly
+        d['type'] = 'p2sh'
+        d['redeemScript'] = decoded[-1][1]
+        d['address'] = Address.from_P2SH_hash(hash160(decoded[-1][1]))
         return
+
     x_sig = [bh2u(x[1]) for x in decoded[1:-1]]
     m, n, x_pubkeys, pubkeys, redeemScript = parse_redeemScript(decoded[-1][1])
     # write result in d
@@ -413,7 +420,7 @@ class Transaction:
         self._outputs = None
         self.locktime = 0
         self.version = 1
-        
+
         # Ephemeral meta-data used internally to keep track of interesting things.
         # This is currently written-to by coinchooser to tell UI code about 'dust_to_fee', which
         # is change that's too small to go to change outputs (below dust threshold) and needed
@@ -555,8 +562,10 @@ class Transaction:
     @classmethod
     def input_script(self, txin, estimate_size=False):
         _type = txin['type']
-        if _type == 'coinbase':
+        # return cached/received script, if available
+        if 'scriptSig' in txin:
             return txin['scriptSig']
+
         pubkeys, sig_list = self.get_siglist(txin, estimate_size)
         script = ''.join(push_script(x) for x in sig_list)
         if _type == 'p2pk':
