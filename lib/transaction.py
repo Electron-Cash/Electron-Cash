@@ -600,6 +600,9 @@ class Transaction:
         _type = txin['type']
         if _type == 'p2pkh':
             return txin['address'].to_script().hex()
+        elif _type == 'forfeit_p2pkh':
+            return txin['forfeit_script']
+
         elif _type == 'p2sh':
             pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)
             return multisig_script(pubkeys, txin['num_sig'])
