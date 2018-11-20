@@ -265,16 +265,25 @@ class TxDialog(QDialog, MessageBoxMixin):
 
     def update_io(self, i_text, o_text):
         ext = QTextCharFormat()
+
         rec = QTextCharFormat()
         rec.setBackground(QBrush(ColorScheme.GREEN.as_color(background=True)))
         rec.setToolTip(_("Wallet receive address"))
+
         chg = QTextCharFormat()
         chg.setBackground(QBrush(QColor("yellow")))
         chg.setToolTip(_("Wallet change address"))
 
+        # for_fei_t, not fast fourier transform!
+        fft = QTextCharFormat()
+        fft.setBackground(QBrush(QColor("lightblue")))
+        fft.setToolTip(_("Forfeit contract P2SH address"))
+
         def text_format(addr):
             if isinstance(addr, Address) and self.wallet.is_mine(addr):
-                return chg if self.wallet.is_change(addr) else rec
+                return (chg if self.wallet.is_change(addr) else
+                        fft if self.wallet.is_forfeit(addr) else
+                        rec)
             return ext
 
         def format_amount(amt):
