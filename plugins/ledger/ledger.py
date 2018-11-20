@@ -141,9 +141,6 @@ class Ledger_Client():
     def sw_supports_cashaddr(self):
         return self.cashaddrSWSupported
 
-    def is_legacy(self):
-        return self.isLegacy
-
     def supports_cashaddr(self):
         return self.fw_supports_cashaddr() and self.sw_supports_cashaddr()
 
@@ -180,14 +177,12 @@ class Ledger_Client():
                 self.dongleObject.verifyPin(pin)
 
             try:
-                self.isLegacy = False
                 try:
                     self.dongleObject.getWalletPublicKey("44'/145'/0'/0/0", showOnScreen=False, cashAddr=True)
                 except BTChipException as e:
-                    # This call fails on HW1/Nano with a specific error, due to it not supporting cashaddr, so use that to mark them legacy
+                    # This call fails on HW1/Nano with a specific error, due to it not supporting cashaddr
                     if (e.sw != 0x6b00):
                         raise e
-                    self.isLegacy = True
                 self.cashaddrSWSupported = True
             except TypeError:
                 self.cashaddrSWSupported = False
@@ -270,7 +265,7 @@ class Ledger_KeyStore(Hardware_KeyStore):
     def cashaddr_alert(self):
         """Alert users about fw/sw updates for cashaddr."""
         if Address.FMT_UI == Address.FMT_CASHADDR:
-            # Do not warn if the device is legacy, they have no display anyway
+            # Do not warn if the device is HW1, they have no display anyway
             if not self.get_client_electrum().fw_supports_cashaddr() and not self.get_client_electrum().is_hw1():
                 self.handler.show_warning(MSG_NEEDS_FW_UPDATE_CASHADDR)
             if not self.get_client_electrum().sw_supports_cashaddr():
