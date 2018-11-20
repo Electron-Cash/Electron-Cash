@@ -81,27 +81,26 @@ class AddressList(MyTreeWidget):
         current_address = item.data(0, Qt.UserRole) if item else None
         expanded_item_names = remember_expanded_items()
         self.clear()
-        receiving_addresses = self.wallet.get_receiving_addresses()
-        change_addresses = self.wallet.get_change_addresses()
 
         if self.parent.fx and self.parent.fx.get_fiat_address_config():
             fx = self.parent.fx
         else:
             fx = None
         account_item = self
-        sequences = [0,1] if change_addresses else [0]
-        for is_change in sequences:
-            if len(sequences) > 1:
-                name = _("Receiving") if not is_change else _("Change")
-                seq_item = QTreeWidgetItem( [ name, '', '', '', '', ''] )
-                account_item.addChild(seq_item)
-                if not is_change and not had_item_count: # first time we create this widget, auto-expand the default address list
-                    seq_item.setExpanded(True)
-            else:
-                seq_item = account_item
+
+        for addr_list, name in [
+            (self.wallet.get_receiving_addresses(), _("Receiving")),
+            (self.wallet.get_change_addresses(), _("Change")),
+            (self.wallet.get_forfeit_addresses(), _("Forfeit"))]:
+            if not len(addr_list):
+                continue
+            seq_item = QTreeWidgetItem( [ name, '', '', '', '', ''] )
+            account_item.addChild(seq_item)
+            if not had_item_count: # first time we create this widget, auto-expand the default address list
+                seq_item.setExpanded(True)
+
             used_item = QTreeWidgetItem( [ _("Used"), '', '', '', '', ''] )
             used_flag = False
-            addr_list = change_addresses if is_change else receiving_addresses
             for n, address in enumerate(addr_list):
                 num = len(self.wallet.get_address_history(address))
                 is_used = self.wallet.is_used(address)
@@ -126,7 +125,8 @@ class AddressList(MyTreeWidget):
                 address_item.setData(0, Qt.UserRole+1, True) # label can be edited
                 if self.wallet.is_frozen(address):
                     address_item.setBackground(0, QColor('lightblue'))
-                if self.wallet.is_beyond_limit(address, is_change):
+
+                if self.wallet.is_beyond_limit(address):
                     address_item.setBackground(0, QColor('red'))
                 if is_used:
                     if not used_flag:
