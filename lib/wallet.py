@@ -337,6 +337,16 @@ class Abstract_Wallet(PrintError):
                           for addr in self.receiving_addresses],
             'change': [addr.to_storage_string()
                        for addr in self.change_addresses],
+            'forfeit' : [addr.to_storage_string()
+                       for addr in self.forfeit_addresses],
+            'forfeit_map' : {
+                forfeit_p2sh.to_storage_string() : underlying_p2pkh.to_storage_string()
+                for (forfeit_p2sh, underlying_p2pkh) in self.forfeit_map.items()
+            },
+            'forfeit_scripts' : {
+                forfeit_p2sh.to_storage_string() : p2sh_script
+                for (forfeit_p2sh, p2sh_script) in self.forfeit_scripts.items()
+            }
         }
         self.storage.put('addresses', addr_dict)
 
@@ -346,6 +356,15 @@ class Abstract_Wallet(PrintError):
             d = {}
         self.receiving_addresses = Address.from_strings(d.get('receiving', []))
         self.change_addresses = Address.from_strings(d.get('change', []))
+        self.forfeit_addresses = Address.from_strings(d.get('forfeit', []))
+        self.forfeit_map = {
+            Address.from_string(forfeit_p2sh_str) : Address.from_string(underlying_p2pkh_str)
+            for forfeit_p2sh_str, underlying_p2pkh_str in d.get('forfeit_map', {}).items()
+        }
+        self.forfeit_scripts = {
+            Address.from_string(forfeit_p2sh_str) : p2sh_script
+            for (forfeit_p2sh_str, p2sh_script) in d.get('forfeit_scripts', {}).items()
+        }
 
     def synchronize(self):
         pass
@@ -391,9 +410,27 @@ class Abstract_Wallet(PrintError):
         assert not isinstance(address, str)
         return address in self.get_addresses()
 
+    def deref_forfeit(self, address, tx=None):
+        assert not isinstance(address, str)
+        if tx is not None:
+            from .zcf import derefForfeitOutput
+            return derefForfeitOutput(tx, address)
+        else:
+            if address in self.forfeit_map:
+                return self.forfeit_map[address], self.forfeit_scripts[address]
+            else:
+                return None, None
+
+    def is_forfeit(self, address):
+        return address in self.get_forfeit_addresses()
+
     def is_change(self, address):
         assert not isinstance(address, str)
         return address in self.change_addresses
+
+    def is_receiving(self, address):
+        assert not isinstance(address, str)
+        return address in self.receiving_addresses
 
     def get_address_index(self, address):
         try:
@@ -404,6 +441,11 @@ class Abstract_Wallet(PrintError):
             return True, self.change_addresses.index(address)
         except ValueError:
             pass
+        try:
+            return 2, self.forfeit_addresses.index(address)
+        except ValueError:
+            pass
+
         assert not isinstance(address, str)
         raise Exception("Address {} not found".format(address))
 
@@ -697,7 +739,7 @@ class Abstract_Wallet(PrintError):
         return self.get_receiving_addresses()[0]
 
     def get_addresses(self):
-        return self.get_receiving_addresses() + self.get_change_addresses()
+        return self.get_receiving_addresses() + self.get_change_addresses() + self.get_forfeit_addresses()
 
     def get_frozen_balance(self):
         if not self.frozen_coins:
@@ -953,6 +995,19 @@ class Abstract_Wallet(PrintError):
         time_str = format_time(timestamp) if timestamp else _("unknown")
         status_str = TX_STATUS[status] if status < 4 else time_str
         return status, status_str
+
+    def get_forfeit_amount(self, tx_hash):
+        # get amount of money in forfeit (or 0 if no forfeit)
+        tx = self.transactions.get(tx_hash)
+        if not tx:
+            return 0
+        for _otype, address, value  in tx.outputs():
+            print(_otype, address, value)
+            address, _ = self.deref_forfeit(address, tx)
+            if address is not None:
+                print("HAS FORFEIT", tx_hash, address, value)
+                return value
+        return 0
 
     def relayfee(self):
         return relayfee(self.network)
@@ -1552,7 +1607,10 @@ class ImportedWalletBase(Simple_Wallet):
     txin_type = 'p2pkh'
 
     def get_txin_type(self, address):
-        return self.txin_type
+        if address in self.get_forfeit_addresses():
+            return "forfeit_p2pkh"
+        else:
+            return self.txin_type
 
     def can_delete_address(self):
         return True
@@ -1580,6 +1638,9 @@ class ImportedWalletBase(Simple_Wallet):
 
     def get_change_addresses(self):
         return []
+
+    def get_forfeit_addresses(self):
+        return self.forfeit_addresses
 
     def delete_address(self, address):
         assert isinstance(address, Address)
@@ -1790,6 +1851,9 @@ class Deterministic_Wallet(Abstract_Wallet):
     def get_change_addresses(self):
         return self.change_addresses
 
+    def get_forfeit_addresses(self):
+        return self.forfeit_addresses
+
     def get_seed(self, password):
         return self.keystore.get_seed(password)
 
@@ -1865,13 +1929,23 @@ class Deterministic_Wallet(Abstract_Wallet):
             self.synchronize_sequence(False)
             self.synchronize_sequence(True)
 
-    def is_beyond_limit(self, address, is_change):
-        if is_change:
+    def is_beyond_limit(self, address):
+        if self.is_change(address):
             addr_list = self.get_change_addresses()
             limit = self.gap_limit_for_change
-        else:
+        elif self.is_receiving(address):
             addr_list = self.get_receiving_addresses()
             limit = self.gap_limit
+        elif self.is_forfeit(address):
+            # use the underlying address as the gap limit
+            addr_list = self.get_change_addresses()
+            address, _ = self.deref_forfeit(address)
+            limit = self.gap_limit_for_change
+        else:
+            # unknown address (likely forfeit)
+            # better mark as beyond limit
+            return True
+
         idx = addr_list.index(address)
         if idx < limit:
             return False
@@ -1887,7 +1961,10 @@ class Deterministic_Wallet(Abstract_Wallet):
         return self.get_master_public_key()
 
     def get_txin_type(self, address):
-        return self.txin_type
+        if address in self.get_forfeit_addresses():
+            return "forfeit_p2pkh"
+        else:
+            return self.txin_type
 
 
 class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
@@ -1917,6 +1994,13 @@ class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
         return [self.get_public_key(address)]
 
     def add_input_sig_info(self, txin, address):
+        if txin['type'] == 'forfeit_p2pkh':
+            underlying = self.forfeit_map[address]
+            print("Mapping signing info for forfeit address %s back to underlying address %s" % (address, underlying))
+            txin['forfeit_underlying_address'] = self.forfeit_map[address]
+            txin['forfeit_script'] = self.forfeit_scripts[address]
+            address = underlying
+
         derivation = self.get_address_index(address)
         x_pubkey = self.keystore.get_xpubkey(*derivation)
         txin['x_pubkeys'] = [x_pubkey]
