@@ -1930,6 +1930,7 @@ class Deterministic_Wallet(Abstract_Wallet):
             self.synchronize_sequence(True)
 
     def is_beyond_limit(self, address):
+        """ Nota bene: This function is solely to be used for visual presentation in a GUI and is not necessarily 100% accurate in all cases (forfeits)! """
         if self.is_change(address):
             addr_list = self.get_change_addresses()
             limit = self.gap_limit_for_change
