@@ -1196,6 +1196,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.fee_custom_lbl, 6, 1)
         grid.addWidget(self.fee_e, 6, 2)
 
+        self.forfeit_cb = QCheckBox(_('Use zero-conf forfeit'))
+        self.forfeit_cb.setChecked(self.config.get("use_forfeits"))
+        self.forfeit_cb.stateChanged.connect(self.toggle_use_forfeit)
+
+        grid.addWidget(self.forfeit_cb, 7, 0)
+
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
         self.preview_button.setToolTip(_('Display the details of your transactions before signing it.'))
         self.send_button = EnterButton(_("Send"), self.do_send)
@@ -1205,7 +1211,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.clear_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.send_button)
-        grid.addLayout(buttons, 7, 1, 1, 3)
+        grid.addLayout(buttons, 8, 1, 1, 3)
 
         self.amount_e.shortcut.connect(self.spend_max)
         self.payto_e.textChanged.connect(self.update_fee)
@@ -2736,6 +2742,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def toggle_cashaddr_settings(self, state):
         self.toggle_cashaddr(state == Qt.Checked)
+
+    def toggle_use_forfeit(self, state):
+        self.config.set_key("use_forfeits", state == Qt.Checked)
 
     def toggle_cashaddr(self, on):
         self.config.set_key('show_cashaddr', on)
