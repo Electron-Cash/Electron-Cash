@@ -714,6 +714,10 @@ class Abstract_Wallet(PrintError):
         confirmed_only = config.get('confirmed_only', False)
         if (isInvoice):
             confirmed_only = True
+
+        # only use confirmed inputs if forfeits are configured
+        confirmed_only = confirmed_only or config.get("use_forfeits", False)
+
         return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only)
 
     def get_utxos(self, domain = None, exclude_frozen = False, mature = False, confirmed_only = False):
@@ -1073,9 +1077,98 @@ class Abstract_Wallet(PrintError):
 
         assert all(isinstance(addr, Address) for addr in change_addrs)
 
+        if config.get("use_forfeits", False):
+            if i_max is not None:
+                raise NotEnoughFunds("Can't use forfeit output when sending everything.")
+
+            self.print_msg("Using forfeit output")
+            self.print_msg("ZCF: Available inputs: %s" % repr(inputs))
+            self.print_msg("ZCF: Regular outputs: %s" % repr(outputs))
+
+            # filter inputs for forfeit safety
+            new_inputs = []
+
+            for inp in inputs:
+                # check that all inputs are confirmed P2PKH
+                # FIXME: also allow forward spending of confirmed forfeit keys maybe?
+                if inp["type"] != "p2pkh":
+                    self.print_msg("ZCF: Ignoring input due to being non-P2PKH: %s", repr(inp))
+                    continue
+
+                # FIXME: is this the correct check for a confirmed input?
+                # FIXME2: A check needs to be implemented to not spend any funds received later
+                # on an address used as a forfeit input without that forfeit transaction being sufficiently buried.
+                # Sufficient meaning safe from reorgs (200 blocks or so). A warning should pop up in any case!
+                if inp["height"] <= 0:
+                    self.print_msg("ZCF: Ignoring input doe to being unconfirmed: %s", repr(inp))
+                    continue
+
+                inp_height, inp_conf, inp_timestamp = self.get_tx_height(inp["prevout_hash"])
+                assert(inp_height == inp["height"])
+
+                # Requiring certain chain depth could help for reorg scenarios etc.
+                # FIXME: Also check for this on the receiving side (optionally)
+                min_conf = 6
+                if inp_conf < min_conf:
+                    self.print_msg("ZCF: Ignoring input due to having less than %d confirmations." % min_conf)
+                    continue
+
+
+                received, sent = self.get_addr_io(inp["address"])
+                self.print_msg("ZCF: Receival history for input %s: %s" % (repr(inp), received))
+                self.print_msg("ZCF: Sent history for input %s: %s" % (repr(inp), sent))
+
+                if len(sent):
+                    self.print_msg("ZCF: Ignoring input as the address has already been used to send funds: %s" % repr(inp))
+                    continue
+
+                if len(received) > 1:
+                    self.print_msg("ZCF: Ignoring input as the address has been used to receive multiple funds: %s" % repr(inp))
+                    continue
+                new_inputs.append(inp)
+
+            inputs = new_inputs
+
+            # FIXME: think harder about using floats here and probably go and avoid them!
+            forfeit_fraction = config.get("forfeit_amount")
+            if forfeit_fraction is None:
+                forfeit_fraction = 1.0
+            self.print_msg("Forfeit fraction: %f" % forfeit_fraction)
+
+            regular_output_sum = 0
+            for out in outputs:
+                regular_output_sum += out[2]
+
+            from .zcf import makeZCFoutput
+
+            # pick first change address and use that as the address to spend the forfeit forward to
+            forfeit_pubkey_address =  change_addrs[0]
+
+            # also make sure that the forfeit address is used for the change
+            change_addrs = change_addrs[:1]
+
+            # mark this transaction as ZCF type 0, "ZCF\x00" by
+            # adding an OP_RETURN marker output
+            # The value here is just a placeholder to ensure correct selection of input amounts
+            # and will be set to zero below
+            # and also add the address so that it is easy to find by searching an OP_RETURN
+            # index.
+            # FIXME: "register" ID for this
+            op_return_marker_script = "OP_RETURN 5a434600"
+            outputs.append((TYPE_SCRIPT,
+                            ScriptOutput.from_string(op_return_marker_script), int(forfeit_fraction * regular_output_sum)))
+            forfeit_op_return_idx = len(outputs) - 1
         # Fee estimator
         if fixed_fee is None:
-            fee_estimator = config.estimate_fee
+            if config.get("use_forfeits", False):
+                # add fee for extra output (FIXME: adjust value of 10000 to the
+                # correct size of the extra P2SH). This high value has been chosen
+                # for now to not get into trouble with missing CPFP and min relay fees
+                # while testing. ZCF likely needs at least single-hop CPFP to be common
+                # to be usable.
+                fee_estimator = lambda size : config.estimate_fee(size + 10000)
+            else:
+                    fee_estimator = config.estimate_fee
         else:
             fee_estimator = lambda size: fixed_fee
 
@@ -1085,6 +1178,35 @@ class Abstract_Wallet(PrintError):
             coin_chooser = coinchooser.CoinChooserPrivacy()
             tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],
                                       fee_estimator, self.dust_threshold())
+
+            if config.get("use_forfeits", False):
+                # check that change actually has output
+                assert len(change_addrs) == 1
+                for outp in tx.get_outputs():
+                    if outp[0] == forfeit_pubkey_address:
+                        break
+                else:
+                    raise NotEnoughFunds("Forfeit need to create actual change.")
+
+                if 1:
+                    # set the OP_RETURN output to zero value
+                    print("BEFORE:", tx.outputs())
+                    forfeit_op_return_output = tx._outputs[forfeit_op_return_idx]
+                    tx._outputs[forfeit_op_return_idx] = (forfeit_op_return_output[0],
+                                                          forfeit_op_return_output[1],
+                                                          0)
+                    print("AFTER:", tx.outputs())
+
+                # sort TX already to have inputs in right order
+                # (FIXME: this could be replaced with just a sort of the inputs)
+                tx.BIP_LI01_sort()
+
+                forfeit_output = makeZCFoutput(tx.inputs(),
+                                  forfeit_pubkey_address,
+                                  int(forfeit_fraction * regular_output_sum))
+
+                # and add the forfeit output
+                tx.add_outputs([forfeit_output])
         else:
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
