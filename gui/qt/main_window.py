@@ -1197,7 +1197,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.fee_e, 6, 2)
 
         self.forfeit_cb = QCheckBox(_('Use zero-conf forfeit'))
-        self.forfeit_cb.setChecked(self.config.get("use_forfeits"))
+        self.forfeit_cb.setChecked(self.config.get("use_forfeits", False))
         self.forfeit_cb.stateChanged.connect(self.toggle_use_forfeit)
 
         grid.addWidget(self.forfeit_cb, 7, 0)
