@@ -1252,6 +1252,18 @@ class Abstract_Wallet(PrintError):
             locktime = 0
         tx.locktime = locktime
         run_hook('make_unsigned_transaction', self, tx)
+
+        if config.get("use_forfeits", False):
+            addr = forfeit_output[1]
+            if addr not in self.forfeit_addresses:
+                underlying, forfeit_script_bin = self.deref_forfeit(addr, tx)
+                forfeit_script_hex = hexlify(forfeit_script_bin).decode("ascii")
+                self.forfeit_addresses.append(addr)
+                self.forfeit_map[addr] = underlying
+                self.forfeit_scripts[addr] = forfeit_script_hex
+                self.add_address(addr)
+                self.save_addresses()
+
         return tx
 
     def mktx(self, outputs, password, config, fee=None, change_addr=None, domain=None):
