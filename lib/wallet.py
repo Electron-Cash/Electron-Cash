@@ -792,7 +792,7 @@ class Abstract_Wallet(PrintError):
                 _type, addr, v = txo
                 underlying, forfeit_script_bin = self.deref_forfeit(addr, tx)
 
-                if underlying is not None:
+                if underlying is not None and self.is_mine(underlying):
                     forfeit_script_hex = hexlify(forfeit_script_bin).decode("ascii")
                     if addr not in self.forfeit_addresses:
                         self.forfeit_addresses.append(addr)
