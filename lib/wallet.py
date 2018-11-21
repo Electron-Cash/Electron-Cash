@@ -2099,6 +2099,11 @@ class Deterministic_Wallet(Abstract_Wallet):
             # use the underlying address as the gap limit
             addr_list = self.get_change_addresses()
             address, _ = self.deref_forfeit(address)
+
+            # no guarantee that the change_addresses() contain this already - if seems
+            # beyond the change gap here, return True no matter what
+            if address not in addr_list:
+                return True
             limit = self.gap_limit_for_change
         else:
             # unknown address (likely forfeit)
