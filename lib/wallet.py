@@ -1118,7 +1118,7 @@ class Abstract_Wallet(PrintError):
 
                 # Requiring certain chain depth could help for reorg scenarios etc.
                 # FIXME: Also check for this on the receiving side (optionally)
-                min_conf = 6
+                min_conf = 1
                 if inp_conf < min_conf:
                     self.print_msg("ZCF: Ignoring input due to having less than %d confirmations." % min_conf)
                     continue
@@ -1181,12 +1181,12 @@ class Abstract_Wallet(PrintError):
         # Fee estimator
         if fixed_fee is None:
             if config.get("use_forfeits", False):
-                # add fee for extra output (FIXME: adjust value of 10000 to the
+                # add fee for extra output (FIXME: adjust value of 1000 to the
                 # correct size of the extra P2SH). This high value has been chosen
                 # for now to not get into trouble with missing CPFP and min relay fees
                 # while testing. ZCF likely needs at least single-hop CPFP to be common
                 # to be usable.
-                fee_estimator = lambda size : config.estimate_fee(size + 10000)
+                fee_estimator = lambda size : config.estimate_fee(size + 1000)
             else:
                     fee_estimator = config.estimate_fee
         else:
