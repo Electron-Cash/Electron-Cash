@@ -1127,6 +1127,13 @@ class Abstract_Wallet(PrintError):
                     continue
                 new_inputs.append(inp)
 
+            # Make sure that no address is used twice as an input
+            # This should be covered by the receival history, but just to make extra sure for now (until
+            # I understand all the Electron Cash logic better)
+            address_set = set(inp["address"] for inp in inputs)
+            if len(address_set) < len(inputs):
+                raise BaseException("No address might appear twice in the input to a forfeit transaction.")
+
             inputs = new_inputs
 
             # FIXME: think harder about using floats here and probably go and avoid them!
