@@ -1146,6 +1146,9 @@ class Abstract_Wallet(PrintError):
 
             inputs = new_inputs
 
+            if not inputs:
+                raise BaseException("Lacking inputs for constructing forfeit transaction.")
+
             # FIXME: think harder about using floats here and probably go and avoid them!
             forfeit_fraction = config.get("forfeit_amount")
             if forfeit_fraction is None:
