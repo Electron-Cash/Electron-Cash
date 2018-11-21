@@ -186,7 +186,7 @@ class Abstract_Wallet(PrintError):
         self._history = self.to_Address_dict(history)
 
         self.load_keystore()
-        self.load_addresses()
+        reload_history = self.load_addresses()
         self.load_transactions()
         self.build_reverse_history()
 
@@ -221,6 +221,9 @@ class Abstract_Wallet(PrintError):
         # invoices and contacts
         self.invoices = InvoiceStore(self.storage)
         self.contacts = Contacts(self.storage)
+
+        if reload_history:
+            self.clear_history()
 
     @classmethod
     def to_Address_dict(cls, d):
@@ -366,6 +369,13 @@ class Abstract_Wallet(PrintError):
             Address.from_string(forfeit_p2sh_str) : p2sh_script
             for (forfeit_p2sh_str, p2sh_script) in d.get('forfeit_scripts', {}).items()
         }
+
+        # reload history in case wallet didn't use forfeits before
+        if d.get('forfeit_map', "non-existent") == "non-existent":
+            self.print_msg("Reloading history as forfeits address map does not exist in wallet.")
+            return True
+        return False
+
 
     def synchronize(self):
         pass
