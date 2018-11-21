@@ -798,11 +798,11 @@ class Abstract_Wallet(PrintError):
                         self.forfeit_addresses.append(addr)
                         self.forfeit_map[addr] = underlying
                         self.forfeit_scripts[addr] = forfeit_script_hex
+                        self.add_address(addr)
+                        self.save_addresses()
                         print("Add forfeit: %s -> %s" % (repr(addr), repr(underlying)))
                     else:
                         print("Already forfeit: %s -> %s" % (repr(addr), repr(underlying)))
-                else:
-                    print("Not forfeit: %s" % repr(addr))
 
             # add inputs
             self.txi[tx_hash] = d = {}
