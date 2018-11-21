@@ -1079,7 +1079,7 @@ class Abstract_Wallet(PrintError):
 
         if config.get("use_forfeits", False):
             if i_max is not None:
-                raise NotEnoughFunds("Can't use forfeit output when sending everything.")
+                raise BaseException("Can't use forfeit output when sending everything.")
 
             self.print_msg("Using forfeit output")
             self.print_msg("ZCF: Available inputs: %s" % repr(inputs))
@@ -1186,7 +1186,7 @@ class Abstract_Wallet(PrintError):
                     if outp[0] == forfeit_pubkey_address:
                         break
                 else:
-                    raise NotEnoughFunds("Forfeit need to create actual change.")
+                    raise BaseException("Forfeit need to create actual change.")
 
                 if 1:
                     # set the OP_RETURN output to zero value
@@ -1223,7 +1223,6 @@ class Abstract_Wallet(PrintError):
         sats_per_byte=fee_in_satoshis/tx_in_bytes
         if (sats_per_byte > 50):
             raise ExcessiveFee()
-            return
 
         # Sort the inputs and outputs deterministically
         tx.BIP_LI01_sort()
