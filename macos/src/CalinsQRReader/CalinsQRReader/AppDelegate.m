@@ -59,11 +59,14 @@
         } else if (st != AVAuthorizationStatusAuthorized) {
             self.label.stringValue = @"Requesting camera authorization";
             [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted){
-                if (!granted) {
-                    self.label.stringValue = @"Camera access denied";
-                    return;
-                }
-                [self performSelectorOnMainThread:@selector(startReading) withObject:nil waitUntilDone:NO];
+                // below must be done on the main thread -- (this handler is not necessarily on the main thread)
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (!granted) {
+                        self.label.stringValue = @"Camera access denied";
+                    } else {
+                        [self startReading];
+                    }
+                });
             }];
             return NO;
         }
@@ -104,8 +107,8 @@
     self.detector = [CIDetector detectorOfType:CIDetectorTypeQRCode context:nil options:nil];
     self.videoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:_captureSession];
 
-    [_videoPreviewLayer setVideoGravity:AVLayerVideoGravityResizeAspectFill];
-    [_videoPreviewLayer setFrame:self.viewForCamera.layer.bounds];
+    [self.videoPreviewLayer setVideoGravity:AVLayerVideoGravityResizeAspectFill];
+    [self.videoPreviewLayer setFrame:self.viewForCamera.layer.bounds];
     [self.viewForCamera.layer addSublayer:self.videoPreviewLayer];
 
     [_captureSession startRunning];
@@ -117,8 +120,9 @@
     [self.captureSession stopRunning];
     self.captureSession = nil;
     [self.videoPreviewLayer removeFromSuperlayer];
-    dispatchQueue = nil;
+    self.videoPreviewLayer = nil;
     self.detector = nil;
+    dispatchQueue = nil;
     //self.button.hidden = NO; // <--- uncomment this if you want the app to read more than one QR code (if you make this a standalone app)
 }
 
@@ -127,7 +131,7 @@
         [[NSApplication sharedApplication] terminate:self];
 }
 - (void)windowDidResize:(NSNotification *)notif {
-    if (notif.object == self.window && self.videoPreviewLayer) {
+    if (notif.object == self.window && self.videoPreviewLayer && self.viewForCamera) {
         [self.videoPreviewLayer setFrame:self.viewForCamera.layer.bounds];
     }
 }
