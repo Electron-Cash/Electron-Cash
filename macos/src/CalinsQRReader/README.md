@@ -19,6 +19,20 @@ it will print nothing to stdout and exit.
 
 ---
 
+### Building
+
+In order to build the app and have it actually work on deployed machines other than your developer machine, you need an Apple Developer Certificate (you have to join the Apple developer program), and you need to sign the app. Otherwise on newer macOS, camera access won't be granted to the app.
+
+1. Load included source code in Xcode.
+2. Hit build.
+
+Or, if you prefer the command-line:
+
+1. Chdir to sources
+2. `xcodebuild`
+3. `codesign -v -f -s MY_DEVELOPER_CERT build/Release/CalinsQRReader.app`
+
+
 ### See Also
 
 - `lib/qrscanner.py` - for how it is integrated into Electron Cash.
