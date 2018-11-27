@@ -2706,6 +2706,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d.setMinimumSize(600, 300)
 
         vbox = QVBoxLayout(d)
+        l = QLabel(_("Note: Electron Cash does not support import of passworded BIP38 private keys (private keys starting in 6P...). Decrypt keys to WIF format (starting with 5, K, or L) in order to sweep."))
+        l.setWordWrap(True)
+        vbox.addWidget(l)
         vbox.addWidget(QLabel(_("Enter private keys:")))
 
         keys_e = ScanQRTextEdit(allow_multi=True)
