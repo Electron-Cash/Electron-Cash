@@ -1152,7 +1152,7 @@ class Abstract_Wallet(PrintError):
             # FIXME: think harder about using floats here and probably go and avoid them!
             forfeit_fraction = config.get("forfeit_amount")
             if forfeit_fraction is None:
-                forfeit_fraction = 1.0
+                forfeit_fraction = config.get("forfeit_send_multiplicator", 1.0)
             self.print_msg("Forfeit fraction: %f" % forfeit_fraction)
 
             regular_output_sum = 0

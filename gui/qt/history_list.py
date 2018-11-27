@@ -88,8 +88,9 @@ class HistoryList(MyTreeWidget):
             forfeit_amt = 0
             if status == 2:
                 forfeit_amt  = self.wallet.get_forfeit_amount(tx_hash)
-                print("GETTING FORFEIT", tx_hash, forfeit_amt)
-                if value is not None and forfeit_amt >= abs(1.0 * value): # FIXME: make configurable
+                #print("GETTING FORFEIT", tx_hash, forfeit_amt)
+                min_factor=self.config.get("forfeit_recv_min_multiplicator", 1.0)
+                if value is not None and forfeit_amt >= abs(min_factor * value):
                     status = 10 # FIXME: this all screams 'enum'!
                     status_str = "Includes forfeit"
 
