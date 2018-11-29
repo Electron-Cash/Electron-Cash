@@ -15,18 +15,14 @@ function warn {
 	printf "\r⚠️  ${YELLOW}WARNING:${NC}  ${1}\n"
 }
 
-function DoCodeSignMaybe { # ARGS: infoName fileOrDirName codesignIdentity entitlements
+function DoCodeSignMaybe { # ARGS: infoName fileOrDirName codesignIdentity
     infoName="$1"
     file="$2"
     identity="$3"
-    entitlements="$4"
     deep=""
     if [ -z "$identity" ]; then
         # we are ok with them not passing anything; master script calls us unconditionally even if no identity is specified
         return
-    fi
-    if [ -n "$entitlements" ]; then
-        entitlements="--entitlements ${entitlements}"
     fi
     if [ -d "$file" ]; then
         deep="--deep"
@@ -35,5 +31,5 @@ function DoCodeSignMaybe { # ARGS: infoName fileOrDirName codesignIdentity entit
         fail "Argument error to internal function DoCodeSignMaybe()"
     fi
     info "Code signing ${infoName}..."
-    codesign -f -v $deep -s "$identity" $entitlements "$file" || fail "Could not code sign ${infoName}"
+    codesign -f -v $deep -s "$identity" --preserve-metadata=requirements,entitlements "$file" || fail "Could not code sign ${infoName}"
 }

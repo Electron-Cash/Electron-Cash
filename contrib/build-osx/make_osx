@@ -84,9 +84,9 @@ info "Building CalinsQRReader..."
 d=contrib/CalinsQRReader
 pushd $d
 rm -fr build
-xcodebuild -sdk macosx10.14 || fail "Could not build CalinsQRReader"
+xcodebuild || fail "Could not build CalinsQRReader"
 popd
-DoCodeSignMaybe "CalinsQRReader.app" "${d}/build/Release/CalinsQRReader.app" "$APP_SIGN" "${d}/CalinsQRReader/CalinsQRReader.entitlements" # If APP_SIGN is empty will be a noop
+DoCodeSignMaybe "CalinsQRReader.app" "${d}/build/Release/CalinsQRReader.app" "$APP_SIGN" # If APP_SIGN is empty will be a noop
 
 info "Installing requirements..."
 python3 -m pip install -Ir ./contrib/deterministic-build/requirements.txt --user && \
