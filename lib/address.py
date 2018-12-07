@@ -64,6 +64,7 @@ OpCodes = Enumeration("OpCodes", [
     ("OP_NOP1", 0xB0),
     "OP_CHECKLOCKTIMEVERIFY", "OP_CHECKSEQUENCEVERIFY",
     "OP_NOP4", "OP_NOP5", "OP_NOP6", "OP_NOP7", "OP_NOP8", "OP_NOP9", "OP_NOP10",
+    ("OP_CHECKDATASIG", 0xba), "OP_CHECKDATASIGVERIFY"
 ])
 
 
@@ -287,7 +288,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
         return self.script
 
     def __str__(self):
-        return self.to_ui_string(True)
+        return self.to_ui_string()
 
     def __repr__(self):
         return '<ScriptOutput {}>'.format(self.__str__())

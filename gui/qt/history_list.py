@@ -42,6 +42,7 @@ TX_ICONS = [
     "clock4.png",
     "clock5.png",
     "confirmed.png",
+    "forfeit.png"
 ]
 
 
@@ -70,7 +71,7 @@ class HistoryList(MyTreeWidget):
     def get_domain(self):
         '''Replaced in address_dialog.py'''
         return self.wallet.get_addresses()
-        
+
     @profiler
     def on_update(self):
         self.wallet = self.parent.wallet
@@ -83,6 +84,16 @@ class HistoryList(MyTreeWidget):
         for h_item in h:
             tx_hash, height, conf, timestamp, value, balance = h_item
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
+
+            forfeit_amt = 0
+            if status == 2:
+                forfeit_amt  = self.wallet.get_forfeit_amount(tx_hash)
+                #print("GETTING FORFEIT", tx_hash, forfeit_amt)
+                min_factor=self.config.get("forfeit_recv_min_multiplicator", 1.0)
+                if value is not None and forfeit_amt >= abs(min_factor * value):
+                    status = 10 # FIXME: this all screams 'enum'!
+                    status_str = "Includes forfeit"
+
             has_invoice = self.wallet.invoices.paid.get(tx_hash)
             if status not in self.statusIcons:
                 self.statusIcons[status] = QIcon(":icons/" + TX_ICONS[status])

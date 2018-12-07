@@ -1196,6 +1196,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(self.fee_custom_lbl, 6, 1)
         grid.addWidget(self.fee_e, 6, 2)
 
+        self.forfeit_cb = QCheckBox(_('Use zero-conf forfeit'))
+        self.forfeit_cb.setChecked(self.config.get("use_forfeits", False))
+        self.forfeit_cb.stateChanged.connect(self.toggle_use_forfeit)
+        self.forfeit_cb.setVisible(self.config.get("forfeit_global_gui_enable", True))
+        grid.addWidget(self.forfeit_cb, 7, 0)
+
         self.preview_button = EnterButton(_("Preview"), self.do_preview)
         self.preview_button.setToolTip(_('Display the details of your transactions before signing it.'))
         self.send_button = EnterButton(_("Send"), self.do_send)
@@ -1205,7 +1211,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.clear_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.send_button)
-        grid.addLayout(buttons, 7, 1, 1, 3)
+        grid.addLayout(buttons, 8, 1, 1, 3)
 
         self.amount_e.shortcut.connect(self.spend_max)
         self.payto_e.textChanged.connect(self.update_fee)
@@ -2737,6 +2743,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def toggle_cashaddr_settings(self, state):
         self.toggle_cashaddr(state == Qt.Checked)
 
+    def toggle_use_forfeit(self, state):
+        self.config.set_key("use_forfeits", state == Qt.Checked)
+
     def toggle_cashaddr(self, on):
         self.config.set_key('show_cashaddr', on)
         Address.show_cashaddr(on)
@@ -3084,12 +3093,57 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         fiat_widgets.append((QLabel(_('Show Fiat balance for addresses')), fiat_address_checkbox))
         fiat_widgets.append((QLabel(_('Source')), ex_combo))
 
+
+        def toggle_show_zcf_features(state):
+            enabled = state == Qt.Checked
+            self.config.set_key("forfeit_global_gui_enable", enabled)
+            if not enabled:
+                # If disabling, also disable the flag that is used by the backend
+                self.config.set_key("use_forfeits", False)
+                self.forfeit_cb.setChecked(False)
+            self.forfeit_cb.setVisible(state)
+
+        show_zcf_features_cb = QCheckBox()
+        show_zcf_features_cb.stateChanged.connect(toggle_show_zcf_features)
+
+        zcf_send_multiplicator_e = QLineEdit()
+        zcf_send_multiplicator_e.setValidator(QDoubleValidator(0.1, 10.0, 2))
+        zcf_recv_min_multiplicator_e = QLineEdit()
+        zcf_recv_min_multiplicator_e.setValidator(QDoubleValidator(0.1, 10.0, 2))
+
+        config = self.config
+
+        show_zcf_features_cb.setChecked(
+            config.get("forfeit_global_gui_enable", True))
+
+        def zcf_range_finished(key, edit):
+            value = float(edit.text())
+            config.set_key(key, value)
+
+        zcf_send_multiplicator_e.setText(
+            "%.2f" % config.get("forfeit_send_multiplicator", 1.0))
+        zcf_send_multiplicator_e.editingFinished.connect(
+            partial(zcf_range_finished, "forfeit_send_multiplicator",
+                    zcf_send_multiplicator_e))
+
+        zcf_recv_min_multiplicator_e.setText(
+            "%.2f" % config.get("forfeit_recv_min_multiplicator", 1.0))
+        zcf_recv_min_multiplicator_e.editingFinished.connect(
+            partial(zcf_range_finished, "forfeit_recv_min_multiplicator",
+                    zcf_recv_min_multiplicator_e))
+
+
+        zcf_widgets = [(QLabel(_('Enable ZCF features')), show_zcf_features_cb),
+                       (QLabel(_('ZCF send multiplicator')), zcf_send_multiplicator_e),
+                       (QLabel(_('ZCF receive min. multiplicator')), zcf_recv_min_multiplicator_e)]
+
         tabs_info = [
             (fee_widgets, _('Fees')),
             (tx_widgets, _('Transactions')),
             (gui_widgets, _('Appearance')),
             (fiat_widgets, _('Fiat')),
             (id_widgets, _('Identity')),
+            (zcf_widgets, _('Zero Conf Forfeits'))
         ]
         for widgets, name in tabs_info:
             tab = QWidget()

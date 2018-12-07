@@ -61,6 +61,7 @@ from . import paymentrequest
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .paymentrequest import InvoiceStore
 from .contacts import Contacts
+from binascii import hexlify
 
 TX_STATUS = [
     _('Unconfirmed parent'),
@@ -185,7 +186,7 @@ class Abstract_Wallet(PrintError):
         self._history = self.to_Address_dict(history)
 
         self.load_keystore()
-        self.load_addresses()
+        reload_history = self.load_addresses()
         self.load_transactions()
         self.build_reverse_history()
 
@@ -220,6 +221,9 @@ class Abstract_Wallet(PrintError):
         # invoices and contacts
         self.invoices = InvoiceStore(self.storage)
         self.contacts = Contacts(self.storage)
+
+        if reload_history:
+            self.clear_history()
 
     @classmethod
     def to_Address_dict(cls, d):
@@ -285,7 +289,7 @@ class Abstract_Wallet(PrintError):
             self.storage.put('verified_tx3', self.verified_tx)
             if write:
                 self.storage.write()
-                
+
     def clear_history(self):
         with self.transaction_lock:
             self.txi = {}
@@ -337,6 +341,16 @@ class Abstract_Wallet(PrintError):
                           for addr in self.receiving_addresses],
             'change': [addr.to_storage_string()
                        for addr in self.change_addresses],
+            'forfeit' : [addr.to_storage_string()
+                       for addr in self.forfeit_addresses],
+            'forfeit_map' : {
+                forfeit_p2sh.to_storage_string() : underlying_p2pkh.to_storage_string()
+                for (forfeit_p2sh, underlying_p2pkh) in self.forfeit_map.items()
+            },
+            'forfeit_scripts' : {
+                forfeit_p2sh.to_storage_string() : p2sh_script
+                for (forfeit_p2sh, p2sh_script) in self.forfeit_scripts.items()
+            }
         }
         self.storage.put('addresses', addr_dict)
 
@@ -346,6 +360,22 @@ class Abstract_Wallet(PrintError):
             d = {}
         self.receiving_addresses = Address.from_strings(d.get('receiving', []))
         self.change_addresses = Address.from_strings(d.get('change', []))
+        self.forfeit_addresses = Address.from_strings(d.get('forfeit', []))
+        self.forfeit_map = {
+            Address.from_string(forfeit_p2sh_str) : Address.from_string(underlying_p2pkh_str)
+            for forfeit_p2sh_str, underlying_p2pkh_str in d.get('forfeit_map', {}).items()
+        }
+        self.forfeit_scripts = {
+            Address.from_string(forfeit_p2sh_str) : p2sh_script
+            for (forfeit_p2sh_str, p2sh_script) in d.get('forfeit_scripts', {}).items()
+        }
+
+        # reload history in case wallet didn't use forfeits before
+        if d.get('forfeit_map', "non-existent") == "non-existent":
+            self.print_msg("Reloading history as forfeits address map does not exist in wallet.")
+            return True
+        return False
+
 
     def synchronize(self):
         pass
@@ -391,9 +421,27 @@ class Abstract_Wallet(PrintError):
         assert not isinstance(address, str)
         return address in self.get_addresses()
 
+    def deref_forfeit(self, address, tx=None):
+        assert not isinstance(address, str)
+        if tx is not None:
+            from .zcf import derefForfeitOutput
+            return derefForfeitOutput(tx, address)
+        else:
+            if address in self.forfeit_map:
+                return self.forfeit_map[address], self.forfeit_scripts[address]
+            else:
+                return None, None
+
+    def is_forfeit(self, address):
+        return address in self.get_forfeit_addresses()
+
     def is_change(self, address):
         assert not isinstance(address, str)
         return address in self.change_addresses
+
+    def is_receiving(self, address):
+        assert not isinstance(address, str)
+        return address in self.receiving_addresses
 
     def get_address_index(self, address):
         try:
@@ -404,6 +452,11 @@ class Abstract_Wallet(PrintError):
             return True, self.change_addresses.index(address)
         except ValueError:
             pass
+        try:
+            return 2, self.forfeit_addresses.index(address)
+        except ValueError:
+            pass
+
         assert not isinstance(address, str)
         raise Exception("Address {} not found".format(address))
 
@@ -671,6 +724,10 @@ class Abstract_Wallet(PrintError):
         confirmed_only = config.get('confirmed_only', False)
         if (isInvoice):
             confirmed_only = True
+
+        # only use confirmed inputs if forfeits are configured
+        confirmed_only = confirmed_only or config.get("use_forfeits", False)
+
         return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only)
 
     def get_utxos(self, domain = None, exclude_frozen = False, mature = False, confirmed_only = False):
@@ -697,7 +754,7 @@ class Abstract_Wallet(PrintError):
         return self.get_receiving_addresses()[0]
 
     def get_addresses(self):
-        return self.get_receiving_addresses() + self.get_change_addresses()
+        return self.get_receiving_addresses() + self.get_change_addresses() + self.get_forfeit_addresses()
 
     def get_frozen_balance(self):
         if not self.frozen_coins:
@@ -727,7 +784,26 @@ class Abstract_Wallet(PrintError):
 
     def add_transaction(self, tx_hash, tx):
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
+
         with self.transaction_lock:
+            # extract potential forfeit address from TXN
+            print("Add tx: %s" % tx_hash)
+            for txo in tx.outputs():
+                _type, addr, v = txo
+                underlying, forfeit_script_bin = self.deref_forfeit(addr, tx)
+
+                if underlying is not None and self.is_mine(underlying):
+                    forfeit_script_hex = hexlify(forfeit_script_bin).decode("ascii")
+                    if addr not in self.forfeit_addresses:
+                        self.forfeit_addresses.append(addr)
+                        self.forfeit_map[addr] = underlying
+                        self.forfeit_scripts[addr] = forfeit_script_hex
+                        self.add_address(addr)
+                        self.save_addresses()
+                        print("Add forfeit: %s -> %s" % (repr(addr), repr(underlying)))
+                    else:
+                        print("Already forfeit: %s -> %s" % (repr(addr), repr(underlying)))
+
             # add inputs
             self.txi[tx_hash] = d = {}
             for txi in tx.inputs():
@@ -824,7 +900,7 @@ class Abstract_Wallet(PrintError):
 
         # Store fees
         self.tx_fees.update(tx_fees)
-        
+
         if self.network:
             self.network.trigger_callback('on_history')
 
@@ -954,6 +1030,19 @@ class Abstract_Wallet(PrintError):
         status_str = TX_STATUS[status] if status < 4 else time_str
         return status, status_str
 
+    def get_forfeit_amount(self, tx_hash):
+        # get amount of money in forfeit (or 0 if no forfeit)
+        tx = self.transactions.get(tx_hash)
+        if not tx:
+            return 0
+        for _otype, address, value  in tx.outputs():
+            print(_otype, address, value)
+            address, _ = self.deref_forfeit(address, tx)
+            if address is not None:
+                print("HAS FORFEIT", tx_hash, address, value)
+                return value
+        return 0
+
     def relayfee(self):
         return relayfee(self.network)
 
@@ -998,9 +1087,108 @@ class Abstract_Wallet(PrintError):
 
         assert all(isinstance(addr, Address) for addr in change_addrs)
 
+        if config.get("use_forfeits", False):
+            if i_max is not None:
+                raise BaseException("Can't use forfeit output when sending everything.")
+
+            self.print_msg("Using forfeit output")
+            self.print_msg("ZCF: Available inputs: %s" % repr(inputs))
+            self.print_msg("ZCF: Regular outputs: %s" % repr(outputs))
+
+            # filter inputs for forfeit safety
+            new_inputs = []
+
+            for inp in inputs:
+                # check that all inputs are confirmed P2PKH
+                # FIXME: also allow forward spending of confirmed forfeit keys maybe?
+                if inp["type"] != "p2pkh":
+                    self.print_msg("ZCF: Ignoring input due to being non-P2PKH: %s", repr(inp))
+                    continue
+
+                # FIXME: is this the correct check for a confirmed input?
+                # FIXME2: A check needs to be implemented to not spend any funds received later
+                # on an address used as a forfeit input without that forfeit transaction being sufficiently buried.
+                # Sufficient meaning safe from reorgs (200 blocks or so). A warning should pop up in any case!
+                if inp["height"] <= 0:
+                    self.print_msg("ZCF: Ignoring input doe to being unconfirmed: %s", repr(inp))
+                    continue
+
+                inp_height, inp_conf, inp_timestamp = self.get_tx_height(inp["prevout_hash"])
+                assert(inp_height == inp["height"])
+
+                # Requiring certain chain depth could help for reorg scenarios etc.
+                # FIXME: Also check for this on the receiving side (optionally)
+                min_conf = 1
+                if inp_conf < min_conf:
+                    self.print_msg("ZCF: Ignoring input due to having less than %d confirmations." % min_conf)
+                    continue
+
+
+                received, sent = self.get_addr_io(inp["address"])
+                self.print_msg("ZCF: Receival history for input %s: %s" % (repr(inp), received))
+                self.print_msg("ZCF: Sent history for input %s: %s" % (repr(inp), sent))
+
+                if len(sent):
+                    self.print_msg("ZCF: Ignoring input as the address has already been used to send funds: %s" % repr(inp))
+                    continue
+
+                if len(received) > 1:
+                    self.print_msg("ZCF: Ignoring input as the address has been used to receive multiple funds: %s" % repr(inp))
+                    continue
+                new_inputs.append(inp)
+
+            # Make sure that no address is used twice as an input
+            # This should be covered by the receival history, but just to make extra sure for now (until
+            # I understand all the Electron Cash logic better)
+            address_set = set(inp["address"] for inp in inputs)
+            if len(address_set) < len(inputs):
+                raise BaseException("No address might appear twice in the input to a forfeit transaction.")
+
+            inputs = new_inputs
+
+            if not inputs:
+                raise BaseException("Lacking inputs for constructing forfeit transaction.")
+
+            # FIXME: think harder about using floats here and probably go and avoid them!
+            forfeit_fraction = config.get("forfeit_amount")
+            if forfeit_fraction is None:
+                forfeit_fraction = config.get("forfeit_send_multiplicator", 1.0)
+            self.print_msg("Forfeit fraction: %f" % forfeit_fraction)
+
+            regular_output_sum = 0
+            for out in outputs:
+                regular_output_sum += out[2]
+
+            from .zcf import makeZCFoutput
+
+            # pick first change address and use that as the address to spend the forfeit forward to
+            forfeit_pubkey_address =  change_addrs[0]
+
+            # also make sure that the forfeit address is used for the change
+            change_addrs = change_addrs[:1]
+
+            # mark this transaction as ZCF type 0, "ZCF\x00" by
+            # adding an OP_RETURN marker output
+            # The value here is just a placeholder to ensure correct selection of input amounts
+            # and will be set to zero below
+            # and also add the address so that it is easy to find by searching an OP_RETURN
+            # index.
+            # FIXME: "register" ID for this
+            op_return_marker_script = "OP_RETURN 5a434600"
+            outputs.append((TYPE_SCRIPT,
+                            ScriptOutput.from_string(op_return_marker_script), int(forfeit_fraction * regular_output_sum)))
+            forfeit_op_return_idx = len(outputs) - 1
         # Fee estimator
         if fixed_fee is None:
-            fee_estimator = config.estimate_fee
+            if config.get("use_forfeits", False):
+                # add fee for extra output (FIXME: adjust value of 1000 to the
+                # correct size of the extra P2SH). This high value has been chosen
+                # for now to not get into trouble with missing CPFP and min relay fees
+                # while testing. ZCF likely needs at least single-hop CPFP to be common
+                # to be usable.
+                fee_estimator = lambda size : config.estimate_fee(size + 1000)
+            else:
+                    fee_estimator = config.estimate_fee
         else:
             fee_estimator = lambda size: fixed_fee
 
@@ -1010,6 +1198,35 @@ class Abstract_Wallet(PrintError):
             coin_chooser = coinchooser.CoinChooserPrivacy()
             tx = coin_chooser.make_tx(inputs, outputs, change_addrs[:max_change],
                                       fee_estimator, self.dust_threshold())
+
+            if config.get("use_forfeits", False):
+                # check that change actually has output
+                assert len(change_addrs) == 1
+                for outp in tx.get_outputs():
+                    if outp[0] == forfeit_pubkey_address:
+                        break
+                else:
+                    raise BaseException("Forfeit need to create actual change.")
+
+                if 1:
+                    # set the OP_RETURN output to zero value
+                    print("BEFORE:", tx.outputs())
+                    forfeit_op_return_output = tx._outputs[forfeit_op_return_idx]
+                    tx._outputs[forfeit_op_return_idx] = (forfeit_op_return_output[0],
+                                                          forfeit_op_return_output[1],
+                                                          0)
+                    print("AFTER:", tx.outputs())
+
+                # sort TX already to have inputs in right order
+                # (FIXME: this could be replaced with just a sort of the inputs)
+                tx.BIP_LI01_sort()
+
+                forfeit_output = makeZCFoutput(tx.inputs(),
+                                  forfeit_pubkey_address,
+                                  int(forfeit_fraction * regular_output_sum))
+
+                # and add the forfeit output
+                tx.add_outputs([forfeit_output])
         else:
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
@@ -1026,7 +1243,6 @@ class Abstract_Wallet(PrintError):
         sats_per_byte=fee_in_satoshis/tx_in_bytes
         if (sats_per_byte > 50):
             raise ExcessiveFee()
-            return
 
         # Sort the inputs and outputs deterministically
         tx.BIP_LI01_sort()
@@ -1036,6 +1252,18 @@ class Abstract_Wallet(PrintError):
             locktime = 0
         tx.locktime = locktime
         run_hook('make_unsigned_transaction', self, tx)
+
+        if config.get("use_forfeits", False):
+            addr = forfeit_output[1]
+            if addr not in self.forfeit_addresses:
+                underlying, forfeit_script_bin = self.deref_forfeit(addr, tx)
+                forfeit_script_hex = hexlify(forfeit_script_bin).decode("ascii")
+                self.forfeit_addresses.append(addr)
+                self.forfeit_map[addr] = underlying
+                self.forfeit_scripts[addr] = forfeit_script_hex
+                self.add_address(addr)
+                self.save_addresses()
+
         return tx
 
     def mktx(self, outputs, password, config, fee=None, change_addr=None, domain=None):
@@ -1552,7 +1780,10 @@ class ImportedWalletBase(Simple_Wallet):
     txin_type = 'p2pkh'
 
     def get_txin_type(self, address):
-        return self.txin_type
+        if address in self.get_forfeit_addresses():
+            return "forfeit_p2pkh"
+        else:
+            return self.txin_type
 
     def can_delete_address(self):
         return True
@@ -1581,6 +1812,9 @@ class ImportedWalletBase(Simple_Wallet):
     def get_change_addresses(self):
         return []
 
+    def get_forfeit_addresses(self):
+        return self.forfeit_addresses
+
     def delete_address(self, address):
         assert isinstance(address, Address)
         if address not in self.get_addresses():
@@ -1608,7 +1842,7 @@ class ImportedWalletBase(Simple_Wallet):
                 # FIXME: what about pruned_txo?
 
             self.storage.put('verified_tx3', self.verified_tx)
-            
+
         self.save_transactions()
 
         self.set_label(address.to_storage_string(), None)
@@ -1790,6 +2024,9 @@ class Deterministic_Wallet(Abstract_Wallet):
     def get_change_addresses(self):
         return self.change_addresses
 
+    def get_forfeit_addresses(self):
+        return self.forfeit_addresses
+
     def get_seed(self, password):
         return self.keystore.get_seed(password)
 
@@ -1865,13 +2102,29 @@ class Deterministic_Wallet(Abstract_Wallet):
             self.synchronize_sequence(False)
             self.synchronize_sequence(True)
 
-    def is_beyond_limit(self, address, is_change):
-        if is_change:
+    def is_beyond_limit(self, address):
+        """ Nota bene: This function is solely to be used for visual presentation in a GUI and is not necessarily 100% accurate in all cases (forfeits)! """
+        if self.is_change(address):
             addr_list = self.get_change_addresses()
             limit = self.gap_limit_for_change
-        else:
+        elif self.is_receiving(address):
             addr_list = self.get_receiving_addresses()
             limit = self.gap_limit
+        elif self.is_forfeit(address):
+            # use the underlying address as the gap limit
+            addr_list = self.get_change_addresses()
+            address, _ = self.deref_forfeit(address)
+
+            # no guarantee that the change_addresses() contain this already - if seems
+            # beyond the change gap here, return True no matter what
+            if address not in addr_list:
+                return True
+            limit = self.gap_limit_for_change
+        else:
+            # unknown address (likely forfeit)
+            # better mark as beyond limit
+            return True
+
         idx = addr_list.index(address)
         if idx < limit:
             return False
@@ -1887,7 +2140,10 @@ class Deterministic_Wallet(Abstract_Wallet):
         return self.get_master_public_key()
 
     def get_txin_type(self, address):
-        return self.txin_type
+        if address in self.get_forfeit_addresses():
+            return "forfeit_p2pkh"
+        else:
+            return self.txin_type
 
 
 class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
@@ -1917,6 +2173,13 @@ class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
         return [self.get_public_key(address)]
 
     def add_input_sig_info(self, txin, address):
+        if txin['type'] == 'forfeit_p2pkh':
+            underlying = self.forfeit_map[address]
+            print("Mapping signing info for forfeit address %s back to underlying address %s" % (address, underlying))
+            txin['forfeit_underlying_address'] = self.forfeit_map[address]
+            txin['forfeit_script'] = self.forfeit_scripts[address]
+            address = underlying
+
         derivation = self.get_address_index(address)
         x_pubkey = self.keystore.get_xpubkey(*derivation)
         txin['x_pubkeys'] = [x_pubkey]
