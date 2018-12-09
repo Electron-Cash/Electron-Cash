@@ -58,7 +58,7 @@
   VIAddVersionKey ProductName "${PRODUCT_NAME} Installer"
   VIAddVersionKey Comments "The installer for ${PRODUCT_NAME}"
   VIAddVersionKey CompanyName "${PRODUCT_NAME}"
-  VIAddVersionKey LegalCopyright "2013-2019 ${PRODUCT_PUBLISHER}"
+  VIAddVersionKey LegalCopyright "2013-2019 ${PRODUCT_PUBLISHER} and Electrum Technologies GmbH"
   VIAddVersionKey FileDescription "${PRODUCT_NAME} Installer"
   VIAddVersionKey FileVersion ${PRODUCT_VERSION}
   VIAddVersionKey ProductVersion ${PRODUCT_VERSION}
@@ -136,7 +136,7 @@ Section
   WriteRegStr HKCU "Software\Classes\bitcoincash" "" "URL:bitcoincash Protocol"
   WriteRegStr HKCU "Software\Classes\bitcoincash" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\bitcoincash" "DefaultIcon" "$\"$INSTDIR\electron.ico, 0$\""
-  WriteRegStr HKCU "Software\Classes\bitcoin\shell\open\command" "" "$\"$INSTDIR\Electron-Cash-${PRODUCT_VERSION}.exe$\" $\"%1$\""
+  WriteRegStr HKCU "Software\Classes\bitcoincash\shell\open\command" "" "$\"$INSTDIR\Electron-Cash-${PRODUCT_VERSION}.exe$\" $\"%1$\""
 
   ;Adds an uninstaller possibilty to Windows Uninstall or change a program section
   WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "DisplayName" "$(^Name)"
