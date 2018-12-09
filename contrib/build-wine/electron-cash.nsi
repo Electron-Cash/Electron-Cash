@@ -132,7 +132,7 @@ Section
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME} Testnet.lnk" "$INSTDIR\Electron-Cash-${PRODUCT_VERSION}.exe" "--testnet" "$INSTDIR\Electron-Cash-${PRODUCT_VERSION}.exe" 0
 
 
-  ;Links bitcoin: URI's to Electrum
+  ;Links bitcoincash: URI's to Electron Cash
   WriteRegStr HKCU "Software\Classes\bitcoincash" "" "URL:bitcoincash Protocol"
   WriteRegStr HKCU "Software\Classes\bitcoincash" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\bitcoincash" "DefaultIcon" "$\"$INSTDIR\electron.ico, 0$\""
