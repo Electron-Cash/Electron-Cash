@@ -73,10 +73,11 @@ class AddressList(MyTreeWidget):
                 it = root.child(i)
                 if it and it.childCount():
                     restore_expanded_items(it, expanded_item_names) # recurse, do leaves first
-                    old = it.isExpanded()
+                    old = bool(it.isExpanded())
                     new = bool(item_path(it) in expanded_item_names)
-                    it.setExpanded(new)
-                    if old != new: print(" ---> RESTORED",item_path(it),old,"->",new)
+                    if old != new:
+                        it.setExpanded(new)
+                        print(" ---> RESTORED",item_path(it),old,"->",new)
         self.wallet = self.parent.wallet
         had_item_count = self.topLevelItemCount()
         item = self.currentItem()
