@@ -632,7 +632,7 @@ class Network(util.DaemonThread):
                 client_req = self.unanswered_requests.pop(message_id, None)
                 if client_req:
                     if interface != self.interface:
-                        self.print_error(("WARNING: got a client request from an interface '{}' that is not self.interface '{}'"
+                        self.print_error(("WARNING: got a 'client' response from an interface '{}' that is not self.interface '{}'"
                                           + " (Probably the default server has been switched). Proceeding gingerly...")
                                          .format(interface, self.interface))
                     callbacks = [client_req[2]]
