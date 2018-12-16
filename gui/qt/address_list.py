@@ -77,13 +77,11 @@ class AddressList(MyTreeWidget):
                     new = bool(item_path(it) in expanded_item_names)
                     if old != new:
                         it.setExpanded(new)
-                        print(" ---> RESTORED",item_path(it),old,"->",new)
         self.wallet = self.parent.wallet
         had_item_count = self.topLevelItemCount()
         item = self.currentItem()
         current_address = item.data(0, Qt.UserRole) if item else None
         expanded_item_names = remember_expanded_items(self.invisibleRootItem())
-        print(" ---> EXPANDED ITEMS:",expanded_item_names)
         self.clear()
         receiving_addresses = self.wallet.get_receiving_addresses()
         change_addresses = self.wallet.get_change_addresses()
@@ -106,7 +104,6 @@ class AddressList(MyTreeWidget):
             else:
                 seq_item = account_item
             used_item = QTreeWidgetItem( [ _("Used"), '', '', '', '', ''] )
-            print("  ------->  used_item is expanded:", used_item.isExpanded())
             used_flag = False
             addr_list = change_addresses if is_change else receiving_addresses
             for n, address in enumerate(addr_list):
@@ -150,12 +147,9 @@ class AddressList(MyTreeWidget):
             # to pick out the selected item and the above code mutates the TreeList, invalidating indices
             # and other craziness, which might produce UI glitches. See #1042
             self.setCurrentItem(items_to_re_select[-1])
-            print(" ----> ReSelected item:", item_path(items_to_re_select[-1]))
-            print(" ----> EXPANDED after reselect:", remember_expanded_items(self.invisibleRootItem()))
         
         # Now, at the very end, enforce previous UI state with respect to what was expanded or not. See #1042
         restore_expanded_items(self.invisibleRootItem(), expanded_item_names)
-        print(" ---> EXPANDED after all is said and done:", remember_expanded_items(self.invisibleRootItem()))
         
     def create_menu(self, position):
         from electroncash.wallet import Multisig_Wallet
