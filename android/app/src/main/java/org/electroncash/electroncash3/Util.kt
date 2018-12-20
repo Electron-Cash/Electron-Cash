@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.PopupMenu
 import android.widget.Toast
+import java.util.*
 import kotlin.reflect.KClass
 
 
@@ -40,9 +41,10 @@ fun toSatoshis(s: String, unit: Long = unitSize) : Long {
     }
 }
 
+// We use Locale.US to be consistent with lib/exchange_rate.py, which is also locale-insensitive.
 fun formatSatoshis(amount: Long, unit: Long = unitSize): String {
     val places = Math.log10(unit.toDouble()).toInt()
-    var result = "%.${places}f".format(amount.toDouble() / unit).trimEnd('0')
+    var result = "%.${places}f".format(Locale.US, amount.toDouble() / unit).trimEnd('0')
     if (result.endsWith(".")) {
         result += "0"
     }
