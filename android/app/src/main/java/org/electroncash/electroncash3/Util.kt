@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.PopupMenu
 import android.widget.Toast
+import java.lang.IllegalArgumentException
 import java.util.*
 import kotlin.reflect.KClass
 
@@ -155,6 +156,11 @@ class BoundViewHolder<Model: Any>(val binding: ViewDataBinding)
 class MenuAdapter(context: Context, val menu: Menu)
     : ArrayAdapter<String>(context, android.R.layout.simple_spinner_item, menuToList(menu)) {
     init {
+        if (context === app) {
+            // This resulted in white-on-white text on older API levels (e.g. 18).
+            throw IllegalArgumentException(
+                "Can't use application context: theme will not be applied to views")
+        }
         setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
     }
 
