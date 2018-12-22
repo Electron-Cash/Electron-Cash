@@ -30,6 +30,7 @@ import traceback
 import threading
 import hmac
 import stat
+import inspect, weakref
 
 from .i18n import _
 
@@ -606,3 +607,73 @@ def setup_thread_excepthook():
 
 def versiontuple(v):
     return tuple(map(int, (v.split("."))))
+
+
+class WeakMethodProxy(weakref.WeakMethod):
+    ''' Direct-use of this class is discouraged (aside from assigning to its print_func attribute).
+        Instead use of the wrapper function 'Weak' defined below is encouraged. '''
+    print_func = print_error
+
+    def __init__(self, meth, *args, **kwargs):
+        super().__init__(meth, *args, **kwargs)
+        # teehee.. save some information about what to call this thing for debug print purposes
+        self.qname, self.sname = meth.__qualname__, str(meth.__self__)
+
+
+    def __call__(self, *args, **kwargs):
+        ''' Either directly calls the method for you or prints debug info
+        if the target object died '''
+        meth = super().__call__()
+        if callable(meth):
+            meth(*args,**kwargs)
+        elif callable(self.print_func):
+            self.print_func("WeakMethodProxy for '{}' called on a dead reference. (obj was '{}')".format(self.qname,
+                                                                                                         self.sname))
+
+def Weak(obj_or_bound_method, *args, **kwargs):
+    '''
+    Weak reference factory. Create either a weak proxy to a bound method
+    or a weakref.proxy, depending on whether this factory function is
+    invoked with a bounded method or a regular function and/or object
+    reference.
+
+    If used with an object/function reference this factory just creates a
+    weakref.proxy and returns that.
+
+    The interesting usage is if this factory is used with a bounded method
+    instance.  In which case it returns a WeakMethodProxy which behaves
+    like a proxy to a bounded method in that you can call the WeakMethodProxy
+    object directly.
+
+    This is unlike regular weakref.WeakMethod which is not a proxy and requires
+    ugly `foo()(args)`, or perhaps `foo() and foo()(args)` idioms.
+
+    Also note that no exception is ever raised with WeakMethodProxy instances on
+    calling them.
+
+    Instead, if the weakly bound method is no longer alive (because its object
+    died), errors are silently ignored.
+
+    However, optionally a print_func can be specified to
+    WeakMethodProxy globally or to each instance specifically
+    in order to specify a debug print function (which will only receive a
+    single argument, a string), so you can track when your weak bound method
+    is being called after its object died. (Default is set to print_error).
+
+    Note you may specify a second postional argument to this factory,
+    `callback`, which is identical to the `callback` argument in the weakref
+    documentation and will be called on target object finalization
+    (destruction).
+
+    This Weak/WeakMethodProxy usage/idiom is intented to be used with Qt's
+    signal/slots mechanism to allow for bounded signals to not keep objects
+    from being garbage collected -- hence the permissiveness in not throwing
+    exceptions.
+    '''
+
+    if inspect.ismethod(obj_or_bound_method):
+        # is a method -- use our custom proxy class
+        return WeakMethodProxy(obj_or_bound_method, *args, **kwargs)
+    else:
+        # Not a method, just return a weakref.proxy
+        return weakref.proxy(obj_or_bound_method, *args, **kwargs)
