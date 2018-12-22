@@ -609,44 +609,29 @@ def versiontuple(v):
     return tuple(map(int, (v.split("."))))
 
 
-class WeakMethodProxy(weakref.WeakMethod):
-    ''' Direct-use of this class is discouraged (aside from assigning to its print_func attribute).
-        Instead use of the wrapper function 'Weak' defined below is encouraged. '''
-    def print_func(self, *args): # <--- you are encouraged to monkey patch this in client code, either on the class or instance level, to control debug printing behavior
-        print_error(*args)
-
-    def __init__(self, meth, *args, **kwargs):
-        super().__init__(meth, *args, **kwargs)
-        # teehee.. save some information about what to call this thing for debug print purposes
-        self.qname, self.sname = meth.__qualname__, str(meth.__self__)
-
-    def __call__(self, *args, **kwargs):
-        ''' Either directly calls the method for you or prints debug info
-        if the target object died '''
-        meth = super().__call__()
-        if callable(meth):
-            meth(*args,**kwargs)
-        elif callable(self.print_func):
-            self.print_func(self, "WeakMethodProxy for '{}' called on a dead reference. (obj was '{}')".format(self.qname,
-                                                                                                               self.sname))
-
-def Weak(obj_or_bound_method, *args, **kwargs):
+class Weak:
     '''
     Weak reference factory. Create either a weak proxy to a bound method
-    or a weakref.proxy, depending on whether this factory function is
+    or a weakref.proxy, depending on whether this factory class's __new__ is
     invoked with a bound method or a regular function/object as its first
     argument.
 
     If used with an object/function reference this factory just creates a
     weakref.proxy and returns that.
 
+        myweak = Weak(myobj)
+        type(myweak) == weakref.proxy # <-- True
+
     The interesting usage is if this factory is used with a bound method
     instance.  In which case it returns a WeakMethodProxy which behaves
     like a proxy to a bound method in that you can call the WeakMethodProxy
-    object directly.
+    object directly:
+
+        mybound = Weak(someObj.aMethod)
+        mybound(arg1, arg2) # <-- invokes someObj.aMethod(arg1, arg2)
 
     This is unlike regular weakref.WeakMethod which is not a proxy and requires
-    ugly `foo()(args)`, or perhaps `foo() and foo()(args)` idioms.
+    unsightly `foo()(args)`, or perhaps `foo() and foo()(args)` idioms.
 
     Also note that no exception is ever raised with WeakMethodProxy instances
     when calling them on dead references.
@@ -666,15 +651,37 @@ def Weak(obj_or_bound_method, *args, **kwargs):
     (destruction).
 
     This Weak/WeakMethodProxy usage/idiom is intented to be used with Qt's
-    signal/slots mechanism to allow for Qt bound signals to not keep target
+    signal/slots mechanism to allow for Qt bound signals to not prevent target
     objects from being garbage collected -- hence the permissiveness in not
     raising exceptions.
     '''
 
-    if inspect.ismethod(obj_or_bound_method):
-        # is a method -- use our custom proxy class
-        return WeakMethodProxy(obj_or_bound_method, *args, **kwargs)
-    else:
-        # Not a method, just return a weakref.proxy
-        return weakref.proxy(obj_or_bound_method, *args, **kwargs)
+    def __new__(cls, obj_or_bound_method, *args, **kwargs):
+        if inspect.ismethod(obj_or_bound_method):
+            # is a method -- use our custom proxy class
+            return cls.WeakMethodProxy(obj_or_bound_method, *args, **kwargs)
+        else:
+            # Not a method, just return a weakref.proxy
+            return weakref.proxy(obj_or_bound_method, *args, **kwargs)
+
+    class WeakMethodProxy(weakref.WeakMethod):
+        ''' Direct-use of this class is discouraged (aside from assigning to its print_func attribute).
+            Instead use of the wrapper function 'Weak' defined below is encouraged. '''
+        def print_func(self, this, info): # <--- you are encouraged to monkey patch this in client code, either on the class or instance level, to control debug printing behavior
+            print_error(this, info)
+
+        def __init__(self, meth, *args, **kwargs):
+            super().__init__(meth, *args, **kwargs)
+            # teehee.. save some information about what to call this thing for debug print purposes
+            self.qname, self.sname = meth.__qualname__, str(meth.__self__)
+    
+        def __call__(self, *args, **kwargs):
+            ''' Either directly calls the method for you or prints debug info
+            if the target object died '''
+            meth = super().__call__()
+            if callable(meth):
+                meth(*args,**kwargs)
+            elif callable(self.print_func):
+                self.print_func(self, "WeakMethodProxy for '{}' called on a dead reference. Referent was: {})".format(self.qname,
+                                                                                                                      self.sname))
 
