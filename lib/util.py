@@ -637,13 +637,16 @@ class Weak:
     when calling them on dead references.
 
     Instead, if the weakly bound method is no longer alive (because its object
-    died), errors are silently ignored.
+    died), the situation is ignored as if no method were called (with an
+    optional print facility provided to print debug information in such a
+    situation).
 
-    However, optionally a print_func can be monkey-patched in to WeakMethodProxy
-    globally or to each instance specifically in order to specify a debug print
-    function (which will receive exactly two arguments: the WeakMethodProxy
-    instance and an info string), so you can track when your weak bound method
-    is being called after its object died (defaults to `print_error`).
+    The optional `print_func` class attribute can be set in WeakMethodProxy
+    globally or for each instance specifically in order to specify a debug
+    print function (which will receive exactly two arguments: the
+    WeakMethodProxy instance and an info string), so you can track when your
+    weak bound method is being called after its object died (defaults to
+    `print_error`).
 
     Note you may specify a second postional argument to this factory,
     `callback`, which is identical to the `callback` argument in the weakref
@@ -665,10 +668,11 @@ class Weak:
             return weakref.proxy(obj_or_bound_method, *args, **kwargs)
 
     class WeakMethodProxy(weakref.WeakMethod):
-        ''' Direct-use of this class is discouraged (aside from assigning to its print_func attribute).
-            Instead use of the wrapper function 'Weak' defined below is encouraged. '''
+        ''' Direct-use of this class is discouraged (aside from assigning to
+            its print_func attribute). Instead use of the wrapper class 'Weak'
+            defined in the enclosing scope is encouraged. '''
 
-        print_func = lambda x, this, info: print_error(this, info) # <--- you are encouraged to monkey patch this in client code, either on the class or instance level, to control debug printing behavior
+        print_func = lambda x, this, info: print_error(this, info) # <--- set this attribute if needed, either on the class or instance level, to control debug printing behavior. None is ok here.
 
         def __init__(self, meth, *args, **kwargs):
             super().__init__(meth, *args, **kwargs)
@@ -677,11 +681,10 @@ class Weak:
     
         def __call__(self, *args, **kwargs):
             ''' Either directly calls the method for you or prints debug info
-            if the target object died '''
-            meth = super().__call__()
-            if callable(meth):
+                if the target object died '''
+            meth = super().__call__() # if dead, None is returned
+            if meth: # could also do callable() as the test but hopefully this is sightly faster
                 meth(*args,**kwargs)
             elif callable(self.print_func):
                 self.print_func(self, "WeakMethodProxy for '{}' called on a dead reference. Referent was: {})".format(self.qname,
                                                                                                                       self.sname))
-
