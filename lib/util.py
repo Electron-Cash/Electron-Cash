@@ -667,8 +667,8 @@ class Weak:
     class WeakMethodProxy(weakref.WeakMethod):
         ''' Direct-use of this class is discouraged (aside from assigning to its print_func attribute).
             Instead use of the wrapper function 'Weak' defined below is encouraged. '''
-        def print_func(self, this, info): # <--- you are encouraged to monkey patch this in client code, either on the class or instance level, to control debug printing behavior
-            print_error(this, info)
+
+        print_func = lambda x, this, info: print_error(this, info) # <--- you are encouraged to monkey patch this in client code, either on the class or instance level, to control debug printing behavior
 
         def __init__(self, meth, *args, **kwargs):
             super().__init__(meth, *args, **kwargs)
