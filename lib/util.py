@@ -612,13 +612,13 @@ def versiontuple(v):
 class WeakMethodProxy(weakref.WeakMethod):
     ''' Direct-use of this class is discouraged (aside from assigning to its print_func attribute).
         Instead use of the wrapper function 'Weak' defined below is encouraged. '''
-    print_func = print_error
+    def print_func(self, *args): # <--- you are encouraged to monkey patched this in client code, either on the class or instance level
+        print_error(*args)
 
     def __init__(self, meth, *args, **kwargs):
         super().__init__(meth, *args, **kwargs)
         # teehee.. save some information about what to call this thing for debug print purposes
         self.qname, self.sname = meth.__qualname__, str(meth.__self__)
-
 
     def __call__(self, *args, **kwargs):
         ''' Either directly calls the method for you or prints debug info
@@ -627,38 +627,38 @@ class WeakMethodProxy(weakref.WeakMethod):
         if callable(meth):
             meth(*args,**kwargs)
         elif callable(self.print_func):
-            self.print_func("WeakMethodProxy for '{}' called on a dead reference. (obj was '{}')".format(self.qname,
-                                                                                                         self.sname))
+            self.print_func(self, "WeakMethodProxy for '{}' called on a dead reference. (obj was '{}')".format(self.qname,
+                                                                                                               self.sname))
 
 def Weak(obj_or_bound_method, *args, **kwargs):
     '''
     Weak reference factory. Create either a weak proxy to a bound method
     or a weakref.proxy, depending on whether this factory function is
-    invoked with a bounded method or a regular function and/or object
-    reference.
+    invoked with a bound method or a regular function/object as its first
+    argument.
 
     If used with an object/function reference this factory just creates a
     weakref.proxy and returns that.
 
-    The interesting usage is if this factory is used with a bounded method
+    The interesting usage is if this factory is used with a bound method
     instance.  In which case it returns a WeakMethodProxy which behaves
-    like a proxy to a bounded method in that you can call the WeakMethodProxy
+    like a proxy to a bound method in that you can call the WeakMethodProxy
     object directly.
 
     This is unlike regular weakref.WeakMethod which is not a proxy and requires
     ugly `foo()(args)`, or perhaps `foo() and foo()(args)` idioms.
 
-    Also note that no exception is ever raised with WeakMethodProxy instances on
-    calling them.
+    Also note that no exception is ever raised with WeakMethodProxy instances
+    when calling them.
 
     Instead, if the weakly bound method is no longer alive (because its object
     died), errors are silently ignored.
 
-    However, optionally a print_func can be specified to
-    WeakMethodProxy globally or to each instance specifically
-    in order to specify a debug print function (which will only receive a
-    single argument, a string), so you can track when your weak bound method
-    is being called after its object died. (Default is set to print_error).
+    However, optionally a print_func can be monkey-patched in to WeakMethodProxy
+    globally or to each instance specifically in order to specify a debug print
+    function (which will receive exactly two arguments: the WeakMethodProxy
+    instance and an info string), so you can track when your weak bound method
+    is being called after its object died (defaults to `print_error`).
 
     Note you may specify a second postional argument to this factory,
     `callback`, which is identical to the `callback` argument in the weakref
@@ -666,9 +666,9 @@ def Weak(obj_or_bound_method, *args, **kwargs):
     (destruction).
 
     This Weak/WeakMethodProxy usage/idiom is intented to be used with Qt's
-    signal/slots mechanism to allow for bounded signals to not keep objects
-    from being garbage collected -- hence the permissiveness in not throwing
-    exceptions.
+    signal/slots mechanism to allow for Qt bound signals to not keep target
+    objects from being garbage collected -- hence the permissiveness in not
+    throwing exceptions.
     '''
 
     if inspect.ismethod(obj_or_bound_method):
@@ -677,3 +677,4 @@ def Weak(obj_or_bound_method, *args, **kwargs):
     else:
         # Not a method, just return a weakref.proxy
         return weakref.proxy(obj_or_bound_method, *args, **kwargs)
+
