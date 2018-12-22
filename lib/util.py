@@ -649,7 +649,7 @@ def Weak(obj_or_bound_method, *args, **kwargs):
     ugly `foo()(args)`, or perhaps `foo() and foo()(args)` idioms.
 
     Also note that no exception is ever raised with WeakMethodProxy instances
-    when calling them.
+    when calling them on dead references.
 
     Instead, if the weakly bound method is no longer alive (because its object
     died), errors are silently ignored.
@@ -668,7 +668,7 @@ def Weak(obj_or_bound_method, *args, **kwargs):
     This Weak/WeakMethodProxy usage/idiom is intented to be used with Qt's
     signal/slots mechanism to allow for Qt bound signals to not keep target
     objects from being garbage collected -- hence the permissiveness in not
-    throwing exceptions.
+    raising exceptions.
     '''
 
     if inspect.ismethod(obj_or_bound_method):
