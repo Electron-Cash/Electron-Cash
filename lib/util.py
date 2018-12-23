@@ -667,6 +667,13 @@ class Weak:
             # Not a method, just return a weakref.proxy
             return weakref.proxy(obj_or_bound_method, *args, **kwargs)
 
+    ref = weakref.ref # alias for convenience so you don't have to import weakref
+    Set = weakref.WeakSet # alias for convenience
+    ValueDictionary = weakref.WeakValueDictionary # alias for convenience
+    KeyDictionary = weakref.WeakKeyDictionary # alias for convenience
+    Method = weakref.WeakMethod # alias
+    finalize = weakref.finalize # alias
+
     class WeakMethodProxy(weakref.WeakMethod):
         ''' Direct-use of this class is discouraged (aside from assigning to
             its print_func attribute). Instead use of the wrapper class 'Weak'
