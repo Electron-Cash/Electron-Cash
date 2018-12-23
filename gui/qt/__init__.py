@@ -177,7 +177,7 @@ class ElectrumGui:
         w = ElectrumWindow(self, wallet)
         self.windows.append(w)
         dname = w.diagnostic_name()
-        def onFinalized(wr,wallet=wallet):
+        def onFinalized(wr,dname=dname):
             print_error("[{}] finalized".format(dname))
             self.weak_windows.remove(wr)
         self.weak_windows.append(Weak.ref(w,onFinalized))
