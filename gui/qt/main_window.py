@@ -1968,9 +1968,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         set_json = Weak(self.console.set_json)
         c = commands.Commands(self.config, self.wallet, self.network, lambda: set_json(True))
         methods = {}
-        password_getter = Weak(self.password_dialog)
         def mkfunc(f, method):
-            return lambda *args, **kwargs: f(method, *args, password_getter=password_getter,
+            return lambda *args, **kwargs: f(method, *args, password_getter=self.password_dialog,
                                              **kwargs)
         for m in dir(c):
             if m[0]=='_' or m in ['network','wallet','config']: continue
