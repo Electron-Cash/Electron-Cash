@@ -62,6 +62,7 @@ DLLs=`find /usr/lib -name api-ms-win-core-path\*  -print`
 BROKEN_DLL_BAK=""
 if [ -n "$DLLs" ]; then
     BROKEN_DLL_BAK="${workdir}/Wine_Broken_DLLs.tar.gz"
+    echo "****************************************************************************"
     echo "We are about to archive the following files which interfere with Python 3.6 "
     echo "due to bugs in Wine. You will need your root password via sudo."
     echo '(See https://bugs.winehq.org/show_bug.cgi?id=42474#c22 )'
