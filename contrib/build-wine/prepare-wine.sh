@@ -58,7 +58,7 @@ wine 'wineboot'
 # HACK to work around https://bugs.winehq.org/show_bug.cgi?id=42474#c22
 # needed for python 3.6+
 find "${WINEPREFIX}" -name api-ms-win-core-path\*  -exec rm -fv {} \; || exit 1
-DLLs=`find /opt/wine-stable /usr/lib /usr/local/lib -name api-ms-win-core-path\*  -print`
+DLLs=`find /usr/lib -name api-ms-win-core-path\*  -print`
 BROKEN_DLL_BAK=""
 if [ -n "$DLLs" ]; then
     BROKEN_DLL_BAK="${workdir}/Wine_Broken_DLLs.tar.gz"
