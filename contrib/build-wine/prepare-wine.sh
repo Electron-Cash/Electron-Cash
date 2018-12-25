@@ -10,7 +10,7 @@ ZBAR_SHA256=177e32b272fa76528a3af486b74e9cb356707be1c5ace4ed3fcee9723e2c2c02
 LIBUSB_URL=https://prdownloads.sourceforge.net/project/libusb/libusb-1.0/libusb-1.0.21/libusb-1.0.21.7z?download
 LIBUSB_SHA256=acdde63a40b1477898aee6153f9d91d1a2e8a5d93f832ca8ab876498f3a6d2b8
 
-PYTHON_VERSION=3.6.4
+PYTHON_VERSION=3.6.7
 
 ## These settings probably don't need change
 export WINEPREFIX=/opt/wine64
@@ -53,6 +53,10 @@ rm -rf $WINEPREFIX
 echo "done"
 
 wine 'wineboot'
+
+# HACK to work around https://bugs.winehq.org/show_bug.cgi?id=42474#c22
+# needed for python 3.6+
+find "${WINEPREFIX}" -iname api-ms-win-core-path\*  -exec rm -fv {} \; || exit 1
 
 echo "Cleaning tmp"
 rm -rf tmp

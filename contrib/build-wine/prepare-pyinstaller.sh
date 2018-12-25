@@ -1,5 +1,5 @@
 #!/bin/bash
-PYTHON_VERSION=3.6.4
+PYTHON_VERSION=3.6.7
 
 PYINSTALLER_GIT_URL=https://github.com/Electron-Cash/pyinstaller
 BRANCH=fix_2952

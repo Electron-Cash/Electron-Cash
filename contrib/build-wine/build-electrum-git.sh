@@ -1,7 +1,7 @@
 #!/bin/bash
 
 NAME_ROOT=Electron-Cash
-PYTHON_VERSION=3.6.4
+PYTHON_VERSION=3.6.7
 
 CHECKOUT_TAG=3.3.3
 
