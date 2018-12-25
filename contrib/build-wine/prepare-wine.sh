@@ -44,7 +44,8 @@ verify_hash() {
 }
 
 # Let's begin!
-cd `dirname $0`
+workdir=`dirname $0`
+cd "$workdir"
 set -e
 
 # Clean up Wine environment
@@ -56,7 +57,25 @@ wine 'wineboot'
 
 # HACK to work around https://bugs.winehq.org/show_bug.cgi?id=42474#c22
 # needed for python 3.6+
-find "${WINEPREFIX}" -iname api-ms-win-core-path\*  -exec rm -fv {} \; || exit 1
+find "${WINEPREFIX}" -name api-ms-win-core-path\*  -exec rm -fv {} \; || exit 1
+DLLs=`find /opt/wine-stable /usr/lib /usr/local/lib -name api-ms-win-core-path\*  -print`
+BROKEN_DLL_BAK=""
+if [ -n "$DLLs" ]; then
+    BROKEN_DLL_BAK="${workdir}/Wine_Broken_DLLs.tar.gz"
+    echo "We are about to archive the following files which interfere with Python 3.6 "
+    echo "due to bugs in Wine. You will need your root password via sudo."
+    echo '(See https://bugs.winehq.org/show_bug.cgi?id=42474#c22 )'
+    echo ""
+    echo "$DLLs"
+    echo ""
+    echo "They will be archived in:"
+    echo "$BROKEN_DLL_BAK"
+    echo "Hit CTRL-C to abort or ENTER to proceed."
+    read
+    [ -e "$BROKEN_DLL_BAK" ] && echo "$BROKEN_DLL_BAK already exists, exiting." && exit 1
+    tar cvPzf "$BROKEN_DLL_BAK" $DLLs || exit 1
+    sudo rm -vf $DLLs || exit 1
+fi
 
 echo "Cleaning tmp"
 rm -rf tmp

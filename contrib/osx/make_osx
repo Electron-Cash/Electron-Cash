@@ -10,7 +10,7 @@ export PYTHONHASHSEED=22
 VERSION=`git describe --tags`
 
 # Paramterize
-PYTHON_VERSION=3.6.4
+PYTHON_VERSION=3.6.7
 BUILDDIR=/tmp/electron-cash-build
 PACKAGE=Electron-Cash
 GIT_REPO_ACCT=https://github.com/Electron-Cash
