@@ -1590,13 +1590,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.invoice_list.update()
                     self.do_clear()
                 else:
-                    if isinstance(msg, TxHashMismatch):
+                    exc = msg; del msg
+                    if isinstance(exc, TxHashMismatch):
                         parent.show_warning(_("Server response does not match signed transaction ID."))
                         return
-                    elif isinstance(msg, TimeoutException):
+                    elif isinstance(exc, TimeoutException):
                         parent.show_error(_("Server did not answer"))
                         return
-                    elif isinstance(msg, ServerError):
+                    elif isinstance(exc, ServerError):
                         def is_suspicious_response(msg):
                             import re
                             msg = msg.replace(r'\n', "\n") # make server's \n chars be real newlines
@@ -1611,12 +1612,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                             if re.search(r'\S+[.]\S+', msg, re.I): # matches any pattern that could be a 'name.tld' Error messages never contain such a pattern
                                 return 1
                             return 0
-                        msg = str(msg)
+                        msg = str(exc)
                         level = is_suspicious_response(msg)
                         if level >= 2:
                             self.print_error("Suspicious server reponse:", msg)
                             parent.show_critical(_("Security Warning: Suspicious server reply.\n\nPlease switch servers immediately using the Network Dialog."))
-                            self.gui_object.show_network_dialog(self)
+                            self.gui_object.show_network_dialog(parent)
                         elif level:
                             self.print_error("Questionable server reponse:", msg)
                             parent.show_error(_("Transaction could not be broadcast. Try switching servers and broadcasting again."))
@@ -1625,13 +1626,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                             "",
                                              (_("The below text was sent by the server and is for diagnostic purposes ONLY.") + " " +
                                               _("NEVER follow any links or install ANY software mentioned in the text below.")),
+                                             "",
+                                              _("Reminder: The ONLY official version of Electron Cash is at https://electroncash.org"),
                                             "",
                                             "*****", "", ""]
                             warning_text = "\n".join(warning_text)
+                            msg = msg.replace("*", "") # just to make sure server message has no asterisks so they don't try and sound official like us
+                            msg = msg[:256] # 256-byte message is enough!
                             parent.show_error(_("An error occurred broadcasting the transaction"), detail_text=(warning_text + msg))
                         return
-                    elif isinstance(msg, BaseException):
-                        parent.show_critical(_("Error") + ": " + str(msg))
+                    elif isinstance(exc, BaseException):
+                        parent.show_critical(_("Error") + ": " + str(exc))
                         return
                     else:
                         parent.show_error(_("An error occurred broadcasting the transaction"))
