@@ -1513,13 +1513,14 @@ class Network(util.DaemonThread):
 
         return True, out
 
-    def broadcast_transaction2(self, transaction, callback=None):
+    def broadcast_transaction2(self, transaction):
+        ''' Very similar to broadcast_transation() but it actually tells calling
+        code what the nature of the error was in a more explicit manner by
+        returning an Exception subclass as the second return value if the first
+        is False. If the first return value is True then the txid is returned
+        as a string. Does not support using a callback function.'''
         command = 'blockchain.transaction.broadcast'
         invocation = lambda c: self.send([(command, [str(transaction)])], c)
-
-        if callback:
-            invocation(callback)
-            return
 
         try:
             out = Network.__wait_for(invocation)

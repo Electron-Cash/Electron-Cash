@@ -1591,36 +1591,54 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.do_clear()
                 else:
                     if isinstance(msg, TxHashMismatch):
-                        parent.show_warning(_("Warning") + ": " + _("Broadcasted transaction id does not match."))
+                        parent.show_warning(_("Server response does not match signed transaction ID."))
                         return
                     elif isinstance(msg, TimeoutException):
                         parent.show_error(_("Server did not answer"))
                         return
                     elif isinstance(msg, ServerError):
-                        msg = self.parse_server_error_response(str(msg))
+                        def is_suspicious_response(msg):
+                            import re
+                            msg = msg.replace(r'\n', "\n") # make server's \n chars be real newlines
+                            try:
+                                msg = msg.encode('ascii').decode('ascii')
+                            except UnicodeError:
+                                return 3 # Non-ascii response from a legit server never happens. bitcoind and ElectrumX send ascii responses.
+                            if ( re.search(r'<[^>]+>', msg, re.I) # matches any <HTML> tags
+                                 or re.search(r'https?', msg, re.I) # matches any http[s]
+                                 ):
+                                return 2
+                            if re.search(r'\S+[.]\S+', msg, re.I): # matches any pattern that could be a 'name.tld' Error messages never contain such a pattern
+                                return 1
+                            return 0
+                        msg = str(msg)
+                        level = is_suspicious_response(msg)
+                        if level >= 2:
+                            self.print_error("Suspicious server reponse:", msg)
+                            parent.show_critical(_("Security Warning: Suspicious server reply.\n\nPlease switch servers immediately using the Network Dialog."))
+                            self.gui_object.show_network_dialog(self)
+                        elif level:
+                            self.print_error("Questionable server reponse:", msg)
+                            parent.show_error(_("Transaction could not be broadcast. Try switching servers and broadcasting again."))
+                        else:
+                            warning_text = [ _("***** THE BELOW TEXT IS FOR DIAGNOSTIC PURPOSES ONLY *****"),
+                                            "",
+                                             (_("The below text was sent by the server and is for diagnostic purposes ONLY.") + " " +
+                                              _("NEVER follow any links or install ANY software mentioned in the text below.")),
+                                            "",
+                                            "*****", "", ""]
+                            warning_text = "\n".join(warning_text)
+                            parent.show_error(_("An error occurred broadcasting the transaction"), detail_text=(warning_text + msg))
+                        return
                     elif isinstance(msg, BaseException):
                         parent.show_critical(_("Error") + ": " + str(msg))
                         return
                     else:
-                        msg = _("An error occurred broadcasting the transaction.")
-                    parent.show_error(msg)
+                        parent.show_error(_("An error occurred broadcasting the transaction"))
+                        return
 
         WaitingDialog(self, _('Broadcasting transaction...'),
                       broadcast_thread, broadcast_done, self.on_error)
-
-    def parse_server_error_response(self, msg):
-        def parse_message(msg):
-            msg = msg.replace("'",'"')
-            print("msg=",msg)
-            try:
-                d = json.loads(msg)
-                return d
-            except:
-                pass
-        errdict = parse_message(msg)
-        return str(errdict)
-
-
 
     def query_choice(self, msg, choices):
         # Needed by QtHandler for hardware wallets
