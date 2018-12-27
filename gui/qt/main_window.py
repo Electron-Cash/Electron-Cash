@@ -1612,7 +1612,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     elif level:
                         parent.show_error(_("Transaction could not be broadcast. Try switching servers and broadcasting again."))
                     else:
-                        parent.show_error(msg)
+                        parent.show_error(_("There was an error broadcasting the transaction"), detail_text=msg)
 
         WaitingDialog(self, _('Broadcasting transaction...'),
                       broadcast_thread, broadcast_done, self.on_error)
