@@ -29,7 +29,6 @@ import shutil
 import weakref
 import webbrowser
 import csv
-import re
 from decimal import Decimal
 import base64
 from functools import partial
@@ -49,7 +48,7 @@ from electroncash.i18n import _
 from electroncash.util import (format_time, format_satoshis, PrintError,
                            format_satoshis_plain, NotEnoughFunds, ExcessiveFee,
                            UserCancelled, bh2u, bfh, format_fee_satoshis, Weak,
-                           print_error)
+                           print_error, TimeoutException, TxHashMismatch, ServerError)
 import electroncash.web as web
 from electroncash import Transaction
 from electroncash import util, bitcoin, commands
@@ -1574,7 +1573,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.payment_request = None
                     status = True
             else:
-                status, msg =  self.network.broadcast_transaction(tx)
+                status, msg =  self.network.broadcast_transaction2(tx)
             return status, msg
 
         # Capture current TL window; override might be removed on return
@@ -1591,27 +1590,37 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.invoice_list.update()
                     self.do_clear()
                 else:
-                    def is_suspicious_response(msg):
-                        msg = msg.replace(r'''\n''', "\n") # make server's \n chars be real newlines
-                        if ( re.search(r'''<[^>]+>''', msg, re.I) # matches any <HTML> tags
-                             or re.search(r'''https?''', msg, re.I) # matches any http[s]
-                             ):
-                            return 2
-                        if re.search(r'''\S+[.]\S+''', msg, re.I): # matches any pattern that could be a 'name.tld' Error messages never contain such a pattern
-                            return 1
-                        return 0
-                    level = is_suspicious_response(msg)
-                    if level >= 2:
-                        self.print_error("Suspicious server seponse:", msg)
-                        parent.show_critical(_("Security Warning: Suspicious server reply.\n\nPlease switch servers immediately using the Network Dialog."))
-                        self.gui_object.show_network_dialog(self)
-                    elif level:
-                        parent.show_error(_("Transaction could not be broadcast. Try switching servers and broadcasting again."))
+                    if isinstance(msg, TxHashMismatch):
+                        parent.show_warning(_("Warning") + ": " + _("Broadcasted transaction id does not match."))
+                        return
+                    elif isinstance(msg, TimeoutException):
+                        parent.show_error(_("Server did not answer"))
+                        return
+                    elif isinstance(msg, ServerError):
+                        msg = self.parse_server_error_response(str(msg))
+                    elif isinstance(msg, BaseException):
+                        parent.show_critical(_("Error") + ": " + str(msg))
+                        return
                     else:
-                        parent.show_error(msg)
+                        msg = _("An error occurred broadcasting the transaction.")
+                    parent.show_error(msg)
 
         WaitingDialog(self, _('Broadcasting transaction...'),
                       broadcast_thread, broadcast_done, self.on_error)
+
+    def parse_server_error_response(self, msg):
+        def parse_message(msg):
+            msg = msg.replace("'",'"')
+            print("msg=",msg)
+            try:
+                d = json.loads(msg)
+                return d
+            except:
+                pass
+        errdict = parse_message(msg)
+        return str(errdict)
+
+
 
     def query_choice(self, msg, choices):
         # Needed by QtHandler for hardware wallets

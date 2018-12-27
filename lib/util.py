@@ -518,6 +518,12 @@ class timeout(Exception):
 
 TimeoutException = timeout # Future compat. with Electrum codebase/cherrypicking
 
+class ServerError(Exception):
+    pass
+
+class TxHashMismatch(Exception):
+    pass
+
 import socket
 import ssl
 

@@ -1480,7 +1480,7 @@ class Network(util.DaemonThread):
             raise util.TimeoutException(_('Server did not answer'))
 
         if result.get('error'):
-            raise Exception(result.get('error'))
+            raise util.ServerError(result.get('error'))
 
         return result.get('result')
 
@@ -1510,6 +1510,24 @@ class Network(util.DaemonThread):
 
         if out != transaction.txid():
             return False, "error: " + out
+
+        return True, out
+
+    def broadcast_transaction2(self, transaction, callback=None):
+        command = 'blockchain.transaction.broadcast'
+        invocation = lambda c: self.send([(command, [str(transaction)])], c)
+
+        if callback:
+            invocation(callback)
+            return
+
+        try:
+            out = Network.__wait_for(invocation)
+        except BaseException as e:
+            return False, e
+
+        if out != transaction.txid():
+            return False, util.TxHashMismatch(out)
 
         return True, out
 
