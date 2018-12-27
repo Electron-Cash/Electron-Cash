@@ -1593,6 +1593,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 else:
                     def is_suspicious_response(msg):
                         msg = msg.replace(r'''\n''', "\n") # make server's \n chars be real newlines
+                        try:
+                            msg = msg.encode('ascii').decode('ascii')
+                        except UnicodeError:
+                            return 3 # Non-ascii response from server never happens. bitcoind and ElectrumX send ascii responses.
                         if ( re.search(r'''<[^>]+>''', msg, re.I) # matches any <HTML> tags
                              or re.search(r'''https?''', msg, re.I) # matches any http[s]
                              ):
