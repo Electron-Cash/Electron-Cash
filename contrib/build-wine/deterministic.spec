@@ -27,6 +27,12 @@ binaries += [('C:/tmp/libsecp256k1.dll', '.')]
 # Workaround for "Retro Look":
 binaries += [b for b in collect_dynamic_libs('PyQt5') if 'qwindowsvista' in b[0]]
 
+# PyQt5.11 now comes with sip so collect that too
+pyqtsip = collect_dynamic_libs('PyQt5.sip')
+for b in pyqtsip:
+    print("   ******* ",b)
+binaries += b
+
 datas = [
     (home+'lib/currencies.json', 'electroncash'),
     (home+'lib/servers.json', 'electroncash'),
