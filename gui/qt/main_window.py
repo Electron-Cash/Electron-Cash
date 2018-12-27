@@ -1591,13 +1591,22 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.invoice_list.update()
                     self.do_clear()
                 else:
-                    self.print_error(msg)
                     def is_suspicious_response(msg):
-                        return True
-                        return bool ( re.search(r'''<\s*A[^>]*>''', msg, re.I)
-                                     or re.search(r'''https?://''', msg, re.I) )
-                    if is_suspicious_response(msg):
-                        parent.show_warning(_("Seucrity Warning: Suspicious server reply. Please switch servers immediately."))
+                        msg = msg.replace(r'''\n''', "\n") # make server's \n chars be real newlines
+                        if ( re.search(r'''<[^>]+>''', msg, re.I) # matches any <HTML> tags
+                             or re.search(r'''https?''', msg, re.I) # matches any http[s]
+                             ):
+                            return 2
+                        if re.search(r'''\S+[.]\S+''', msg, re.I): # matches any pattern that could be a 'name.tld' Error messages never contain such a pattern
+                            return 1
+                        return 0
+                    level = is_suspicious_response(msg)
+                    if level >= 2:
+                        self.print_error("Suspicious server seponse:", msg)
+                        parent.show_critical(_("Security Warning: Suspicious server reply.\n\nPlease switch servers immediately using the Network Dialog."))
+                        self.gui_object.show_network_dialog(self)
+                    elif level:
+                        parent.show_error(_("Transaction could not be broadcast. Try switching servers and broadcasting again."))
                     else:
                         parent.show_error(msg)
 
