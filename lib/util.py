@@ -514,14 +514,25 @@ def parse_json(message):
 
 
 class timeout(Exception):
+    ''' Server timed out on broadcast tx (normally due to a bad connection).
+    Exception string is the translated error string.'''
     pass
 
 TimeoutException = timeout # Future compat. with Electrum codebase/cherrypicking
 
 class ServerError(Exception):
+    ''' Raised by network.py broadcast_transaction2() when the server sent an
+    error response. The actual JSON error response is contained in this
+    exception class. Warning: DO NOT display the server text to users without
+    warnings or in a rich-text enabled GUI control. Displaying server text
+    holds a phishing risk. See https://github.com/spesmilo/electrum/issues/4968 '''
     pass
 
 class TxHashMismatch(Exception):
+    ''' Server sent an OK response but the txid it supplied does not match our
+    signed tx id that we requested to broadcast. It's advised not to display
+    the txid response as there is also potential for phishing exploits if
+    one does.'''
     pass
 
 import socket
