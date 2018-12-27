@@ -29,6 +29,7 @@ import shutil
 import weakref
 import webbrowser
 import csv
+import re
 from decimal import Decimal
 import base64
 from functools import partial
@@ -1590,7 +1591,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.invoice_list.update()
                     self.do_clear()
                 else:
-                    parent.show_error(msg)
+                    self.print_error(msg)
+                    def is_suspicious_response(msg):
+                        return True
+                        return bool ( re.search(r'''<\s*A[^>]*>''', msg, re.I)
+                                     or re.search(r'''https?://''', msg, re.I) )
+                    if is_suspicious_response(msg):
+                        parent.show_warning(_("Seucrity Warning: Suspicious server reply. Please switch servers immediately."))
+                    else:
+                        parent.show_error(msg)
 
         WaitingDialog(self, _('Broadcasting transaction...'),
                       broadcast_thread, broadcast_done, self.on_error)
