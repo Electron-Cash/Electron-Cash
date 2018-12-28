@@ -1591,7 +1591,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.do_clear()
                 else:
                     if msg.startswith("error: "):
-                        msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: "
+                        msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: " prefix
                     parent.show_error(msg)
 
         WaitingDialog(self, _('Broadcasting transaction...'),

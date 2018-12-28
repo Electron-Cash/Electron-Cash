@@ -521,17 +521,21 @@ class timeout(Exception):
 TimeoutException = timeout # Future compat. with Electrum codebase/cherrypicking
 
 class ServerError(Exception):
+    ''' Note exception string is the translated, gui-friendly error message.
+    self.server_msg may be a dict or a string containing the raw response from
+    the server.  Do NOT display self.server_msg in GUI code due to potential for
+    phishing attacks from the untrusted server.
+    See: https://github.com/spesmilo/electrum/issues/4968  '''
     def __init__(self, msg, server_msg = None):
         super().__init__(msg)
         self.server_msg = server_msg or '' # prefer empty string if none supplied
 
 class ServerErrorResponse(ServerError):
     ''' Raised by network.py broadcast_transaction2() when the server sent an
-    error response. The actual server error response is contained in
-    self.server_msg. Warning: DO NOT display the server text to users
-    without warnings or in a rich-text enabled GUI control. Displaying server
-    text harbors a phishing risk. Instead, a translated GUI-friendly
-    'deduced' response is in the exception string.
+    error response. The actual server error response is contained in a dict
+    and/or str in self.server_msg. Warning: DO NOT display the server text.
+    Displaying server text harbors a phishing risk. Instead, a translated
+    GUI-friendly 'deduced' response is in the exception string.
     See: https://github.com/spesmilo/electrum/issues/4968 '''
     pass
 

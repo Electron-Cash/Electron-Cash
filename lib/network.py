@@ -1499,7 +1499,7 @@ class Network(util.DaemonThread):
         for plugins and other code, but it has been improved to not allow for
         phishing attacks by calling broadcast_transaction2 which actually
         deduces a more intelligent and phishing-proof error message.
-        If you want to actual server response, use broadcast_transaction2 and
+        If you want the actual server response, use broadcast_transaction2 and
         catch exceptions. '''
         command = 'blockchain.transaction.broadcast'
         invocation = lambda c: self.send([(command, [str(transaction)])], c)
@@ -1536,6 +1536,7 @@ class Network(util.DaemonThread):
             raise util.ServerErrorResponse(Network.transmogrify_broadcast_response_for_gui(e.server_msg), e.server_msg)
 
         if out != transaction.txid():
+            self.print_error("Server replied with a mismatching txid:", str(out))
             raise util.TxHashMismatch(_("Server response does not match signed transaction ID."), str(out))
 
         return out
