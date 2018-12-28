@@ -1562,6 +1562,8 @@ class Network(util.DaemonThread):
             return _("Transaction could not be broadcast due to dust outputs (dust threshold is {} satoshis).").format(dust_thold)
         elif r'Missing inputs' in server_msg or r'Inputs unavailable' in server_msg or r"bad-txns-inputs-spent" in server_msg:
             return _("Transaction could not be broadcast due to missing, already-spent, or otherwise invalid inputs.")
+        elif r'insufficient priority' in server_msg:
+            return _("The transaction was rejected due to paying insufficient fees and/or for being of extremely low priority.")
         elif r'bad-txns-premature-spend-of-coinbase' in server_msg:
             return _("Transaction could not be broadcast due to an attempt to spend a coinbase input before maturity.")
         elif r"txn-already-in-mempool" in server_msg or r"txn-already-known" in server_msg:
