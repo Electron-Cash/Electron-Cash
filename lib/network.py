@@ -1501,11 +1501,10 @@ class Network(util.DaemonThread):
         deduces a more intelligent and phishing-proof error message.
         If you want the actual server response, use broadcast_transaction2 and
         catch exceptions. '''
-        command = 'blockchain.transaction.broadcast'
-        invocation = lambda c: self.send([(command, [str(transaction)])], c)
 
         if callback:
-            invocation(callback)
+            command = 'blockchain.transaction.broadcast'
+            self.send([(command, [str(transaction)])], callback)
             return
 
         try:
@@ -1525,6 +1524,7 @@ class Network(util.DaemonThread):
         of the specified transaction. All other exceptions indicate no broadcast
         has successfully occurred.
         Does not support using a callback function.'''
+
         command = 'blockchain.transaction.broadcast'
         invocation = lambda c: self.send([(command, [str(transaction)])], c)
 
