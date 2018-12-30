@@ -118,9 +118,13 @@ class Plugin(LabelsPlugin):
         if window: self._notok_synch(window, exc_info)
 
     def start_wallet(self, wallet, window=None):
-        ret = super().start_wallet(wallet)
-        if ret and window:
+        if window:
+            # NB: this needs to be here because super().start_wallet() will start a thread
             self.wallet_windows[wallet] = window
+        ret = super().start_wallet(wallet)
+        if not ret:
+            # Hmm. start failed. pop the wallet from the wallet->window list
+            self.wallet_windows.pop(wallet, None)
         return ret
 
     def stop_wallet(self, wallet):
