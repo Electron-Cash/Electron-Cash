@@ -36,7 +36,6 @@ if sys.platform == 'darwin':
         setup_requires=['py2app'],
         app=[mainscript],
         options=dict(py2app=dict(argv_emulation=False,
-                                 includes=['PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWebKit', 'PyQt5.QtNetwork', 'sip'],
                                  packages=['lib', 'gui', 'plugins', 'packages'],
                                  iconfile='electron.icns',
                                  plist=plist,
