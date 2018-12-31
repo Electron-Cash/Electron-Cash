@@ -15,6 +15,7 @@ from .labels import LabelsPlugin
 
 
 class LabelsSignalObject(QObject):
+    ''' Signals need to be members of a QObject, hence why this class exists. '''
     labels_changed_signal = pyqtSignal(object)
     wallet_not_synched_signal = pyqtSignal(object)
     request_exception_signal = pyqtSignal(object, object)
@@ -41,8 +42,7 @@ class Plugin(LabelsPlugin):
         if not window: return
         wallet = window.parent().wallet
         d = WindowModalDialog(window.top_level_window(), _("Label Settings"))
-        #weak_print = Weak(self.print_error)
-        dlgRef = Weak.ref(d) #, lambda *args: print("*** dialog finalized")) # testing
+        dlgRef = Weak.ref(d)
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel("Label sync options:"))
         upload = ThreadedButton("Force upload",
@@ -64,7 +64,6 @@ class Plugin(LabelsPlugin):
         vbox.addSpacing(20)
         d.ok_button = OkButton(d)
         vbox.addLayout(Buttons(d.ok_button))
-        #d.destroyed.connect(lambda x=None: print("****** dialog Destroyed")) # testing
         return bool(d.exec_())
     
     def on_dlg_finished(self, dlgRef, result_code):
@@ -118,19 +117,15 @@ class Plugin(LabelsPlugin):
         if window: self._notok_synch(window, exc_info)
 
     def start_wallet(self, wallet, window=None):
-        if window:
-            # NB: this needs to be here because super().start_wallet() will start a thread
-            self.wallet_windows[wallet] = window
         ret = super().start_wallet(wallet)
-        if not ret:
-            # Hmm. start failed. pop the wallet from the wallet->window list
-            self.wallet_windows.pop(wallet, None)
+        if ret and window:
+            self.wallet_windows[wallet] = window
         return ret
 
     def stop_wallet(self, wallet):
         ret = super().stop_wallet(wallet)
         window = self.wallet_windows.pop(wallet, None)
-        return ret and window
+        return ret
 
     def on_pulled(self, wallet):
         # not main thread
@@ -142,11 +137,11 @@ class Plugin(LabelsPlugin):
         if window:
             #self.print_error("On labels changed", wallet.basename())
             window.update_tabs()
-            
+
     def on_wallet_not_synched(self, wallet):
-        #not main thread
+        # not main thread
         self.obj.wallet_not_synched_signal.emit(wallet)
-                
+
     def wallet_not_synched_slot(self, wallet):
         # main thread
         window = self.wallet_windows.get(wallet, None)
@@ -168,6 +163,7 @@ class Plugin(LabelsPlugin):
         try: self.obj.request_exception_signal.disconnect(self.request_exception_slot)
         except TypeError: pass # not connected
         super().on_close()
+        assert 0==len(self.wallet_windows), "LabelSync still had extant wallet_windows!"
         self.initted = False
 
     @hook
@@ -183,15 +179,16 @@ class Plugin(LabelsPlugin):
         if self.initted:
             return
         self.print_error("Initializing...")
+        # connect signals. this needs to happen first as below on_new_window depends on these being active
+        self.obj.labels_changed_signal.connect(self.on_labels_changed)
+        self.obj.wallet_not_synched_signal.connect(self.wallet_not_synched_slot)
+        self.obj.request_exception_signal.connect(self.request_exception_slot)
+
         ct, ct2 = 0, 0
         for window in gui.windows:
             if self.on_new_window(window):
                 ct2 += 1
             ct += 1
-        # connect signals
-        self.obj.labels_changed_signal.connect(self.on_labels_changed)
-        self.obj.wallet_not_synched_signal.connect(self.wallet_not_synched_slot)
-        self.obj.request_exception_signal.connect(self.request_exception_slot)
 
         self.initted = True
         self.print_error("Initialized (had {} extant windows, added {}).".format(ct,ct2))
