@@ -1107,11 +1107,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.opreturn_label = HelpLabel(_('OP_RETURN'), msg_opreturn)
         grid.addWidget(self.opreturn_label,  3, 0)
         self.message_opreturn_e = MyLineEdit()
-        grid.addWidget(self.message_opreturn_e,  3 , 1, 1, -1)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.message_opreturn_e)
+        self.opreturn_rawhex_checkbox = QCheckBox(_('Hex script'))
+        hbox.addWidget(self.opreturn_rawhex_checkbox)
+        grid.addLayout(hbox,  3 , 1, 1, -1)
 
         if not self.config.get('enable_opreturn'):
             self.message_opreturn_e.setText("")
             self.message_opreturn_e.setHidden(True)
+            self.opreturn_rawhex_checkbox.setHidden(True)
             self.opreturn_label.setHidden(True)
 
 
@@ -1291,6 +1296,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         amount = 0
         return (TYPE_SCRIPT, ScriptOutput.from_string(script), amount)
 
+    @staticmethod
+    def output_for_opreturn_rawhex(op_return):
+        if not isinstance(op_return, str):
+            raise OPReturnError('OP_RETURN parameter needs to be of type str!')
+        op_return_script = b'\x6a' + bytes.fromhex(op_return)
+        if len(op_return_script) > 223:
+            raise OPReturnTooLarge(_("OP_RETURN script too large, needs to be under 223 bytes"))
+        amount = 0
+        return (TYPE_SCRIPT, ScriptOutput(op_return_script), amount)
+
     def do_update_fee(self):
         '''Recalculate the fee.  If the fee was manually input, retain it, but
         still build the TX to see if there are enough funds.
@@ -1313,7 +1328,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             try:
                 opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
                 if opreturn_message:
-                    outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
+                    if self.opreturn_rawhex_checkbox.isChecked():
+                        outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
+                    else:
+                        outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
                 tx = self.wallet.make_unsigned_transaction(self.get_coins(), outputs, self.config, fee)
                 self.not_enough_funds = False
                 self.op_return_toolong = False
@@ -1440,7 +1458,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # handle op_return if specified and enabled
             opreturn_message = self.message_opreturn_e.text()
             if opreturn_message:
-                outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
+                if self.opreturn_rawhex_checkbox.isChecked():
+                    outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
+                else:
+                    outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
         except OPReturnTooLarge as e:
             self.show_error(str(e))
             return
@@ -1713,10 +1734,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if op_return:
             self.message_opreturn_e.setText(op_return)
             self.message_opreturn_e.setHidden(False)
+            self.opreturn_rawhex_checkbox.setHidden(False)
+            self.opreturn_rawhex_checkbox.setChecked(False)
             self.opreturn_label.setHidden(False)
         elif not self.config.get('enable_opreturn'):
             self.message_opreturn_e.setText('')
             self.message_opreturn_e.setHidden(True)
+            self.opreturn_rawhex_checkbox.setHidden(True)
             self.opreturn_label.setHidden(True)
 
     def do_clear(self):
@@ -3013,6 +3037,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.message_opreturn_e.setText("")
                 self.op_return_toolong = False
             self.message_opreturn_e.setHidden(not x)
+            self.opreturn_rawhex_checkbox.setHidden(not x)
             self.opreturn_label.setHidden(not x)
 
         enable_opreturn = bool(self.config.get('enable_opreturn'))
