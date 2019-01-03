@@ -1206,6 +1206,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.message_opreturn_e.textEdited.connect(self.update_fee)
         self.message_opreturn_e.textChanged.connect(self.update_fee)
         self.message_opreturn_e.editingFinished.connect(self.update_fee)
+        self.opreturn_rawhex_cb.stateChanged.connect(self.update_fee)
 
         def reset_max(t):
             self.is_max = False
@@ -1243,6 +1244,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.message_opreturn_e.textChanged.connect(entry_changed)
         self.message_opreturn_e.textEdited.connect(entry_changed)
         self.message_opreturn_e.editingFinished.connect(entry_changed)
+        self.opreturn_rawhex_cb.stateChanged.connect(entry_changed)
 
         self.invoices_label = QLabel(_('Invoices'))
         from .invoice_list import InvoiceList
