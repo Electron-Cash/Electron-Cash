@@ -1306,7 +1306,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         try:
             op_return_script = b'\x6a' + bytes.fromhex(op_return.strip())
         except ValueError:
-            raise OPReturnError(_('OP_RETURN script expected to be hexadecimal'))
+            raise OPReturnError(_('OP_RETURN script expected to be hexadecimal bytes'))
         if len(op_return_script) > 223:
             raise OPReturnTooLarge(_("OP_RETURN script too large, needs to be under 223 bytes"))
         amount = 0
