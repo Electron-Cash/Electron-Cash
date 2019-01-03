@@ -1109,14 +1109,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.message_opreturn_e = MyLineEdit()
         hbox = QHBoxLayout()
         hbox.addWidget(self.message_opreturn_e)
-        self.opreturn_rawhex_checkbox = QCheckBox(_('Hex script'))
-        hbox.addWidget(self.opreturn_rawhex_checkbox)
+        self.opreturn_rawhex_cb = QCheckBox(_('Hex script'))
+        self.opreturn_rawhex_cb.setToolTip(_('If unchecked, the textbox contents be UTF8-encoded and result in a single-push script: <tt>OP_RETURN PUSH &lt;text&gt;</tt>. If checked, the text contents will be interpreted as a raw hexadecimal script to be appended after the OP_RETURN opcode: <tt>OP_RETURN &lt;script&gt;</tt>.'))
+        hbox.addWidget(self.opreturn_rawhex_cb)
         grid.addLayout(hbox,  3 , 1, 1, -1)
 
         if not self.config.get('enable_opreturn'):
             self.message_opreturn_e.setText("")
             self.message_opreturn_e.setHidden(True)
-            self.opreturn_rawhex_checkbox.setHidden(True)
+            self.opreturn_rawhex_cb.setHidden(True)
             self.opreturn_label.setHidden(True)
 
 
@@ -1300,7 +1301,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def output_for_opreturn_rawhex(op_return):
         if not isinstance(op_return, str):
             raise OPReturnError('OP_RETURN parameter needs to be of type str!')
-        op_return_script = b'\x6a' + bytes.fromhex(op_return)
+        try:
+            op_return_script = b'\x6a' + bytes.fromhex(op_return.strip())
+        except ValueError:
+            raise OPReturnError(_('OP_RETURN script expected to be hexadecimal'))
         if len(op_return_script) > 223:
             raise OPReturnTooLarge(_("OP_RETURN script too large, needs to be under 223 bytes"))
         amount = 0
@@ -1328,7 +1332,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             try:
                 opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
                 if opreturn_message:
-                    if self.opreturn_rawhex_checkbox.isChecked():
+                    if self.opreturn_rawhex_cb.isChecked():
                         outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
                     else:
                         outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
@@ -1458,7 +1462,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # handle op_return if specified and enabled
             opreturn_message = self.message_opreturn_e.text()
             if opreturn_message:
-                if self.opreturn_rawhex_checkbox.isChecked():
+                if self.opreturn_rawhex_cb.isChecked():
                     outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
                 else:
                     outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
@@ -1734,13 +1738,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if op_return:
             self.message_opreturn_e.setText(op_return)
             self.message_opreturn_e.setHidden(False)
-            self.opreturn_rawhex_checkbox.setHidden(False)
-            self.opreturn_rawhex_checkbox.setChecked(False)
+            self.opreturn_rawhex_cb.setHidden(False)
+            self.opreturn_rawhex_cb.setChecked(False)
             self.opreturn_label.setHidden(False)
         elif not self.config.get('enable_opreturn'):
             self.message_opreturn_e.setText('')
             self.message_opreturn_e.setHidden(True)
-            self.opreturn_rawhex_checkbox.setHidden(True)
+            self.opreturn_rawhex_cb.setHidden(True)
             self.opreturn_label.setHidden(True)
 
     def do_clear(self):
@@ -1753,9 +1757,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             e.setText('')
             e.setFrozen(False)
         self.max_button.setDisabled(False)
+        self.opreturn_rawhex_cb.setChecked(False)
         self.set_pay_from([])
         self.tx_external_keypairs = {}
         self.message_opreturn_e.setVisible(self.config.get('enable_opreturn', False))
+        self.opreturn_rawhex_cb.setVisible(self.config.get('enable_opreturn', False))
         self.opreturn_label.setVisible(self.config.get('enable_opreturn', False))
         self.update_status()
         run_hook('do_clear', self)
@@ -3037,7 +3043,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.message_opreturn_e.setText("")
                 self.op_return_toolong = False
             self.message_opreturn_e.setHidden(not x)
-            self.opreturn_rawhex_checkbox.setHidden(not x)
+            self.opreturn_rawhex_cb.setHidden(not x)
             self.opreturn_label.setHidden(not x)
 
         enable_opreturn = bool(self.config.get('enable_opreturn'))
