@@ -33,7 +33,7 @@ import PyQt5.QtCore as QtCore
 from electroncash.i18n import _
 from electroncash.networks import NetworkConstants
 from electroncash.util import print_error, Weak
-from electroncash.network import serialize_server, deserialize_server
+from electroncash.network import serialize_server, deserialize_server, get_eligible_servers
 
 from .util import *
 
@@ -444,7 +444,8 @@ class NetworkChoiceLayout(QObject):
             bl_srv_ct_str = ' ({}) <a href="ViewBlackList">{}</a>'.format(len(self.network.blacklisted_servers), _("View blacklist..."))
         else:
             bl_srv_ct_str = " (0)<i> </i>" # ensure rich text
-        self.legend_label.setText(ServerFlag.Symbol[ServerFlag.Default] + "=" + _("Default") + " ({})".format(len(self.network.whitelisted_servers)) + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+        servers_whitelisted = set(get_eligible_servers(self.servers, protocol)).intersection(self.network.whitelisted_servers) - self.network.blacklisted_servers
+        self.legend_label.setText(ServerFlag.Symbol[ServerFlag.Default] + "=" + _("Default") + " ({})".format(len(servers_whitelisted)) + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
                                   + ServerFlag.Symbol[ServerFlag.Blacklisted] + "=" + _("Blacklisted") + bl_srv_ct_str)
         self.servers_list.update(self.network, self.servers, self.protocol, self.tor_cb.isChecked())
         self.enable_set_server()
