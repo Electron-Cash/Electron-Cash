@@ -155,6 +155,7 @@ class ServerListWidget(QTreeWidget):
         useAction = menu.addAction(_("Use as server"), lambda: self.set_server(server))
         menu.addSeparator()
         flagval = item.data(0, Qt.UserRole)
+        iswl = flagval & ServerFlag.Default
         if flagval & ServerFlag.Blacklisted:
             optxt = ServerFlag.UnSymbol[ServerFlag.Blacklisted] + " " + _("Unblacklist server")
             isbl = True
@@ -168,7 +169,7 @@ class ServerListWidget(QTreeWidget):
                     optxt_fav = ServerFlag.UnSymbol[ServerFlag.Default] + " " + _("Remove from defaults")
                 else:
                     optxt_fav = ServerFlag.Symbol[ServerFlag.Default] + " " + _("Add to defaults")
-                menu.addAction(optxt_fav, lambda: print_error("DEFAULTS NOT IMPLEMENTED YET"))
+                menu.addAction(optxt_fav, lambda: self.parent.set_whitelisted(server, not iswl))
         menu.addAction(optxt, lambda: self.parent.set_blacklisted(server, not isbl))
         menu.exec_(self.viewport().mapToGlobal(position))
 
@@ -200,7 +201,7 @@ class ServerListWidget(QTreeWidget):
             if port:
                 server = serialize_server(_host, port, protocol)
                 flag, flagval, tt = (ServerFlag.Symbol[ServerFlag.Blacklisted], ServerFlag.Blacklisted, _("This server is blacklisted")) if network.server_is_blacklisted(server) else ("", 0, "")
-                flag2, flagval2, tt2 = (ServerFlag.Symbol[ServerFlag.Default], ServerFlag.Default, _("This is a default server")) if network.server_is_default(server) else ("", 0, "")
+                flag2, flagval2, tt2 = (ServerFlag.Symbol[ServerFlag.Default], ServerFlag.Default, _("This is a default server")) if network.server_is_whitelisted(server) else ("", 0, "")
                 flag = flag or flag2; del flag2
                 tt = tt or tt2; del tt2
                 flagval |= flagval2; del flagval2
@@ -573,6 +574,11 @@ class NetworkChoiceLayout(QObject):
     def set_blacklisted(self, server, bl):
         self.network.server_set_blacklisted(server, bl, True)
         self.set_server() # if the blacklisted server is the active server, this will force a reconnect to another server
+        self.update()
+
+    def set_whitelisted(self, server, flag):
+        self.network.server_set_whitelisted(server, flag, True)
+        self.set_server()
         self.update()
 
     def set_default_only(self, b):

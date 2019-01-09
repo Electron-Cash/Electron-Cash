@@ -182,7 +182,8 @@ class Network(util.DaemonThread):
             self.blockchain_index = 0
         # Server for addresses and transactions
         self.blacklisted_servers = set(self.config.get('server_blacklist', []))
-        self.print_error("server blacklist: {}".format(self.blacklisted_servers))
+        self.whitelisted_servers = self._compute_whitelist()
+        self.print_error("server blacklist: {} server whitelist: {}".format(self.blacklisted_servers, self.whitelisted_servers))
         self.default_server = self.get_config_server()
 
         self.lock = threading.Lock()
@@ -1623,8 +1624,9 @@ class Network(util.DaemonThread):
             return proxies
         return None
 
-    def server_set_blacklisted(self, server, flag, save=True):
-        if flag:
+    def server_set_blacklisted(self, server, b, save=True):
+        assert isinstance(server, str)
+        if b:
             self.blacklisted_servers |= {server}
             if server in self.interfaces:
                 self.connection_down(server, False)
@@ -1635,8 +1637,38 @@ class Network(util.DaemonThread):
     def server_is_blacklisted(self, server): return server in self.blacklisted_servers
     def server_get_blacklist(self): return self.blacklisted_servers.copy()
 
-    def server_is_default(self, server):
-        # TODO: save this in a real class variable, and compute it based on what they added/removed from the default list
-        if not hasattr(self, '_default_eligible_servers_'):
-            self._default_eligible_servers_ = frozenset(get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS))
-        return server in self._default_eligible_servers_
+    def server_set_whitelisted(self, server, b, save=True):
+        assert isinstance(server, str)
+        adds = set(self.config.get('server_whitelist_added', []))
+        rems = set(self.config.get('server_whitelist_removed', []))
+        is_hardcoded = server in self._hardcoded_whitelist
+        s = {server} # make a set so |= and -= work
+        if b:
+            # the below logic keeps the adds list from containing redundant 'whitelisted' servers that are already defined in servers.json
+            # it also makes it so that if the developers remove a server from servers.json, it goes away from the whitelist automatically.
+            if is_hardcoded:
+                adds -= s # it's in the hardcoded list anyway, remove it from adds to keep adds from being redundant
+            else:
+                adds |= s # it's not a hardcoded server, add it to 'adds'
+            rems -= s
+            self.whitelisted_servers |= s
+        else:
+            adds -= s
+            if is_hardcoded:
+                rems |= s # it's in the hardcoded set, so it needs to explicitly be added to the 'rems' set to be taken out of the dynamically computed whitelist (_compute_whitelist())
+            else:
+                rems -= s # it's not in the hardcoded list, so no need to add it to the rems as it will be not whitelisted on next run since it's gone from 'adds'
+            self.whitelisted_servers -= s
+        self.config.set_key('server_whitelist_added', list(adds), save)
+        self.config.set_key('server_whitelist_removed', list(rems), save)
+
+    def server_is_whitelisted(self, server): return server in self.whitelisted_servers
+    def server_get_whitelist(self): return self.whitelisted_servers.copy()
+
+    def _compute_whitelist(self):
+        if not hasattr(self, '_hardcoded_whitelist'):
+            self._hardcoded_whitelist = frozenset(get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS))
+        ret = set(self._hardcoded_whitelist)
+        ret |= set(self.config.get('server_whitelist_added', [])) # this key is all the servers that weren't in the hardcoded whitelist that the user explicitly added
+        ret -= set(self.config.get('server_whitelist_removed', [])) # this key is all the servers that were hardcoded in the whitelist that the user explicitly removed
+        return ret
