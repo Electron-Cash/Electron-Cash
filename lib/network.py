@@ -755,7 +755,7 @@ class Network(util.DaemonThread):
         '''A connection to server either went down, or was never made.
         We distinguish by whether it is in self.interfaces.'''
         if blacklist:
-            self.server_set_blacklisted(server, True, True)
+            self.server_set_blacklisted(server, True, save=True, skip_connection_logic=True)
         else:
             self.disconnected_servers.add(server)
         if server == self.default_server:
@@ -1624,15 +1624,15 @@ class Network(util.DaemonThread):
             return proxies
         return None
 
-    def server_set_blacklisted(self, server, b, save=True):
+    def server_set_blacklisted(self, server, b, save=True, skip_connection_logic=False):
         assert isinstance(server, str)
         if b:
             self.blacklisted_servers |= {server}
-            if server in self.interfaces:
-                self.connection_down(server, False)
         else:
             self.blacklisted_servers -= {server}
         self.config.set_key("server_blacklist", list(self.blacklisted_servers), save)
+        if b and not skip_connection_logic and server in self.interfaces:
+            self.connection_down(server, False) # if blacklisting, this disconnects (if we were connected)
 
     def server_is_blacklisted(self, server): return server in self.blacklisted_servers
     def server_get_blacklist(self): return self.blacklisted_servers.copy()
