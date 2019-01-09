@@ -104,6 +104,26 @@ def pick_random_server(hostmap = None, protocol = 's', exclude_set = set()):
     eligible = get_eligible_servers(hostmap, protocol, exclude_set)
     return random.choice(eligible) if eligible else None
 
+def servers_to_hostmap(servers, protocol = 's'):
+    ''' Takes an iterable of HOST:PORT:PROTOCOL strings and breaks them into
+    a hostmap dict of host -> { protocol : port } suitable to be passed to
+    pick_random_server() and get_eligible_servers() above.'''
+    ret = dict()
+    for s in servers:
+        try:
+            host, port, proto = deserialize_server(s)
+        except (AssertionError, ValueError, TypeError):
+            continue # deserialization error
+        if proto == protocol:
+            m = ret.get(host, dict())
+            need_add = len(m) == 0
+            m[proto] = port
+            if need_add:
+                m['pruning'] = '-' # hmm. this info is missing, so give defaults just to make the map complete.
+                m['version'] = PROTOCOL_VERSION
+                ret[host] = m
+    return ret
+
 from .simple_config import SimpleConfig
 
 proxy_modes = ['socks4', 'socks5', 'http']
@@ -429,7 +449,8 @@ class Network(util.DaemonThread):
 
     def start_random_interface(self):
         exclude_set = self.get_unavailable_servers()
-        server_key = pick_random_server(self.get_servers(), self.protocol, exclude_set)
+        hostmap = self.get_servers() if not self.is_whitelist_only() else servers_to_hostmap(self.whitelisted_servers)
+        server_key = pick_random_server(hostmap, self.protocol, exclude_set)
         if server_key:
             self.start_interface(server_key)
 
@@ -532,8 +553,10 @@ class Network(util.DaemonThread):
             except:
                 self.print_error('Warning: failed to parse server-string; falling back to random.')
                 server = None
-        if (not server) or (server in self.blacklisted_servers):
-            server = pick_random_server()
+        wl_only = self.is_whitelist_only()
+        if (not server) or (server in self.blacklisted_servers) or (wl_only and server not in self.whitelisted_servers):
+            hostmap = None if not wl_only else servers_to_hostmap(self.whitelisted_servers)
+            server = pick_random_server(hostmap, exclude_set=self.blacklisted_servers)
         return server
 
     def switch_to_random_interface(self):
@@ -1635,7 +1658,6 @@ class Network(util.DaemonThread):
             self.connection_down(server, False) # if blacklisting, this disconnects (if we were connected)
 
     def server_is_blacklisted(self, server): return server in self.blacklisted_servers
-    def server_get_blacklist(self): return self.blacklisted_servers.copy()
 
     def server_set_whitelisted(self, server, b, save=True):
         assert isinstance(server, str)
@@ -1663,7 +1685,6 @@ class Network(util.DaemonThread):
         self.config.set_key('server_whitelist_removed', list(rems), save)
 
     def server_is_whitelisted(self, server): return server in self.whitelisted_servers
-    def server_get_whitelist(self): return self.whitelisted_servers.copy()
 
     def _compute_whitelist(self):
         if not hasattr(self, '_hardcoded_whitelist'):
@@ -1672,3 +1693,16 @@ class Network(util.DaemonThread):
         ret |= set(self.config.get('server_whitelist_added', [])) # this key is all the servers that weren't in the hardcoded whitelist that the user explicitly added
         ret -= set(self.config.get('server_whitelist_removed', [])) # this key is all the servers that were hardcoded in the whitelist that the user explicitly removed
         return ret
+
+    def is_whitelist_only(self): return bool(self.config.get('whitelist_servers_only', False))
+
+    def set_whitelist_only(self, b):
+        if bool(b) == self.is_whitelist_only():
+            return # disallow redundant/noop calls
+        self.config.set_key('whitelist_servers_only', b, True)
+        if b:
+            with self.interface_lock:
+                # now, disconnect from all non-whitelisted servers
+                for s in self.interfaces.copy():
+                    if s not in self.whitelisted_servers:
+                        self.connection_down(s)
