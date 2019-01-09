@@ -104,24 +104,23 @@ def pick_random_server(hostmap = None, protocol = 's', exclude_set = set()):
     eligible = get_eligible_servers(hostmap, protocol, exclude_set)
     return random.choice(eligible) if eligible else None
 
-def servers_to_hostmap(servers, protocol = 's'):
+def servers_to_hostmap(servers):
     ''' Takes an iterable of HOST:PORT:PROTOCOL strings and breaks them into
     a hostmap dict of host -> { protocol : port } suitable to be passed to
     pick_random_server() and get_eligible_servers() above.'''
     ret = dict()
     for s in servers:
         try:
-            host, port, proto = deserialize_server(s)
+            host, port, protocol = deserialize_server(s)
         except (AssertionError, ValueError, TypeError):
             continue # deserialization error
-        if proto == protocol:
-            m = ret.get(host, dict())
-            need_add = len(m) == 0
-            m[proto] = port
-            if need_add:
-                m['pruning'] = '-' # hmm. this info is missing, so give defaults just to make the map complete.
-                m['version'] = PROTOCOL_VERSION
-                ret[host] = m
+        m = ret.get(host, dict())
+        need_add = len(m) == 0
+        m[protocol] = port
+        if need_add:
+            m['pruning'] = '-' # hmm. this info is missing, so give defaults just to make the map complete.
+            m['version'] = PROTOCOL_VERSION
+            ret[host] = m
     return ret
 
 from .simple_config import SimpleConfig
@@ -1688,7 +1687,8 @@ class Network(util.DaemonThread):
 
     def _compute_whitelist(self):
         if not hasattr(self, '_hardcoded_whitelist'):
-            self._hardcoded_whitelist = frozenset(get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS))
+            self._hardcoded_whitelist = frozenset(get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS, 's')
+                                                  + get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS, 't') )
         ret = set(self._hardcoded_whitelist)
         ret |= set(self.config.get('server_whitelist_added', [])) # this key is all the servers that weren't in the hardcoded whitelist that the user explicitly added
         ret -= set(self.config.get('server_whitelist_removed', [])) # this key is all the servers that were hardcoded in the whitelist that the user explicitly removed
