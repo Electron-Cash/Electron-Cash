@@ -87,12 +87,14 @@ def filter_version(servers):
 
 def filter_protocol(hostmap, protocol = 's'):
     '''Filters the hostmap for those implementing protocol.
+    Protocol may be: 's', 't', or 'st' for both.
     The result is a list in serialized form.'''
     eligible = []
     for host, portmap in hostmap.items():
-        port = portmap.get(protocol)
-        if port:
-            eligible.append(serialize_server(host, port, protocol))
+        for proto in protocol:
+            port = portmap.get(proto)
+            if port:
+                eligible.append(serialize_server(host, port, proto))
     return eligible
 
 def get_eligible_servers(hostmap=None, protocol="s", exclude_set=set()):
@@ -112,7 +114,8 @@ def servers_to_hostmap(servers):
     for s in servers:
         try:
             host, port, protocol = deserialize_server(s)
-        except (AssertionError, ValueError, TypeError):
+        except (AssertionError, ValueError, TypeError) as e:
+            util.print_error("[servers_to_hostmap] deserialization failure for server:", s, "error:", str(e))
             continue # deserialization error
         m = ret.get(host, dict())
         need_add = len(m) == 0
@@ -122,6 +125,10 @@ def servers_to_hostmap(servers):
             m['version'] = PROTOCOL_VERSION
             ret[host] = m
     return ret
+
+def hostmap_to_servers(hostmap):
+    ''' The inverse of servers_to_hostmap '''
+    return filter_protocol(hostmap, protocol = 'st')
 
 from .simple_config import SimpleConfig
 
@@ -201,7 +208,7 @@ class Network(util.DaemonThread):
             self.blockchain_index = 0
         # Server for addresses and transactions
         self.blacklisted_servers = set(self.config.get('server_blacklist', []))
-        self.whitelisted_servers = self._compute_whitelist()
+        self.whitelisted_servers, self.whitelisted_servers_hostmap = self._compute_whitelist()
         self.print_error("server blacklist: {} server whitelist: {}".format(self.blacklisted_servers, self.whitelisted_servers))
         self.default_server = self.get_config_server()
 
@@ -448,7 +455,7 @@ class Network(util.DaemonThread):
 
     def start_random_interface(self):
         exclude_set = self.get_unavailable_servers()
-        hostmap = self.get_servers() if not self.is_whitelist_only() else servers_to_hostmap(self.whitelisted_servers)
+        hostmap = self.get_servers() if not self.is_whitelist_only() else self.whitelisted_servers_hostmap
         server_key = pick_random_server(hostmap, self.protocol, exclude_set)
         if server_key:
             self.start_interface(server_key)
@@ -554,7 +561,7 @@ class Network(util.DaemonThread):
                 server = None
         wl_only = self.is_whitelist_only()
         if (not server) or (server in self.blacklisted_servers) or (wl_only and server not in self.whitelisted_servers):
-            hostmap = None if not wl_only else servers_to_hostmap(self.whitelisted_servers)
+            hostmap = None if not wl_only else self.whitelisted_servers_hostmap
             server = pick_random_server(hostmap, exclude_set=self.blacklisted_servers)
         return server
 
@@ -1664,6 +1671,7 @@ class Network(util.DaemonThread):
         rems = set(self.config.get('server_whitelist_removed', []))
         is_hardcoded = server in self._hardcoded_whitelist
         s = {server} # make a set so |= and -= work
+        len0 = len(self.whitelisted_servers)
         if b:
             # the below logic keeps the adds list from containing redundant 'whitelisted' servers that are already defined in servers.json
             # it also makes it so that if the developers remove a server from servers.json, it goes away from the whitelist automatically.
@@ -1680,6 +1688,9 @@ class Network(util.DaemonThread):
             else:
                 rems -= s # it's not in the hardcoded list, so no need to add it to the rems as it will be not whitelisted on next run since it's gone from 'adds'
             self.whitelisted_servers -= s
+        if len0 != len(self.whitelisted_servers):
+            # it changed. So re-cache hostmap which we use as an argument to pick_random_server() elsewhere in this class
+            self.whitelisted_servers_hostmap = servers_to_hostmap(self.whitelisted_servers)
         self.config.set_key('server_whitelist_added', list(adds), save)
         self.config.set_key('server_whitelist_removed', list(rems), save)
 
@@ -1687,12 +1698,11 @@ class Network(util.DaemonThread):
 
     def _compute_whitelist(self):
         if not hasattr(self, '_hardcoded_whitelist'):
-            self._hardcoded_whitelist = frozenset(get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS, 's')
-                                                  + get_eligible_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS, 't') )
+            self._hardcoded_whitelist = frozenset(hostmap_to_servers(NetworkConstants.HARDCODED_DEFAULT_SERVERS))
         ret = set(self._hardcoded_whitelist)
         ret |= set(self.config.get('server_whitelist_added', [])) # this key is all the servers that weren't in the hardcoded whitelist that the user explicitly added
         ret -= set(self.config.get('server_whitelist_removed', [])) # this key is all the servers that were hardcoded in the whitelist that the user explicitly removed
-        return ret
+        return ret, servers_to_hostmap(ret)
 
     def is_whitelist_only(self): return bool(self.config.get('whitelist_servers_only', False))
 
