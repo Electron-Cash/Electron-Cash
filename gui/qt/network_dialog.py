@@ -115,7 +115,7 @@ class NodesListWidget(QTreeWidget):
             else:
                 x = self
             for i in items:
-                star = ' ✦' if i == network.interface else ''
+                star = ' ☚' if i == network.interface else ''
                 item = QTreeWidgetItem([i.host + star, '%d'%i.tip])
                 item.setData(0, Qt.UserRole, 0)
                 item.setData(1, Qt.UserRole, i.server)
@@ -131,11 +131,11 @@ class NodesListWidget(QTreeWidget):
 
 class ServerFlag:
     ''' Used by ServerListWidget for Server flags & Symbols '''
-    Blacklisted = 2 # Blacklisting was a hidden mechanism inherited from Electrum. We would blacklist misbehaving servers under the hood. Now that facility is exposed (editable by the user). We never connect to blacklisted servers.
-    Default = 1 # Default servers start off as the servers in servers.json and are "more trusted" and optionally the user can elect to connect to only these servers
+    Banned = 2 # Blacklisting/banning was a hidden mechanism inherited from Electrum. We would blacklist misbehaving servers under the hood. Now that facility is exposed (editable by the user). We never connect to blacklisted servers.
+    Preferred = 1 # Preferred servers (white-listed) start off as the servers in servers.json and are "more trusted" and optionally the user can elect to connect to only these servers
     NoFlag = 0
-    Symbol = ("", "⌘", "⌧") # indexed using pseudo-enum above
-    UnSymbol = ("", "✖", "✓") # used for "disable X" context menu
+    Symbol = ("", "★", "⛔") # indexed using pseudo-enum above
+    UnSymbol = ("", "✖", "⚬") # used for "disable X" context menu
 
 class ServerListWidget(QTreeWidget):
 
@@ -159,20 +159,20 @@ class ServerListWidget(QTreeWidget):
             useAction.setDisabled(True)
         menu.addSeparator()
         flagval = item.data(0, Qt.UserRole)
-        iswl = flagval & ServerFlag.Default
-        if flagval & ServerFlag.Blacklisted:
-            optxt = ServerFlag.UnSymbol[ServerFlag.Blacklisted] + " " + _("Unblacklist server")
+        iswl = flagval & ServerFlag.Preferred
+        if flagval & ServerFlag.Banned:
+            optxt = ServerFlag.UnSymbol[ServerFlag.Banned] + " " + _("Unban server")
             isbl = True
             useAction.setDisabled(True)
-            useAction.setText(_("Server blacklisted"))
+            useAction.setText(_("Server banned"))
         else:
-            optxt = ServerFlag.Symbol[ServerFlag.Blacklisted] + " " + _("Blacklist server")
+            optxt = ServerFlag.Symbol[ServerFlag.Banned] + " " + _("Ban server")
             isbl = False
             if not isbl:
-                if flagval & ServerFlag.Default:
-                    optxt_fav = ServerFlag.UnSymbol[ServerFlag.Default] + " " + _("Remove from defaults")
+                if flagval & ServerFlag.Preferred:
+                    optxt_fav = ServerFlag.UnSymbol[ServerFlag.Preferred] + " " + _("Remove from preferred")
                 else:
-                    optxt_fav = ServerFlag.Symbol[ServerFlag.Default] + " " + _("Add to defaults")
+                    optxt_fav = ServerFlag.Symbol[ServerFlag.Preferred] + " " + _("Add to preferred")
                 menu.addAction(optxt_fav, lambda: self.parent.set_whitelisted(server, not iswl))
         menu.addAction(optxt, lambda: self.parent.set_blacklisted(server, not isbl))
         menu.exec_(self.viewport().mapToGlobal(position))
@@ -197,22 +197,33 @@ class ServerListWidget(QTreeWidget):
         pt.setX(50)
         self.customContextMenuRequested.emit(pt)
 
+    @staticmethod
+    def lightenItemText(item, rang=None):
+        if rang is None: rang = range(0, item.columnCount())
+        for i in rang:
+            brush = item.foreground(i); color = brush.color(); color.setHsvF(color.hueF(), color.saturationF(), 0.5); brush.setColor(color)
+            item.setForeground(i, brush)
+
     def update(self, network, servers, protocol, use_tor):
         self.clear()
         self.setIndentation(0)
+        wl_only = network.is_whitelist_only()
         for _host, d in sorted(servers.items()):
             if _host.endswith('.onion') and not use_tor:
                 continue
             port = d.get(protocol)
             if port:
                 server = serialize_server(_host, port, protocol)
-                flag, flagval, tt = (ServerFlag.Symbol[ServerFlag.Blacklisted], ServerFlag.Blacklisted, _("This server is blacklisted")) if network.server_is_blacklisted(server) else ("", 0, "")
-                flag2, flagval2, tt2 = (ServerFlag.Symbol[ServerFlag.Default], ServerFlag.Default, _("This is a default server")) if network.server_is_whitelisted(server) else ("", 0, "")
+                flag, flagval, tt = (ServerFlag.Symbol[ServerFlag.Banned], ServerFlag.Banned, _("This server is banned")) if network.server_is_blacklisted(server) else ("", 0, "")
+                flag2, flagval2, tt2 = (ServerFlag.Symbol[ServerFlag.Preferred], ServerFlag.Preferred, _("This is a preferred server")) if network.server_is_whitelisted(server) else ("", 0, "")
                 flag = flag or flag2; del flag2
                 tt = tt or tt2; del tt2
                 flagval |= flagval2; del flagval2
                 x = QTreeWidgetItem([flag, _host, port])
                 if tt: x.setToolTip(0, tt)
+                if (wl_only and flagval != ServerFlag.Preferred) or flagval & ServerFlag.Banned:
+                    # lighten the text of servers we can't/won't connect to for the given mode
+                    self.lightenItemText(x, range(1,3))
                 x.setData(2, Qt.UserRole, server)
                 x.setData(0, Qt.UserRole, flagval)
                 self.addTopLevelItem(x)
@@ -283,18 +294,18 @@ class NetworkChoiceLayout(QObject):
         grid.addWidget(self.autoconnect_cb, 0, 0, 1, 3)
         grid.addWidget(HelpButton(msg), 0, 4)
 
-        self.default_only_cb = QCheckBox(_("Connect only to default servers"))
-        self.default_only_cb.setEnabled(self.config.is_modifiable('whitelist_servers_only'))
-        self.default_only_cb.setToolTip(_("If enabled, restricts Electron Cash to connecting to servers only marked as 'default'."))
+        self.preferred_only_cb = QCheckBox(_("Connect only to preferred servers"))
+        self.preferred_only_cb.setEnabled(self.config.is_modifiable('whitelist_servers_only'))
+        self.preferred_only_cb.setToolTip(_("If enabled, restricts Electron Cash to connecting to servers only marked as 'preferred'."))
 
-        self.default_only_cb.clicked.connect(self.set_default_only) # re-set the config key and notify network.py
+        self.preferred_only_cb.clicked.connect(self.set_whitelisted_only) # re-set the config key and notify network.py
 
         msg = '\n\n'.join([
-            _("If 'Connect only to default servers' is enabled, Electron Cash will only connect to servers marked as 'default' servers ({}).").format(ServerFlag.Symbol[ServerFlag.Default]),
+            _("If 'Connect only to preferred servers' is enabled, Electron Cash will only connect to servers marked as 'preferred' servers ({}).").format(ServerFlag.Symbol[ServerFlag.Preferred]),
             _("This feature was added in response to the potential for a malicious actor to deny service via launching many servers (aka a sybil attack)."),
             _("If unsure, most of the time it's safe to leave this option disabled. However leaving it enabled is safer (if a little bit discouraging to new server operators wanting to populate their servers).")
         ])
-        grid.addWidget(self.default_only_cb, 1, 0, 1, 3)
+        grid.addWidget(self.preferred_only_cb, 1, 0, 1, 3)
         grid.addWidget(HelpButton(msg), 1, 4)
 
 
@@ -310,10 +321,10 @@ class NetworkChoiceLayout(QObject):
         self.legend_label.linkActivated.connect(self.on_view_blacklist)
         grid.addWidget(label, 5, 0, 1, 4)
         msg = ' '.join([
-            _("Default servers ({}) are servers you have designated as reliable and/or trustworthy.").format(ServerFlag.Symbol[ServerFlag.Default]),
-            _("Initially, the default list is the hard-coded list of known-good servers vetted by the Electron Cash developers."),
-            _("You can add or remove any server from this list and optionally elect to only connect to default servers."),
-            "\n\n"+_("Blacklisted servers ({}) are servers you have deemed unreliable and/or untrustworthy, and so they will never be connected-to by Electron Cash.").format(ServerFlag.Symbol[ServerFlag.Blacklisted])
+            _("Preferred servers ({}) are servers you have designated as reliable and/or trustworthy.").format(ServerFlag.Symbol[ServerFlag.Preferred]),
+            _("Initially, the preferred list is the hard-coded list of known-good servers vetted by the Electron Cash developers."),
+            _("You can add or remove any server from this list and optionally elect to only connect to preferred servers."),
+            "\n\n"+_("Banned servers ({}) are servers deemed unreliable and/or untrustworthy, and so they will never be connected-to by Electron Cash.").format(ServerFlag.Symbol[ServerFlag.Banned])
         ])
         grid.addWidget(HelpButton(msg), 5, 4)
 
@@ -428,11 +439,11 @@ class NetworkChoiceLayout(QObject):
 
     def update(self):
         host, port, protocol, proxy_config, auto_connect = self.network.get_parameters()
-        default_only = self.network.is_whitelist_only()
+        preferred_only = self.network.is_whitelist_only()
         self.server_host.setText(host)
         self.server_port.setText(port)
         self.autoconnect_cb.setChecked(auto_connect)
-        self.default_only_cb.setChecked(default_only)
+        self.preferred_only_cb.setChecked(preferred_only)
 
         host = self.network.interface.host if self.network.interface else _('None')
         self.server_label.setText(host)
@@ -441,12 +452,12 @@ class NetworkChoiceLayout(QObject):
         self.servers = self.network.get_servers()
         self.server_list_label.setText((_('Server peers') if self.network.is_connected() else _('Servers')) + " ({})".format(len(self.servers)))
         if self.network.blacklisted_servers:
-            bl_srv_ct_str = ' ({}) <a href="ViewBlackList">{}</a>'.format(len(self.network.blacklisted_servers), _("View blacklist..."))
+            bl_srv_ct_str = ' ({}) <a href="ViewBanList">{}</a>'.format(len(self.network.blacklisted_servers), _("View ban list..."))
         else:
             bl_srv_ct_str = " (0)<i> </i>" # ensure rich text
         servers_whitelisted = set(get_eligible_servers(self.servers, protocol)).intersection(self.network.whitelisted_servers) - self.network.blacklisted_servers
-        self.legend_label.setText(ServerFlag.Symbol[ServerFlag.Default] + "=" + _("Default") + " ({})".format(len(servers_whitelisted)) + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-                                  + ServerFlag.Symbol[ServerFlag.Blacklisted] + "=" + _("Blacklisted") + bl_srv_ct_str)
+        self.legend_label.setText(ServerFlag.Symbol[ServerFlag.Preferred] + "=" + _("Preferred") + " ({})".format(len(servers_whitelisted)) + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+                                  + ServerFlag.Symbol[ServerFlag.Banned] + "=" + _("Banned") + bl_srv_ct_str)
         self.servers_list.update(self.network, self.servers, self.protocol, self.tor_cb.isChecked())
         self.enable_set_server()
 
@@ -605,22 +616,22 @@ class NetworkChoiceLayout(QObject):
         self.set_server()
         self.update()
 
-    def set_default_only(self, b):
+    def set_whitelisted_only(self, b):
         self.network.set_whitelist_only(b)
         self.set_server() # forces us to send a set-server to network.py which recomputes eligible servers, etc
         self.update()
 
     def on_view_blacklist(self, ignored):
-        ''' The 'view blacklist...' link leads to a modal dialog box where the
+        ''' The 'view ban list...' link leads to a modal dialog box where the
         user has the option to clear the entire blacklist. Build that dialog here. '''
         bl = sorted(self.network.blacklisted_servers)
         parent = self.parent()
         if not bl:
-            parent.show_error(_("Server blacklist is empty!"))
+            parent.show_error(_("Server ban list is empty!"))
             return
-        d = WindowModalDialog(parent.top_level_window(), _("Blacklisted Servers"))
+        d = WindowModalDialog(parent.top_level_window(), _("Banned Servers"))
         vbox = QVBoxLayout(d)
-        vbox.addWidget(QLabel(_("Blacklisted Servers") + " ({})".format(len(bl))))
+        vbox.addWidget(QLabel(_("Banned Servers") + " ({})".format(len(bl))))
         tree = QTreeWidget()
         tree.setHeaderLabels([_('Host'), _('Port')])
         for s in bl:
@@ -635,7 +646,7 @@ class NetworkChoiceLayout(QObject):
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         vbox.addWidget(tree)
 
-        clear_but = QPushButton(_("Clear blacklist"))
+        clear_but = QPushButton(_("Clear ban list"))
         weakSelf = Weak.ref(self)
         weakD = Weak.ref(d)
         clear_but.clicked.connect(lambda: weakSelf() and weakSelf().on_clear_blacklist() and weakD().reject())
@@ -645,7 +656,7 @@ class NetworkChoiceLayout(QObject):
     def on_clear_blacklist(self):
         bl = list(self.network.blacklisted_servers)
         blen = len(bl)
-        if self.parent().question(_("Clear all {} servers from the blacklist?").format(blen)):
+        if self.parent().question(_("Clear all {} servers from the ban list?").format(blen)):
             for i,s in enumerate(bl):
                 self.network.server_set_blacklisted(s, False, save=bool(i+1 == blen)) # save on last iter
             self.update()
