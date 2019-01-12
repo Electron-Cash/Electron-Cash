@@ -115,7 +115,7 @@ class NodesListWidget(QTreeWidget):
             else:
                 x = self
             for i in items:
-                star = ' ☚' if i == network.interface else ''
+                star = ' ◀' if i == network.interface else ''
                 item = QTreeWidgetItem([i.host + star, '%d'%i.tip])
                 item.setData(0, Qt.UserRole, 0)
                 item.setData(1, Qt.UserRole, i.server)
