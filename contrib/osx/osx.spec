@@ -20,6 +20,7 @@ def codesign(identity, binary):
     d = os.path.dirname(binary)
     saved_dir=None
     if d:
+        # switch to directory of the binary so codesign verbose messages don't include long path
         saved_dir = os.path.abspath(os.path.curdir)
         os.chdir(d)
         binary = os.path.basename(binary)
@@ -36,7 +37,7 @@ def monkey_patch_pyinstaller_for_codesigning(identity):
         _saved_func = PyInstaller.depend.dylib.mac_set_relative_dylib_deps
     except (ImportError, NameError, AttributeError):
         # Hmm. Likely wrong PyInstaller version.
-        fail("Could not monkey patch pyinstaller for code signing. Please ensure that you are using PyInstaller 3.4.")
+        fail("Could not monkey-patch PyInstaller for code signing. Please ensure that you are using PyInstaller 3.4.")
     _signed = set()
     def my_func(fn, distname):
         _saved_func(fn, distname)
@@ -115,7 +116,7 @@ for d in a.datas:
 # This is a hack of sorts that works to keep the binary file size reasonable.
 bins2remove=('qtweb', 'qt3d', 'qtgame', 'qtdesigner', 'qtquick', 'qtlocation', 'qttest', 'qtxml')
 files2remove=('libqsqlmysql.dylib', 'libdeclarative_multimedia.dylib', 'libqtquickscene2dplugin.dylib', 'libqtquickscene3dplugin.dylib')
-print("Removing", *bins2remove)
+print("Removing", *(bins2remove + files2remove))
 for x in a.binaries.copy():
     for r in bins2remove:
         if x[0].lower().startswith(r) or os.path.basename(x[1].lower()) in files2remove:
