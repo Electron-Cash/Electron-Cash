@@ -37,12 +37,12 @@ def monkey_patch_pyinstaller_for_codesigning(identity):
     except (ImportError, NameError, AttributeError):
         # Hmm. Likely wrong PyInstaller version.
         fail("Could not monkey patch pyinstaller for code signing. Please ensure that you are using PyInstaller 3.4.")
-    _signed = {}
+    _signed = set()
     def my_func(fn, distname):
         _saved_func(fn, distname)
-        if _signed.get(fn) != distname:
+        if  (fn, distname) not in _signed:
             codesign(identity, fn)
-            _signed[fn] = distname # remember we signed it so we don't sign again
+            _signed.add((fn,distname)) # remember we signed it so we don't sign again
     PyInstaller.depend.dylib.mac_set_relative_dylib_deps = my_func
 
 
