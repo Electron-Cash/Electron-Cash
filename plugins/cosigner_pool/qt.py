@@ -32,7 +32,7 @@ import http.client
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import *
 
 from electroncash import bitcoin, util, keystore
 from electroncash import transaction
@@ -80,7 +80,8 @@ class Listener(util.DaemonThread):
     def clear(self, keyhash):
         state = self.state_ref()
         if state: state.server.delete(keyhash)
-        self.received.remove(keyhash)
+        try: self.received.remove(keyhash)
+        except ValueError: pass
 
     def run(self):
         self.print_error("started.")
@@ -91,6 +92,7 @@ class Listener(util.DaemonThread):
                     continue
                 for keyhash in self.keyhashes:
                     if keyhash in self.received:
+                        # already seen.. avoids popup window spam
                         continue
                     try:
                         message = self.state_ref() and self.state_ref().server.get(keyhash)
@@ -318,7 +320,7 @@ class Plugin(BasePlugin):
                 return
         else:
             if not window.question(_("An encrypted transaction was retrieved from cosigning pool.") + '\n' +
-                                   _("Do you want to open it now?")):
+                                   _("Do you want to open it now?"), defaultButton=QMessageBox.Yes):
                 return
 
         err = "Unknown Error"
@@ -336,7 +338,7 @@ class Plugin(BasePlugin):
             message = bh2u(EC.decrypt_message(message))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
-            window.show_error(str(e))
+            window.show_error(repr(e))
             return
 
         state.listener.clear(keyhash)
