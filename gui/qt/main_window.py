@@ -1324,6 +1324,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def output_for_opreturn_rawhex(op_return):
         if not isinstance(op_return, str):
             raise OPReturnError('OP_RETURN parameter needs to be of type str!')
+        if op_return == 'empty':
+            op_return = ''
         try:
             op_return_script = b'\x6a' + bytes.fromhex(op_return.strip())
         except ValueError:
@@ -1769,6 +1771,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         elif op_return_raw is not None:
             # 'is not None' allows blank value.
             # op_return_raw is secondary precedence to op_return
+            if not op_return_raw:
+                op_return_raw='empty'
             self.message_opreturn_e.setText(op_return_raw)
             self.message_opreturn_e.setHidden(False)
             self.opreturn_rawhex_cb.setHidden(False)
