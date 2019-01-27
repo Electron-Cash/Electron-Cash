@@ -38,7 +38,7 @@ import PyQt5.QtCore as QtCore
 from electroncash.i18n import _, set_language
 from electroncash.plugins import run_hook
 from electroncash import WalletStorage
-from electroncash.util import UserCancelled, Weak, print_error
+from electroncash.util import UserCancelled, Weak, PrintError, print_error
 from electroncash.networks import NetworkConstants
 
 from .installwizard import InstallWizard, GoBack
@@ -48,28 +48,14 @@ from .util import *   # * needed for plugins
 from .main_window import ElectrumWindow
 from .network_dialog import NetworkDialog
 from .exception_window import Exception_Hook
+from .update_checker import UpdateChecker
 
 
-class OpenFileEventFilter(QObject):
-    def __init__(self, windows):
-        self.windows = windows
-        super(OpenFileEventFilter, self).__init__()
-
-    def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.FileOpen:
-            if len(self.windows) >= 1:
-                self.windows[0].pay_to_URI(event.url().toString())
-                return True
-        return False
-
-
-class QElectrumApplication(QApplication):
+class ElectrumGui(QObject, PrintError):
     new_window_signal = pyqtSignal(str, object)
 
-
-class ElectrumGui:
-
     def __init__(self, config, daemon, plugins):
+        super(__class__, self).__init__() # QObject init
         set_language(config.get('language'))
         # Uncomment this call to verify objects are being properly
         # GC-ed when windows are closed
@@ -90,12 +76,12 @@ class ElectrumGui:
         self.plugins = plugins
         self.windows = []
         self.weak_windows = []
-        self.efilter = OpenFileEventFilter(self.windows)
-        self.app = QElectrumApplication(sys.argv)
-        self.app.installEventFilter(self.efilter)
+        self.app = QApplication(sys.argv)
+        self.app.installEventFilter(self)
         self.timer = QTimer(self.app); self.timer.setSingleShot(False); self.timer.setInterval(500) #msec
         self.gc_timer = QTimer(self.app); self.gc_timer.setSingleShot(True); self.gc_timer.timeout.connect(ElectrumGui.gc); self.gc_timer.setInterval(333) #msec
         self.nd = None
+        self.update_checker = None
         # init tray
         self.dark_icon = self.config.get("dark_icon", False)
         self.tray = QSystemTrayIcon(self.tray_icon(), None)
@@ -103,9 +89,17 @@ class ElectrumGui:
         self.tray.activated.connect(self.tray_activated)
         self.build_tray_menu()
         self.tray.show()
-        self.app.new_window_signal.connect(self.start_new_window)
+        self.new_window_signal.connect(self.start_new_window)
         run_hook('init_qt', self)
         ColorScheme.update_from_widget(QWidget())
+
+    def eventFilter(self, obj, event):
+        ''' This event filter allows us to open bitcoincash: URIs on macOS '''
+        if event.type() == QtCore.QEvent.FileOpen:
+            if len(self.windows) >= 1:
+                self.windows[0].pay_to_URI(event.url().toString())
+                return True
+        return False
 
     def build_tray_menu(self):
         # Avoid immediate GC of old menu when window closed via its action
@@ -150,11 +144,10 @@ class ElectrumGui:
 
     def new_window(self, path, uri=None):
         # Use a signal as can be called from daemon thread
-        self.app.new_window_signal.emit(path, uri)
+        self.new_window_signal.emit(path, uri)
 
     def show_network_dialog(self, parent):
-        if not self.daemon.network:
-            parent.show_warning(_('You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected'), title=_('Offline'))
+        if self.warn_if_no_network(parent):
             return
         if self.nd:
             self.nd.on_update()
@@ -195,7 +188,7 @@ class ElectrumGui:
                     except UserCancelled:
                         pass
                     except GoBack as e:
-                        print_error('[start_new_window] Exception caught (GoBack)', e)
+                        self.print_error('[start_new_window] Exception caught (GoBack)', e)
                     finally:
                         wizard.terminate()
                         del wizard
@@ -254,10 +247,59 @@ class ElectrumGui:
     def init_network(self):
         # Show network dialog if config does not exist
         if self.daemon.network:
+            # register callback for 'proxy' signal so we can set app-global
+            # QNetworkProxy to tell the Qt side that the proxy settings have changed
+            self.daemon.network.register_callback(self.proxy_changed, ['proxy'])
+            self.proxy_changed('proxy', getattr(self.daemon.network, 'proxy', None))
             if self.config.get('auto_connect') is None:
                 wizard = InstallWizard(self.config, self.app, self.plugins, None)
                 wizard.init_network(self.daemon.network)
                 wizard.terminate()
+
+    def proxy_changed(self, event, proxy):
+        assert event=='proxy'
+        try:
+            from PyQt5.QtNetwork import QNetworkProxy
+        except ImportError:
+            self.print_error("Error: QNetworkProxy class not found. Ignoring network 'proxy' event...")
+            return
+        qnp = QNetworkProxy(QNetworkProxy.NoProxy)
+        if proxy:
+            host, port, user, pw =  (proxy["host"],
+                                     int(proxy["port"]),
+                                     proxy.get("user", ""),
+                                     proxy.get("password", ""))
+            proxy_mode = proxy.get('mode', 'NoProxy')
+            mode = QNetworkProxy.NoProxy
+            if proxy_mode in ('http', 'socks4'):
+                mode = QNetworkProxy.HttpProxy # This looks like it's basically socks4
+            elif proxy_mode == 'socks5':
+                mode = QNetworkProxy.Socks5Proxy
+            if mode != QNetworkProxy.NoProxy and host and port:
+                qnp = QNetworkProxy(mode, host, port, user, pw)
+        QNetworkProxy.setApplicationProxy(qnp)
+        qnp = QNetworkProxy.applicationProxy()
+        if qnp.hostName():
+            self.print_error("Qt proxy set to: type={proxy_mode} (h={host} p={port} [u={username}/pw={password}])"
+                             .format(host=qnp.hostName(),port=qnp.port(),username=qnp.user(),password=qnp.password(),proxy_mode=qnp.type()))
+        else:
+            self.print_error("Qt proxy set to: NoProxy")
+
+    def show_update_checker(self, parent):
+        if self.warn_if_no_network(parent):
+            return
+        if not self.update_checker:
+            self.update_checker = UpdateChecker()
+        self.update_checker.show()
+        self.update_checker.raise_()
+        self.update_checker.do_check()
+
+    def warn_if_no_network(self, parent):
+        if not self.daemon.network:
+            parent.show_warning(_('You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected'), title=_('Offline'))
+            return True
+        return False
+
 
     def main(self):
         try:

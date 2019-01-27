@@ -577,7 +577,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         help_menu = menubar.addMenu(_("&Help"))
         help_menu.addAction(_("&About"), self.show_about)
-        help_menu.addAction(_("&Official website"), lambda: webbrowser.open("http://electroncash.org"))
+        help_menu.addAction(_("&Check for updates..."), lambda: self.gui_object.show_update_checker(self))
+        help_menu.addAction(_("&Official website"), lambda: webbrowser.open("https://electroncash.org"))
         help_menu.addSeparator()
         help_menu.addAction(_("Documentation"), lambda: webbrowser.open("http://electroncash.readthedocs.io/")).setShortcut(QKeySequence.HelpContents)
         help_menu.addAction(_("&Report Bug"), self.show_report_bug)
@@ -1640,9 +1641,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # Capture current TL window; override might be removed on return
         parent = self.top_level_window()
 
-        if not self.network:
+        if self.gui_object.warn_if_no_network(self):
             # Don't allow a useless broadcast when in offline mode. Previous to this we were getting an exception on broadcast.
-            parent.show_error(_("You are using Electron Cash in offline mode; restart Electron Cash if you want to get connected"))
             return
         elif not self.network.is_connected():
             # Don't allow a potentially very slow broadcast when obviously not connected.
