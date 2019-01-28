@@ -66,6 +66,7 @@ class UpdateChecker(QWidget, PrintError):
     VERSION_ANNOUNCEMENT_SIGNING_ADDRESSES = (
         address.Address.from_string("bitcoincash:qphax4cg8sxuc0qnzk6sx25939ma7y877uz04s2z82", net=MainNet), # Calin's key
         address.Address.from_string("bitcoincash:qqy9myvyt7qffgye5a2mn2vn8ry95qm6asy40ptgx2", net=MainNet), # Mark Lundeberg's key
+        address.Address.from_string("bitcoincash:qz4wq9m860zr5p2nfdpttm5ymdqdyt3psc95qjagae", net=MainNet), # electroncash.org donation address
     )
 
     def __init__(self, parent=None):
@@ -307,7 +308,7 @@ class UpdateChecker(QWidget, PrintError):
         if not self.active_reply:
             self._update_view(None)
             req = QNetworkRequest(QUrl(self.url))
-            req.setMaximumRedirectsAllowed(2)
+            req.setMaximumRedirectsAllowed(5)
             req.setAttribute(QNetworkRequest.EmitAllUploadProgressSignalsAttribute, QVariant(True))
             req.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QVariant(QNetworkRequest.AlwaysNetwork))
             req.setAttribute(QNetworkRequest.RedirectPolicyAttribute, QVariant(QNetworkRequest.NoLessSafeRedirectPolicy))
