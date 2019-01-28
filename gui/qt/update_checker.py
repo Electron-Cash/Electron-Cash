@@ -60,7 +60,8 @@ class UpdateChecker(QWidget, PrintError):
     got_new_version = pyqtSignal(object) # emitted in tandem with 'checked' above ONLY if the server gave us a (properly signed) version string we recognize as *newer*
     failed = pyqtSignal() # emitted when there is an exception, network error, or verify error on version check.
 
-    url = "https://raw.github.com/cculianu/electrum/update_checker/contrib/update_checker/releases.json"
+    #url = "https://www.c3-soft.com/downloads/BitcoinCash/Electron-Cash/update_check" # Testing URL
+    url = "https://raw.github.com/Electron-Cash/Electron-Cash/master/contrib/update_checker/releases.json" # Release URL
     download_url = "https://electroncash.org/#download"
 
     VERSION_ANNOUNCEMENT_SIGNING_ADDRESSES = (
@@ -126,9 +127,9 @@ class UpdateChecker(QWidget, PrintError):
         if reply is self.active_reply:
             self.on_reply_finished(reply)
             self.active_reply = None
-            self.print_error("was the active reply, set to None")
+            self.print_error("active reply finished, set to None")
         else:
-            self.print_error("was NOT the active reply")
+            self.print_error("was NOT the active reply, ignored.")
         reply.deleteLater()
 
     def on_reply_downloading(self, reply, bytesReceived, bytesTotal):
@@ -145,7 +146,8 @@ class UpdateChecker(QWidget, PrintError):
         if not reply.error():
             try:
                 data = bytes(reply.readAll()).decode('utf-8')
-                self.print_error("got data\n" + str(data)) # comment this out for release
+                #self.print_error("got data\n" + str(data)) # comment this out for release
+                self.print_error("got data {} bytes".format(len(data)))
                 data = json.loads(data)
                 newver = self._process_server_reply(data)
             except:
