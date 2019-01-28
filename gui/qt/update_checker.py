@@ -34,7 +34,7 @@ from electroncash.i18n import _
 from electroncash import version, bitcoin, address
 from electroncash.networks import MainNet
 from .util import *
-import base64, sys, requests, threading
+import base64, sys, requests, threading, time
 
 class UpdateChecker(QWidget, PrintError):
     ''' A window that checks for updates.
@@ -109,6 +109,7 @@ class UpdateChecker(QWidget, PrintError):
         self._req_finished.connect(self._on_req_finished)
 
         self.active_req = None
+        self.last_checked_ts = 0.0
         self.resize(450, 200)
 
     def _process_server_reply(self, signed_version_dict):
@@ -257,9 +258,13 @@ class UpdateChecker(QWidget, PrintError):
         if force:
             self.cancel_active() # no-op if none active
         if not self.active_req:
+            self.last_checked_ts = time.time()
             self._update_view(None)
             self.active_req = _Req(self)
             self._on_downloading(self.active_req, 10, 100)
+
+    def did_check_recently(self, secs=10.0):
+        return time.time() - self.last_checked_ts < secs
 
     _error_val = 0xdeadb33f
     def _err_fail(self):
@@ -268,7 +273,6 @@ class UpdateChecker(QWidget, PrintError):
 
     def _got_reply(self, req):
         self._on_downloading(req, 100, 100)
-        req.print_error("got reply")
         newver = None
         if not req.aborted and req.json:
             try:
@@ -293,10 +297,10 @@ class UpdateChecker(QWidget, PrintError):
         if req is self.active_req:
             self._got_reply(req)
             self.active_req = None
-            adjective = "Active "
+            adjective = "Active"
         if req.aborted:
-            adjective = "Aborted "
-        self.print_error("{}Req".format(adjective),req.diagnostic_name(),"finished")
+            adjective = "Aborted"
+        self.print_error("{}".format(adjective),req.diagnostic_name(),"finished")
 
 
 class _Req(threading.Thread, PrintError):

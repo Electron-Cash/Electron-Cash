@@ -263,7 +263,8 @@ class ElectrumGui(QObject, PrintError):
             self.update_checker.do_check()
 
     def on_auto_update_timeout(self):
-        self.update_checker.do_check()
+        if not self.update_checker.did_check_recently():  # make sure auto-check doesn't happen right after a manual check.
+            self.update_checker.do_check()
         if self.update_checker_timer.first_run:
             self._start_auto_update_timer(first_run = False)
 
