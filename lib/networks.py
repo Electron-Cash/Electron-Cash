@@ -22,11 +22,9 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import json
-import os
-import pkgutil
+import json, pkgutil
 
-def read_json_dict(filename):
+def _read_json_dict(filename):
     try:
         data = pkgutil.get_data(__name__, filename)
         r = json.loads(data.decode('utf-8'))
@@ -49,7 +47,7 @@ class MainNet(AbstractNet):
     HEADERS_URL = "http://bitcoincash.com/files/blockchain_headers"
     GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
     DEFAULT_PORTS = {'t': '50001', 's': '50002'}
-    DEFAULT_SERVERS = read_json_dict('servers.json') # this may get modified by Network class
+    DEFAULT_SERVERS = _read_json_dict('servers.json') # this may get modified by Network class
     HARDCODED_DEFAULT_SERVERS = DEFAULT_SERVERS.copy() # this is the original servers.json. Do not modify
     TITLE = 'Electron Cash'
 
@@ -87,7 +85,7 @@ class TestNet(AbstractNet):
     HEADERS_URL = "http://bitcoincash.com/files/testnet_headers"
     GENESIS = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
     DEFAULT_PORTS = {'t':'51001', 's':'51002'}
-    DEFAULT_SERVERS = read_json_dict('servers_testnet.json')
+    DEFAULT_SERVERS = _read_json_dict('servers_testnet.json')
     HARDCODED_DEFAULT_SERVERS = DEFAULT_SERVERS.copy()
     TITLE = 'Electron Cash Testnet'
 
@@ -109,27 +107,7 @@ class TestNet(AbstractNet):
     }
 
 
-
-def _instancer(cls):
-    return cls()
-
-@_instancer
-class NetworkConstants:
-    ''' Compatibility class for old code & plugins.
-
-    Client code can just do things like:
-    NetworkConstants.ADDRTYPE_P2PKH, NetworkConstants.DEFAULT_PORTS, etc.
-
-    We plan to transition away from this class and have client code use the
-    'net' global variable above. '''
-    def __getattribute__(self, name):
-        return getattr(net, name)
-
-    def __setattr__(self, name, value):
-        raise RuntimeError('NetworkConstants does not support setting attributes! ({}={})'.format(name,value))
-        setattr(net, name, value)
-
-# All new code should access this for current network config.
+# All new code should access this to get the current network config.
 net = MainNet
 
 def set_mainnet():
@@ -139,3 +117,24 @@ def set_mainnet():
 def set_testnet():
     global net
     net = TestNet
+
+
+# Compatibility
+def _instancer(cls):
+    return cls()
+
+@_instancer
+class NetworkConstants:
+    ''' Compatibility class for old code such as extant plugins.
+
+    Client code can just do things like:
+    NetworkConstants.ADDRTYPE_P2PKH, NetworkConstants.DEFAULT_PORTS, etc.
+
+    We have transitioned away from this class. All new code should use the
+    'net' global variable above instead. '''
+    def __getattribute__(self, name):
+        return getattr(net, name)
+
+    def __setattr__(self, name, value):
+        raise RuntimeError('NetworkConstants does not support setting attributes! ({}={})'.format(name,value))
+        #setattr(net, name, value)

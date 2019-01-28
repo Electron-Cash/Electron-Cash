@@ -39,7 +39,6 @@ from electroncash.i18n import _, set_language
 from electroncash.plugins import run_hook
 from electroncash import WalletStorage
 from electroncash.util import UserCancelled, Weak, PrintError, print_error
-from electroncash.networks import NetworkConstants
 
 from .installwizard import InstallWizard, GoBack
 

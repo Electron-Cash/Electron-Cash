@@ -42,7 +42,7 @@ from PyQt5.QtWidgets import *
 from electroncash import keystore
 from electroncash.address import Address, ScriptOutput
 from electroncash.bitcoin import COIN, TYPE_ADDRESS, TYPE_SCRIPT
-from electroncash.networks import NetworkConstants
+from electroncash import networks
 from electroncash.plugins import run_hook
 from electroncash.i18n import _
 from electroncash.util import (format_time, format_satoshis, PrintError,
@@ -396,7 +396,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.setGeometry(100, 100, 840, 400)
 
     def watching_only_changed(self):
-        title = '%s %s  -  %s' % (NetworkConstants.TITLE,
+        title = '%s %s  -  %s' % (networks.net.TITLE,
                                   self.wallet.electrum_version,
                                   self.wallet.basename())
         extra = [self.wallet.storage.get('wallet_type', '?')]
@@ -592,7 +592,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if d:
             host = self.network.get_parameters()[0]
             self.pay_to_URI('{}:{}?message=donation for {}'
-                            .format(NetworkConstants.CASHADDR_PREFIX, d, host))
+                            .format(networks.net.CASHADDR_PREFIX, d, host))
         else:
             self.show_error(_('No donation address for this server'))
 
@@ -2443,7 +2443,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not data:
             return
         # if the user scanned a bitcoincash URI
-        if data.lower().startswith(NetworkConstants.CASHADDR_PREFIX + ':'):
+        if data.lower().startswith(networks.net.CASHADDR_PREFIX + ':'):
             self.pay_to_URI(data)
             return
         # else if the user scanned an offline signed tx
