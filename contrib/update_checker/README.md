@@ -59,7 +59,7 @@ Notice how the version string is different, the signing address happened to rema
 - Make sure you control one of the bitcoin addresses listed in `gui/qt/update_checker.py`.  (If you do not, modify this file before release to include one of your addresses!)
 -  Open up Electron Cash and go to that address in the "Addresses" tab and right click on it, selecting **"Sign/Verify Message"**
 -  The message to be signed is the version string you will put into the JSON, so for example the simple string `3.3.5` in the example above.
--  Hit **sign**, and paste the signed text into the JSON.
+-  Hit **sign**, and paste the signature text into the JSON (and signing address, of course, if it's changed).
 
-##### Feedback / Questions
+#### Feedback / Questions
 Open up an issue in the issue tracker or contact Calin Culianu (/u/NilacTheGrim on reddit), as he is the author of this mechanism in Electron Cash.
