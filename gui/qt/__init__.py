@@ -249,43 +249,10 @@ class ElectrumGui(QObject, PrintError):
     def init_network(self):
         # Show network dialog if config does not exist
         if self.daemon.network:
-            # register callback for 'proxy' signal so we can set app-global
-            # QNetworkProxy to tell the Qt side that the proxy settings have changed
-            self.daemon.network.register_callback(self.proxy_changed, ['proxy'])
-            self.proxy_changed('proxy', getattr(self.daemon.network, 'proxy', None))
             if self.config.get('auto_connect') is None:
                 wizard = InstallWizard(self.config, self.app, self.plugins, None)
                 wizard.init_network(self.daemon.network)
                 wizard.terminate()
-
-    def proxy_changed(self, event, proxy):
-        assert event=='proxy'
-        try:
-            from PyQt5.QtNetwork import QNetworkProxy
-        except ImportError:
-            self.print_error("Error: QNetworkProxy class not found. Ignoring network 'proxy' event...")
-            return
-        qnp = QNetworkProxy(QNetworkProxy.NoProxy)
-        if proxy:
-            host, port, user, pw =  (proxy["host"],
-                                     int(proxy["port"]),
-                                     proxy.get("user", ""),
-                                     proxy.get("password", ""))
-            proxy_mode = proxy.get('mode', 'NoProxy')
-            mode = QNetworkProxy.NoProxy
-            if proxy_mode in ('http', 'socks4'):
-                mode = QNetworkProxy.HttpProxy # This looks like it's basically socks4
-            elif proxy_mode == 'socks5':
-                mode = QNetworkProxy.Socks5Proxy
-            if mode != QNetworkProxy.NoProxy and host and port:
-                qnp = QNetworkProxy(mode, host, port, user, pw)
-        QNetworkProxy.setApplicationProxy(qnp)
-        qnp = QNetworkProxy.applicationProxy()
-        if qnp.hostName():
-            self.print_error("Qt proxy set to: type={proxy_mode} (h={host} p={port} [u={username}/pw={password}])"
-                             .format(host=qnp.hostName(),port=qnp.port(),username=qnp.user(),password=qnp.password(),proxy_mode=qnp.type()))
-        else:
-            self.print_error("Qt proxy set to: NoProxy")
 
     def show_update_checker(self, parent, *, skip_check = False):
         if self.warn_if_no_network(parent):
