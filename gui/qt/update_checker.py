@@ -27,7 +27,6 @@
 # SOFTWARE.
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from PyQt5.QtNetwork import *
 from PyQt5.QtWidgets import *
 
 from electroncash.util import PrintError, print_error
@@ -35,7 +34,7 @@ from electroncash.i18n import _
 from electroncash import version, bitcoin, address
 from electroncash.networks import MainNet
 from .util import *
-import base64, sys, json
+import base64, sys, requests, threading
 
 class UpdateChecker(QWidget, PrintError):
     ''' A window that checks for updates.
@@ -59,6 +58,8 @@ class UpdateChecker(QWidget, PrintError):
     checked = pyqtSignal(object) # emitted whenever the server gave us a (properly signed) version string. may or may not mean it's a new version.
     got_new_version = pyqtSignal(object) # emitted in tandem with 'checked' above ONLY if the server gave us a (properly signed) version string we recognize as *newer*
     failed = pyqtSignal() # emitted when there is an exception, network error, or verify error on version check.
+
+    _req_finished = pyqtSignal(object) # internal use by _Req thread
 
     #url = "https://www.c3-soft.com/downloads/BitcoinCash/Electron-Cash/update_check" # Testing URL
     url = "https://raw.github.com/Electron-Cash/Electron-Cash/master/contrib/update_checker/releases.json" # Release URL
@@ -105,67 +106,10 @@ class UpdateChecker(QWidget, PrintError):
         grid.addLayout(self.content, 0, 0)
         self.setLayout(grid)
 
-        self.network_access_manager = QNetworkAccessManager(self)
-        net_config = self.network_access_manager.configuration()
-        net_config.setConnectTimeout(int(5.0 * 1e3)) # timeout in msecs
-        self.network_access_manager.setConfiguration(net_config)
-        self.network_access_manager.authenticationRequired.connect(self.qam_authentication_required)
-        self.network_access_manager.encrypted.connect(self.qam_encrypted)
-        self.network_access_manager.finished.connect(self.qam_finished)
-        self.active_reply = None
+        self._req_finished.connect(self._on_req_finished)
+
+        self.active_req = None
         self.resize(450, 200)
-
-    def qam_authentication_required(self, reply, authenticator):
-        self.print_error("Authentication required for", reply.url().toString())
-        # doing nothing will result in connection fail and a finished() signal emitted
-
-    def qam_encrypted(self, reply):
-        self.print_error("Encrypted connecton to", reply.url().toString())
-
-    def qam_finished(self, reply):
-        self.print_error("Finished", reply.url().toString(), "with error code:", reply.errorString() if reply.error() else '(No Error)')
-        if reply is self.active_reply:
-            self.on_reply_finished(reply)
-            self.active_reply = None
-            self.print_error("active reply finished, set to None")
-        else:
-            self.print_error("was NOT the active reply, ignored.")
-        reply.deleteLater()
-
-    def on_reply_downloading(self, reply, bytesReceived, bytesTotal):
-        if reply is self.active_reply:
-            self.print_error("Downloading bytes received", bytesReceived, "/", bytesTotal, "from", reply.url().toString())
-            prog = abs((bytesReceived*100.0) / bytesTotal) if bytesTotal else 1
-            self.pb.setValue(max(0, min(int(prog), 100)))
-        else:
-            self.print_error("Warning: on_reply_downloading called with a reply that is not 'active'!")
-
-    def on_reply_finished(self, reply):
-        self.print_error("Reply finished", reply.url().toString())
-        data, newver = None, None
-        if not reply.error():
-            try:
-                data = bytes(reply.readAll()).decode('utf-8')
-                #self.print_error("got data\n" + str(data)) # comment this out for release
-                self.print_error("got data {} bytes".format(len(data)))
-                data = json.loads(data)
-                newver = self._process_server_reply(data)
-            except:
-                data, newver = None, None
-                import traceback
-                self.print_error(traceback.format_exc())
-        if newver is None:
-            self.on_retrieval_failed()
-            self.failed.emit()
-        else:
-            # NB: below 'newver' may actually just be our version or a version
-            # before our version (in case we are on a develpment build).
-            # Client code should check with this class.is_newer if the emitted
-            # version is actually newer.
-            self.on_version_retrieved(newver)
-            self.checked.emit(newver)
-            if self.is_newer(newver):
-                self.got_new_version.emit(newver)
 
     def _process_server_reply(self, signed_version_dict):
         ''' Returns:
@@ -222,10 +166,6 @@ class UpdateChecker(QWidget, PrintError):
     def on_version_retrieved(self, version):
         self._update_view(version)
 
-    _error_val = 0xdeadb33f
-    def on_retrieval_failed(self):
-        self._update_view(self._error_val)
-
     @staticmethod
     def _ver2int(vtup):
         ''' param vtup is a tuple of ints: (major, minor, revision) as would be
@@ -261,6 +201,14 @@ class UpdateChecker(QWidget, PrintError):
             return v_server > v_me
         return False
 
+    def _on_downloading(self, req, prog, total):
+        if req is self.active_req:
+            self.print_error("Downloading progress", prog, "/", total, "from", req.url)
+            val = abs((prog*100.0) / total) if total else 1
+            self.pb.setValue(max(0, min(int(val), 100)))
+        else:
+            self.print_error("Warning: on_downloading called with a req that is not 'active'!")
+
     def _update_view(self, latest_version):
         if latest_version == self._error_val:
             self.heading_label.setText('<h2>' + _("Update check failed") + '</h2>')
@@ -292,12 +240,13 @@ class UpdateChecker(QWidget, PrintError):
             self.detail_label.setText(_("Please wait while Electron Cash checks for available updates."))
 
     def cancel_active(self):
-        if self.active_reply:
-            self.active_reply.abort()
-            self.active_reply = None
+        if self.active_req:
+            self.active_req.abort()
+            self.active_req = None
+            self._err_fail()
 
     def cancel_or_check(self):
-        if self.active_reply:
+        if self.active_req:
             self.cancel_active()
         else:
             self.do_check(force=True)
@@ -307,13 +256,78 @@ class UpdateChecker(QWidget, PrintError):
     def do_check(self, force=False):
         if force:
             self.cancel_active() # no-op if none active
-        if not self.active_reply:
+        if not self.active_req:
             self._update_view(None)
-            req = QNetworkRequest(QUrl(self.url))
-            req.setMaximumRedirectsAllowed(5)
-            req.setAttribute(QNetworkRequest.EmitAllUploadProgressSignalsAttribute, QVariant(True))
-            req.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QVariant(QNetworkRequest.AlwaysNetwork))
-            req.setAttribute(QNetworkRequest.RedirectPolicyAttribute, QVariant(QNetworkRequest.NoLessSafeRedirectPolicy))
-            self.active_reply = reply = self.network_access_manager.get(req)
-            self.active_reply.downloadProgress.connect(lambda bytes_read, bytes_total: self.on_reply_downloading(reply, bytes_read, bytes_total))
+            self.active_req = _Req(self)
+            self._on_downloading(self.active_req, 10, 100)
 
+    _error_val = 0xdeadb33f
+    def _err_fail(self):
+        self._update_view(self._error_val)
+        self.failed.emit()
+
+    def _got_reply(self, req):
+        self._on_downloading(req, 100, 100)
+        req.print_error("got reply")
+        newver = None
+        if not req.aborted and req.json:
+            try:
+                newver = self._process_server_reply(req.json)
+            except:
+                import traceback
+                self.print_error(traceback.format_exc())
+        if newver is None:
+            self._err_fail()
+        else:
+            # NB: below 'newver' may actually just be our version or a version
+            # before our version (in case we are on a develpment build).
+            # Client code should check with this class.is_newer if the emitted
+            # version is actually newer.
+            self.on_version_retrieved(newver)
+            self.checked.emit(newver)
+            if self.is_newer(newver):
+                self.got_new_version.emit(newver)
+
+    def _on_req_finished(self, req):
+        adjective = ''
+        if req is self.active_req:
+            self._got_reply(req)
+            self.active_req = None
+            adjective = "Active "
+        if req.aborted:
+            adjective = "Aborted "
+        self.print_error("{}Req".format(adjective),req.diagnostic_name(),"finished")
+
+
+class _Req(threading.Thread, PrintError):
+    def __init__(self, checker):
+        super().__init__(daemon=True)
+        self.checker = checker
+        self.url = self.checker.url
+        self.aborted = False
+        self.json = None
+        self.start()
+
+    def abort(self):
+        self.aborted = True
+
+    def diagnostic_name(self):
+        return "{}@{}".format(__class__.__name__, id(self)&0xffff)
+
+    def run(self):
+        try:
+            self.print_error("Requesting from",self.url,"...")
+            self.json, self.url = self._do_request(self.url)
+        except:
+            import traceback
+            self.print_error(traceback.format_exc())
+        finally:
+            self.checker._req_finished.emit(self)
+
+    def _do_request(self, url):
+        response = requests.get(url, allow_redirects=True, timeout=5.0) # will raise requests.exceptions.Timeout on timeout
+
+        if response.status_code != 200:
+            raise RuntimeError(response.status_code, response.text)
+        self.print_error("got response {} bytes".format(len(response.text)))
+        return response.json(), response.url
