@@ -65,6 +65,7 @@ class UpdateChecker(QWidget, PrintError):
 
     VERSION_ANNOUNCEMENT_SIGNING_ADDRESSES = (
         address.Address.from_string("bitcoincash:qphax4cg8sxuc0qnzk6sx25939ma7y877uz04s2z82", net=MainNet), # Calin's key
+        address.Address.from_string("bitcoincash:qqy9myvyt7qffgye5a2mn2vn8ry95qm6asy40ptgx2", net=MainNet), # Mark Lundeberg's key
     )
 
     def __init__(self, parent=None):
