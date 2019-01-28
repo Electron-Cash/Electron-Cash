@@ -60,7 +60,7 @@ class UpdateChecker(QWidget, PrintError):
     got_new_version = pyqtSignal(object) # emitted in tandem with 'checked' above ONLY if the server gave us a (properly signed) version string we recognize as *newer*
     failed = pyqtSignal() # emitted when there is an exception, network error, or verify error on version check.
 
-    url = "https://www.c3-soft.com/downloads/BitcoinCash/Electron-Cash/update_check"
+    url = "https://raw.github.com/cculianu/electrum/update_checker/contrib/update_checker/releases.json"
     download_url = "https://electroncash.org/#download"
 
     VERSION_ANNOUNCEMENT_SIGNING_ADDRESSES = (
