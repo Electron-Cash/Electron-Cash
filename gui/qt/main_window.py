@@ -35,8 +35,6 @@ from functools import partial
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-import PyQt5.QtCore as QtCore
-
 from PyQt5.QtWidgets import *
 
 from electroncash import keystore
@@ -3028,6 +3026,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         qr_combo.currentIndexChanged.connect(on_video_device)
         gui_widgets.append((qr_label, qr_combo))
 
+        gui_widgets.append((None, None)) # spacer
+        updatecheck_cb = QCheckBox(_("Automatically check for updates"))
+        updatecheck_cb.setChecked(self.gui_object.has_auto_update_check())
+        updatecheck_cb.setToolTip(_("Enable this option if you wish to be notified as soon as a new version of Electron Cash becomes available"))
+        def on_set_updatecheck(v):
+            self.gui_object.set_auto_update_check(v == Qt.Checked)
+        updatecheck_cb.stateChanged.connect(on_set_updatecheck)
+        gui_widgets.append((updatecheck_cb, None))
+
+
         usechange_cb = QCheckBox(_('Use change addresses'))
         usechange_cb.setChecked(self.wallet.use_change)
         def on_usechange(x):
@@ -3173,7 +3181,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         tabs_info = [
             (fee_widgets, _('Fees')),
             (tx_widgets, _('Transactions')),
-            (gui_widgets, _('Appearance')),
+            (gui_widgets, _('General')),
             (fiat_widgets, _('Fiat')),
             (id_widgets, _('Identity')),
         ]
@@ -3188,7 +3196,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         grid.addWidget(a, i, 0)
                     grid.addWidget(b, i, 1)
                 else:
-                    grid.addWidget(a, i, 0, 1, 2)
+                    if a:
+                        grid.addWidget(a, i, 0, 1, 2)
+                    else:
+                        grid.addItem(QSpacerItem(15, 15), i, 0, 1, 2)
             tabs.addTab(tab, name)
 
         vbox.addWidget(tabs)

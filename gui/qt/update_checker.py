@@ -38,8 +38,6 @@ from .util import *
 import base64, sys, json
 
 class UpdateChecker(QWidget, PrintError):
-    # TODO:
-    # 1. Integrate with settings and have the update check run off a timer periodically.
     ''' A window that checks for updates.
 
     If ok, and a new version is detected, will present the hard-coded download
@@ -56,8 +54,10 @@ class UpdateChecker(QWidget, PrintError):
     '''
     # Note: it's guaranteed that every call to do_check() will either result
     # in a 'checked' signal or a 'failed' signal to be emitted.
+    # got_new_version is only emitted if the new version is actually newer than
+    # our version.
     checked = pyqtSignal(object) # emitted whenever the server gave us a (properly signed) version string. may or may not mean it's a new version.
-    gotNewVersion = pyqtSignal(object) # emitted in tandem with 'checked' above ONLY if the server gave us a (properly signed) version string we recognize as *newer*
+    got_new_version = pyqtSignal(object) # emitted in tandem with 'checked' above ONLY if the server gave us a (properly signed) version string we recognize as *newer*
     failed = pyqtSignal() # emitted when there is an exception, network error, or verify error on version check.
 
     url = "https://www.c3-soft.com/downloads/BitcoinCash/Electron-Cash/update_check"
@@ -161,7 +161,7 @@ class UpdateChecker(QWidget, PrintError):
             self.on_version_retrieved(newver)
             self.checked.emit(newver)
             if self.is_newer(newver):
-                self.gotNewVersion.emit(newver)
+                self.got_new_version.emit(newver)
 
     def _process_server_reply(self, signed_version_dict):
         ''' Returns:
@@ -231,9 +231,9 @@ class UpdateChecker(QWidget, PrintError):
 
     @classmethod
     def _my_version(cls):
-        if not getattr(cls, '_my_version_parsed', None):
+        if getattr(cls, '_my_version_parsed', None) is None:
             cls._my_version_parsed = version.parse_package_version(version.PACKAGE_VERSION)
-        return cls._my_version_parsed or (None,)*4
+        return cls._my_version_parsed
 
     @classmethod
     def _parse_version(cls, version_msg):
@@ -298,8 +298,8 @@ class UpdateChecker(QWidget, PrintError):
         else:
             self.do_check(force=True)
 
-    # Note: it's guaranteed that every call to do_check() will either result
-    # in a 'checked' signal or a 'failed' signal to be emitted.
+    # Note: calls to do_check() will either result in a 'checked' signal or
+    # a 'failed' signal to be emitted (and possibly also 'got_new_version')
     def do_check(self, force=False):
         if force:
             self.cancel_active() # no-op if none active

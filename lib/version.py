@@ -20,7 +20,8 @@ def parse_package_version(pvstr):
     """
     import re
     m = re.search('(\d+)[.](\d+)[.]?(\d*)\s*(\S*)', pvstr)
-    if not m: return None
+    if not m:
+        raise ValueError('Failed to parse package version for: ' + str(pvstr))
     major, minor, rev, variant = int(m.group(1)), int(m.group(2)), m.group(3), m.group(4)
     rev = int(rev) if rev else 0
     return major, minor, rev, variant
