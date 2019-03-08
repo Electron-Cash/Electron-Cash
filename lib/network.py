@@ -400,7 +400,7 @@ class Network(util.DaemonThread):
             else:
                 # If a wallet was closed, we stayed subscribed to its scripthashes
                 # (there is no way to unsubscribe from a scripthash, unfortunately)
-                # However, now what we are connecting to a new server, use this
+                # However, now that we are connecting to a new server, use this
                 # opportunity to clean house and not subscribe to scripthashes
                 # for closed wallets.  We know a scripthash is defunct if it is
                 # missing a callback (no entry in self.subscriptions dict).
@@ -816,7 +816,9 @@ class Network(util.DaemonThread):
         '''Unsubscribe a callback to free object references to enable GC.'''
         # Note: we can't unsubscribe from the server, so if we receive
         # subsequent notifications, they will be safely ignored as
-        # no callbacks will exist to process them.
+        # no callbacks will exist to process them. For subscriptions we will
+        # however cache the 'result' hash and feed it back in case a wallet that
+        # was closed gets reopened (self.sub_cache).
         ct = 0
         with self.lock:  # FIXME: still have possible race conditions here with network thread
             for k,v in self.subscriptions.copy().items():
@@ -835,7 +837,7 @@ class Network(util.DaemonThread):
         '''Remove a callback to free object references to enable GC.'''
         # If the interface ends up answering these requests, they will just
         # be safely ignored. This is better than the alternative which is to
-        # keep references to an object that declared itself cleaned-up.
+        # keep references to an object that declared itself defunct.
         ct = 0
         # FIXME: race conditions here with network thread since this is usually
         # called from the main thread.
