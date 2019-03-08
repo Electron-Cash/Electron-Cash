@@ -37,6 +37,10 @@ class SPV(ThreadJob):
         self.merkle_roots = {}  # txid -> merkle root (once it has been verified)
         self.requested_merkle = set()  # txid set of pending requests
         self.qbusy = False
+        self.cleaned_up = False
+
+    def release(self):
+        self.cleaned_up = True
 
     def run(self):
         interface = self.network.interface
@@ -85,7 +89,7 @@ class SPV(ThreadJob):
             self.undo_verifications()
 
     def verify_merkle(self, response):
-        if self.wallet.verifier is None:
+        if self.cleaned_up:
             return  # we have been killed, this was just an orphan callback
         if response.get('error'):
             # FIXME: tx will never verify now until server reconnect.

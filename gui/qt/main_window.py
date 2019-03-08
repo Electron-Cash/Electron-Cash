@@ -3388,6 +3388,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except TypeError: pass # defensive programming: this can happen if we got an exception before the timer action was connected
 
         self.gui_object.close_window(self) # implicitly runs the hook: on_close_window
+        # Now, actually STOP the wallet's synchronizer and verifiers and remove
+        # it from the daemon. Note that its addresses will still stay
+        # 'subscribed' to the ElectrumX server until we connect to a new server,
+        # (due to ElectrumX protocol limitations).. but this is harmless.
+        self.gui_object.daemon.stop_wallet(self.wallet.storage.path)
 
         # At this point all plugins should have removed any references to this window.
         # Now, just to be paranoid, do some active destruction of signal/slot connections as well as

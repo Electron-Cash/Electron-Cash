@@ -378,7 +378,6 @@ class Network(util.DaemonThread):
         return message_id
 
     def send_subscriptions(self):
-        self.print_error('sending subscriptions to', self.interface.server, len(self.unanswered_requests), len(self.subscribed_addresses))
         self.sub_cache.clear()
         # Resend unanswered requests
         old_reqs = self.unanswered_requests
@@ -391,8 +390,25 @@ class Network(util.DaemonThread):
         self.queue_request('server.peers.subscribe', [])
         self.request_fee_estimates()
         self.queue_request('blockchain.relayfee', [])
-        for h in self.subscribed_addresses:
-            self.queue_request('blockchain.scripthash.subscribe', [h])
+        n_defunct = 0
+        method = 'blockchain.scripthash.subscribe'
+        for h in self.subscribed_addresses.copy():
+            params = [h]
+            k = self.get_index(method, params)
+            if self.subscriptions.get(k, None):
+                self.queue_request(method, params)
+            else:
+                # If a wallet was closed, we stayed subscribed to its scripthashes
+                # (there is no way to unsubscribe from a scripthash, unfortunately)
+                # However, now what we are connecting to a new server, use this
+                # opportunity to clean house and not subscribe to scripthashes
+                # for closed wallets.  We know a scripthash is defunct if it is
+                # missing a callback (no entry in self.subscriptions dict).
+                #self.print_error("removing defunct subscription", h)
+                self.subscribed_addresses.discard(h)
+                self.subscriptions.pop(k, None)  # it may be an empty list (or missing), so pop it just in case it's a list.
+                n_defunct += 1
+        self.print_error('sent subscriptions to', self.interface.server, len(old_reqs),"reqs", len(self.subscribed_addresses), "subs (did not send", n_defunct,"defunct subs)")
 
     def request_fee_estimates(self):
         self.config.requested_fee_estimates()
@@ -775,10 +791,9 @@ class Network(util.DaemonThread):
                 if method.endswith('.subscribe'):
                     k = self.get_index(method, params)
                     # add callback to list
-                    l = self.subscriptions.get(k, [])
+                    l = self.subscriptions[k] # <-- it's a defaultdict(list)
                     if callback not in l:
                         l.append(callback)
-                    self.subscriptions[k] = l
                     # check cached response for subscriptions
                     r = self.sub_cache.get(k)
                 if r is not None:

@@ -1133,6 +1133,7 @@ class Abstract_Wallet(PrintError):
         if self.network:
             self.network.remove_jobs([self.synchronizer, self.verifier])
             self.synchronizer.release()
+            self.verifier.release()
             self.synchronizer = None
             self.verifier = None
             # Now no references to the syncronizer or verifier
