@@ -73,8 +73,11 @@ class Synchronizer(ThreadJob):
                 and not self.requested_hashes)
 
     def release(self):
-        self.network.unsubscribe(self.on_address_status)
         self.cleaned_up = True
+        self.network.unsubscribe(self.on_address_status)
+        self.network.cancel_requests(self.on_address_status)
+        self.network.cancel_requests(self.on_address_history)
+        self.network.cancel_requests(self.tx_response)
 
     def add(self, address):
         '''This can be called from the proxy or GUI threads.'''

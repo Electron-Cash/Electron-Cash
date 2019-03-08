@@ -40,7 +40,7 @@ from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 
 from .i18n import _
-from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time
+from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, Weak, print_error
 
 from .address import Address, Script, ScriptOutput, PublicKey
 from .bitcoin import *
@@ -159,6 +159,8 @@ class Abstract_Wallet(PrintError):
 
     max_change_outputs = 3
 
+    _weak_wallets = []
+
     def __init__(self, storage):
         self.electrum_version = PACKAGE_VERSION
         self.storage = storage
@@ -220,6 +222,16 @@ class Abstract_Wallet(PrintError):
         # invoices and contacts
         self.invoices = InvoiceStore(self.storage)
         self.contacts = Contacts(self.storage)
+
+        # Print debug message on finalization
+        dname = "{}/{}".format(__class__.__name__, self.diagnostic_name())
+        def finalized(wr):
+            if wr in __class__._weak_wallets:
+                __class__._weak_wallets.remove(wr)
+                print_error("[{}] finalized".format(dname))
+        weakSelf = Weak.ref(self, finalized)
+        Abstract_Wallet._weak_wallets.append(weakSelf)
+
 
     @classmethod
     def to_Address_dict(cls, d):
@@ -285,7 +297,7 @@ class Abstract_Wallet(PrintError):
             self.storage.put('verified_tx3', self.verified_tx)
             if write:
                 self.storage.write()
-                
+
     def clear_history(self):
         with self.transaction_lock:
             self.txi = {}
@@ -826,7 +838,7 @@ class Abstract_Wallet(PrintError):
 
         # Store fees
         self.tx_fees.update(tx_fees)
-        
+
         if self.network:
             self.network.trigger_callback('on_history', self)
 
@@ -1643,7 +1655,7 @@ class ImportedWalletBase(Simple_Wallet):
                 # FIXME: what about pruned_txo?
 
             self.storage.put('verified_tx3', self.verified_tx)
-            
+
         self.save_transactions()
 
         self.set_label(address.to_storage_string(), None)

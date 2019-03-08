@@ -41,6 +41,7 @@ class SPV(ThreadJob):
 
     def release(self):
         self.cleaned_up = True
+        self.network.cancel_requests(self.verify_merkle)
 
     def run(self):
         interface = self.network.interface
