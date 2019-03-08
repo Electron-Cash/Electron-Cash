@@ -724,6 +724,18 @@ class Weak:
     Method = weakref.WeakMethod # alias
     finalize = weakref.finalize # alias
 
+    _weak_refs_for_print_error = []
+    def finalization_print_error(obj, msg):
+        ''' Supply a message to be printed via print_error when obj is
+        finalized (Python GC'd). This is useful for debugging memory leaks. '''
+        def finalizer(x):
+            if x in __class__._weak_refs_for_print_error:
+                __class__._weak_refs_for_print_error.remove(x)
+                print_error(msg)
+        wr = Weak.ref(obj, finalizer)
+        __class__._weak_refs_for_print_error.append(wr)
+
+
     class MethodProxy(weakref.WeakMethod):
         ''' Direct-use of this class is discouraged (aside from assigning to
             its print_func attribute). Instead use of the wrapper class 'Weak'

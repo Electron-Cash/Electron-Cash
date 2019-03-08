@@ -78,7 +78,6 @@ class ElectrumGui(QObject, PrintError):
         self.daemon = daemon
         self.plugins = plugins
         self.windows = []
-        self.weak_windows = []
         self.app = QApplication(sys.argv)
         self.app.installEventFilter(self)
         self.timer = QTimer(self); self.timer.setSingleShot(False); self.timer.setInterval(500) #msec
@@ -204,11 +203,7 @@ class ElectrumGui(QObject, PrintError):
     def create_window_for_wallet(self, wallet):
         w = ElectrumWindow(self, wallet)
         self.windows.append(w)
-        dname = w.diagnostic_name()
-        def onFinalized(wr,dname=dname):
-            print_error("[{}] finalized".format(dname))
-            self.weak_windows.remove(wr)
-        self.weak_windows.append(Weak.ref(w,onFinalized))
+        Weak.finalization_print_error(w, "[{}] finalized".format(w.diagnostic_name()))
         self.build_tray_menu()
         # FIXME: Remove in favour of the load_wallet hook
         run_hook('on_new_window', w)

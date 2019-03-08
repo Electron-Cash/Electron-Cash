@@ -191,7 +191,6 @@ class Exception_Hook(QObject):
     
     _report_exception = QtCore.pyqtSignal(object, object, object, object)
     _instance = None
-    _weak_instances = []
 
     def __init__(self, config):
         super().__init__(None) # Top-level Object
@@ -204,12 +203,7 @@ class Exception_Hook(QObject):
         sys.excepthook = self.handler # yet another strong reference. We really won't die unless uninstall() is called
         self._report_exception.connect(_show_window)
         print_error("[{}] Installed.".format(__class__.__qualname__))
-        Exception_Hook._weak_instances.append(Weak.ref(self, Exception_Hook.finalized))
-
-    @staticmethod
-    def finalized(wr):
-        print_error("[{}] Finalized.".format(__class__.__qualname__))
-        Exception_Hook._weak_instances.remove(wr)
+        Weak.finalization_print_error(self, "[{}] Finalized.".format(__class__.__qualname__))
 
     @staticmethod
     def uninstall():

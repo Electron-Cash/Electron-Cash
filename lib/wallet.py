@@ -159,8 +159,6 @@ class Abstract_Wallet(PrintError):
 
     max_change_outputs = 3
 
-    _weak_wallets = []
-
     def __init__(self, storage):
         self.electrum_version = PACKAGE_VERSION
         self.storage = storage
@@ -224,13 +222,7 @@ class Abstract_Wallet(PrintError):
         self.contacts = Contacts(self.storage)
 
         # Print debug message on finalization
-        dname = "{}/{}".format(__class__.__name__, self.diagnostic_name())
-        def finalized(wr):
-            if wr in __class__._weak_wallets:
-                __class__._weak_wallets.remove(wr)
-                print_error("[{}] finalized".format(dname))
-        weakSelf = Weak.ref(self, finalized)
-        Abstract_Wallet._weak_wallets.append(weakSelf)
+        Weak.finalization_print_error(self, "[{}/{}] finalized".format(__class__.__name__, self.diagnostic_name()))
 
 
     @classmethod
