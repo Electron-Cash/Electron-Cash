@@ -377,7 +377,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.request_list.update()
         self.tabs.show()
         self.init_geometry()
-        if self.config.get('hide_gui') and self.gui_object.tray.isVisible():
+        if self.config.get('hide_gui') and self.tray.isVisible():
             self.hide()
         else:
             self.show()
@@ -2258,12 +2258,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         wallet_path = self.wallet.storage.path
         basename = os.path.basename(wallet_path)
         r = self.gui_object.daemon.delete_wallet(wallet_path)  # implicitly also calls stop_wallet
-        self.close()
         self.update_recently_visited(wallet_path) # this ensures it's deleted from the menu
         if r:
             self.show_error(_("Wallet removed: {}").format(basename))
         else:
             self.show_error(_("Wallet file not found: {}").format(basename))
+        self.close()
 
     @protected
     def show_seed_dialog(self, password):
@@ -3399,6 +3399,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # Removing child widgets forcefully to speed up Python's own GC of this window.
         self.clean_up_connections()
         self.clean_up_children()
+
+        # And finally, print when we are destroyed by C++ for debug purposes
+        # We must call this here as above calls disconnected all signals
+        # involving this widget.
+        destroyed_print_error(self)
 
 
     def internal_plugins_dialog(self):

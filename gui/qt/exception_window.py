@@ -40,6 +40,7 @@ import sys
 from electroncash import PACKAGE_VERSION
 from electroncash.util import Weak, print_error
 from .main_window import ElectrumWindow
+from .util import destroyed_print_error
 
 
 issue_template = """<h2>Traceback</h2>
@@ -204,6 +205,7 @@ class Exception_Hook(QObject):
         self._report_exception.connect(_show_window)
         print_error("[{}] Installed.".format(__class__.__qualname__))
         Weak.finalization_print_error(self, "[{}] Finalized.".format(__class__.__qualname__))
+        destroyed_print_error(self)
 
     @staticmethod
     def uninstall():
