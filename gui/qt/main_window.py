@@ -283,8 +283,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return self.top_level_window_recurse(override)
 
     def diagnostic_name(self):
-        return "%s/%s" % (PrintError.diagnostic_name(self),
-                          self.wallet.basename() if self.wallet else "None")
+        return "%s%s" % (PrintError.diagnostic_name(self),
+                         ("/"+self.wallet.basename()) if getattr(self, 'wallet', None) else "")
 
     def is_hidden(self):
         return self.isMinimized() or self.isHidden()
@@ -531,6 +531,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def init_menubar(self):
         menubar = QMenuBar()
+        menubar.setObjectName(self.diagnostic_name() + ".QMenuBar")
+        destroyed_print_error(menubar)
 
         file_menu = menubar.addMenu(_("&File"))
         self.recently_visited_menu = file_menu.addMenu(_("&Recently open"))
