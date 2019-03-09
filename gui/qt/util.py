@@ -954,7 +954,7 @@ def destroyed_print_error(qobject, msg=None):
                     name = (qobject.parent().objectName() or qobject.parent().__class__.__qualname__) + "."
                 except:
                     pass  # some of the code in this project overrites .parent or it may not have a parent
-                name += qobject.objectName() or qobject.__class__.__qualname__
+                name += qobject.__class__.__qualname__
         msg = "[{}] destroyed".format(name)
     def printer(x=None): print_error(msg)
     qobject.destroyed.connect(printer)
