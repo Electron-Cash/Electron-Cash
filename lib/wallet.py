@@ -452,7 +452,7 @@ class Abstract_Wallet(PrintError):
         ''' Returns the number of unverified tx's that are confirmed and are
         still in process and should be verified soon.'''
         with self.lock:
-            return len([1 for tx_hash, height in self.unverified_tx.items() if height > 0])
+            return len([1 for height in self.unverified_tx.values() if height > 0])
 
     def undo_verifications(self, blockchain, height):
         '''Used by the verifier when a reorg has happened'''
