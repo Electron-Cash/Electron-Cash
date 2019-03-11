@@ -1668,6 +1668,7 @@ class ImportedWalletBase(Simple_Wallet):
                 self.verified_tx.pop(tx_hash, None)
                 self.unverified_tx.pop(tx_hash, None)
                 self.transactions.pop(tx_hash, None)
+                self.tx_addr_hist.get(tx_hash, set()).discard(address)
                 # FIXME: what about pruned_txo?
 
             self.storage.put('verified_tx3', self.verified_tx)
