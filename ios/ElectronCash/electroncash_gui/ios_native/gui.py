@@ -540,7 +540,9 @@ class ElectrumGui(PrintError):
             #todo: handle status update here
             self.refresh_components('helper')
         elif event in ('verified2', 'wallet_updated'):
-            self.refresh_components('history', 'addresses', 'helper')
+            wallet = args[0]
+            if wallet is self.wallet:  # this should always be the case. But we check anyway in case in the future we support multiple wallets open at once.
+                self.refresh_components('history', 'addresses', 'helper')
         elif event == 'fee':
             # todo: handle fee stuff here
             pass
