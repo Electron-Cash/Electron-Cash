@@ -1647,7 +1647,7 @@ class Abstract_Wallet(PrintError):
         self.save_verified_tx()
         self.storage.write()
         self.start_threads(network)
-        self.network.trigger_callback('updated', self)
+        self.network.trigger_callback('wallet_updated', self)
 
 
 class Simple_Wallet(Abstract_Wallet):
