@@ -320,7 +320,7 @@ class Network(util.DaemonThread):
         elif event == 'verified2' and 'verified' in self.callbacks:
             # pop off the 'wallet' arg as the old bad 'verified' callback lacked it.
             self.trigger_callback('verified', args[1:])  # we will re-enter this function with event == 'verified' (triggering the warning in the elif clause below)
-        elif event in ('updated', 'verified'):
+        elif event in self._deprecated_alternatives:
             # If we see updated or verified events come through here, warn:
             # deprecated. Note that the above 2 clauses will also trigger this
             # execution path.
