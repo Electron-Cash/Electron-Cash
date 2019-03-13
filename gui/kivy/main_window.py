@@ -469,7 +469,7 @@ class ElectrumWindow(App):
             activity.bind(on_new_intent=self.on_new_intent)
         # connect callbacks
         if self.network:
-            interests = ['blockchain_updated', 'wallet_updated', 'status', 'new_transaction', 'verified', 'interfaces']
+            interests = ['blockchain_updated', 'wallet_updated', 'status', 'new_transaction', 'verified2', 'interfaces']
             self.network.register_callback(self.on_network_event, interests)
             self.network.register_callback(self.on_quotes, ['on_quotes'])
             self.network.register_callback(self.on_history, ['on_history'])
@@ -620,7 +620,7 @@ class ElectrumWindow(App):
             tx, wallet = args
             if wallet == self.wallet:
                 self._trigger_update_wallet()
-        elif event == 'verified':
+        elif event == 'verified2':
             self._trigger_update_wallet()
 
     @profiler

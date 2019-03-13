@@ -292,8 +292,8 @@ class Network(util.DaemonThread):
         with self.lock:
             for event in events:
                 self.callbacks[event].append(callback)
-                if event == 'updated':
-                    self._warn_updated_deprecated()
+                if event in self._deprecated_alternatives:
+                    self._warn_deprecated_callback(event)
 
     def unregister_callback(self, callback):
         with self.lock:
@@ -315,15 +315,27 @@ class Network(util.DaemonThread):
             # still rely on this event existing. There are some external
             # electron cash plugins that still use this event, as does android,
             # and we need to keep this hack here so they don't break
-            # on new EC versions.  Such technical debt. Much wow.
-            self.trigger_callback('updated')  # this function will re-enter with event = 'updated'.
-        elif event == 'updated':
-            # if we see an updated event come through here, warn deprecated
-            # Note that the above clause will also trigger this callpath
-            self._warn_updated_deprecated()
+            # on new EC versions.  "Technical debt" :)
+            self.trigger_callback('updated')  # we will re-enter this function with event == 'updated' (triggering the warning in the elif clause below)
+        elif event == 'verified2' and 'verified' in self.callbacks:
+            # pop off the 'wallet' arg as the old bad 'verified' callback lacked it.
+            self.trigger_callback('verified', args[1:])  # we will re-enter this function with event == 'verified' (triggering the warning in the elif clause below)
+        elif event in ('updated', 'verified'):
+            # If we see updated or verified events come through here, warn:
+            # deprecated. Note that the above 2 clauses will also trigger this
+            # execution path.
+            self._warn_deprecated_callback(event)
 
-    def _warn_updated_deprecated(self):
-        self.print_error("Warning: Legacy 'updated' callback is deprecated, use the 'blockchain_updated' and/or 'wallet_updated' callbacks instead. Please update your code.")
+    _deprecated_alternatives = {
+        'updated' : "'blockchain_updated' and/or 'wallet_updated'",
+        'verified': "'verified2'",
+    }
+    def _warn_deprecated_callback(self, which):
+        alt = self._deprecated_alternatives.get(which)
+        if alt:
+            self.print_error("Warning: Legacy '{}' callback is deprecated, it is recommended that you instead use: {}. Please update your code.".format(which, alt))
+        else:
+            self.print_error("Warning: Legacy '{}' callback is deprecated. Please update your code.".format(which))
 
     def recent_servers_file(self):
         return os.path.join(self.config.path, "recent-servers")
@@ -447,7 +459,7 @@ class Network(util.DaemonThread):
             value = (self.get_local_height(), self.get_server_height())
         elif key == 'updated':
             value = (self.get_local_height(), self.get_server_height())
-            self._warn_updated_deprecated()
+            self._warn_deprecated_callback(key)
         elif key == 'servers':
             value = self.get_servers()
         elif key == 'interfaces':
