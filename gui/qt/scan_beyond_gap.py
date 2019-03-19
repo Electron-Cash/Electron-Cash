@@ -153,7 +153,7 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         if found:
             found, added = found # decompose the tuple passed in
         if added:
-            self.show_message(_("{} address(es) with a history discovered and {} in-between address(es) were added to your wallet.").format(len(found), added))
+            self.show_message(_("{} address(es) with a history and {} in-between address(es) were added to your wallet.").format(len(found), added))
         else:
             self.show_message(_("No addresses with transaction histories were found in the specified scan range."))
         self.accept()
