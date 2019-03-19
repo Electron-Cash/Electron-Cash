@@ -41,13 +41,14 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.main_window = main_window
         vbox = QVBoxLayout(self)
         l = QLabel(
-            "<p><font size=+1><b><i>" + _("Scan Beyond Gap") + "</i></b></font></p><p>"
-            + _("Normally, when you (re)generate a wallet from seed, your addresses are added to the wallet until a block of addresses are found without a history.")
-            + "</p><p>" + _("Addresses beyond this gap are not scanned for a balance.")
-            + "</p><p>"
-            + _("Use this tool to scan for an address history past your current address gap, and if any history is found, those addresses will be added to your wallet.")
+            "<p><font size=+1><b><i>" + _("Scanning Beyond the Gap") + "</i></b></font></p><p>"
+            + _("Deterministic wallets can contain a nearly infinite number of addresses. However, usually only a relatively small block of addresses at the beginning are ever used.")
+            + "</p><p>" + _("Normally, when you (re)generate a wallet from its seed, addresses are derived and added to the wallet until a block of addresses is found without a history. This is referred to as the gap.")
+            #+ "</p><p>" + _("Addresses beyond this gap are not scanned for a balance (since they would normally not have one for most users).")
+            + "</p><p>" + _("If you think this wallet may have a transaction history for addresses beyond the gap, use this tool to search for them. If any history for an address is found, those addresses (plus all intervening addresses), will be added to your wallet.")
             + "</p>")
         l.setWordWrap(True)
+        l.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         vbox.addWidget(l)
         vbox.addStretch(1)
         hbox = QHBoxLayout()
@@ -57,7 +58,7 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.num_sb.setValue(100)
         hbox.addWidget(self.num_sb)
         self.which_cb = QComboBox()
-        self.which_cb.addItem(_("Scan Both Receiving & Change"))
+        self.which_cb.addItem(_("Both Receiving & Change (x2)"))
         self.which_cb.addItem(_("Receiving Addresses Only"))
         self.which_cb.addItem(_("Change Addresses Only"))
         self.which_cb.setCurrentIndex(0)
@@ -79,8 +80,10 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.scan_but.clicked.connect(self.scan)
 
         self.thread = threading.Thread(target=self.scan_thread, daemon=True)
+        self._thread_args = (None,) * 2
         self.stop_flag = False
         self.canceling = False
+        self.stage2 = False
 
         self.progress_sig.connect(self.progress_slot)
         self.done_sig.connect(self.done_slot)
@@ -122,15 +125,21 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.which_cb.setDisabled(True)
         self.num_sb.setDisabled(True)
         self.found_label.setText('')
+        total = self.num_sb.value()
+        which = self.which_cb.currentIndex()
+        self._thread_args = (total, which)
         self.thread.start()
 
     def progress_slot(self, pct, scanned, total, found):
         if self.canceling:
             return
-        found_txt = ''
-        if found:
-            found_txt = _(' {} found').format(found)
-        self.prog_label.setText(_("Scanning {} of {} addresses ...{}").format(scanned, total, found_txt))
+        if not self.stage2:
+            found_txt = ''
+            if found:
+                found_txt = _(' {} found').format(found)
+            self.prog_label.setText(_("Scanning {} of {} addresses ...{}").format(scanned, total, found_txt))
+        else:
+            self.prog_label.setText(_("Adding {} of {} new addresses to wallet...").format(scanned, total))
         self.prog.setValue(pct)
 
     def done_slot(self, found, exc):
@@ -140,32 +149,78 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         if exc:
             self.prog_label.setText("<font color=red><b>Error:</b></font> <i>{}</i>".format(repr(exc)))
             return
+        added = 0
         if found:
-            self.add_addresses(found)
-            self.show_message(_("{} addresses were successfully discovered and added to your wallet.").format(len(found)))
+            found, added = found # decompose the tuple passed in
+        if added:
+            self.show_message(_("{} address(es) with a history discovered and {} in-between address(es) were added to your wallet.").format(len(found), added))
         else:
             self.show_message(_("No addresses with transaction histories were found in the specified scan range."))
         self.accept()
 
-    def add_addresses(self, found):
-        # TODO
-        pass
+    def _add_addresses(self, found):
+        recv = [n for is_change, n in found if not is_change]
+        change = [n for is_change, n in found if is_change]
+        recv_end = max(recv or [-1])
+        change_end = max(change or [-1])
+        self.stage2 = True
+        wallet = self.main_window.wallet
+        total, added = 0, 0
+        if recv_end > -1: total += recv_end - len(wallet.get_receiving_addresses()) + 1
+        if change_end > -1: total += change_end - len(wallet.get_change_addresses()) + 1
+        self.progress_sig.emit(0, added, total, None)  # progress bar indicator reset to base for stage2
+        while len(wallet.get_receiving_addresses()) < recv_end + 1:
+            if self.stop_flag: return
+            wallet.create_new_address(for_change=False)
+            added += 1
+            self.progress_sig.emit(added*100//total, added, total, None)
+        while len(wallet.get_change_addresses()) < change_end + 1:
+            if self.stop_flag: return
+            wallet.create_new_address(for_change=True)
+            added += 1
+            self.progress_sig.emit(added*100//total, added, total, None)
+        return added
 
+    def _addr_has_history(self, address, network):
+        return bool(network.synchronous_get(('blockchain.scripthash.get_history', [address.to_scripthash_hex()]), timeout=5))
 
     def scan_thread(self):
-        total = self.num_sb.value()
-        which = self.which_cb.currentIndex()
+        total, which = self._thread_args
+        assert total is not None and which is not None
+        wallet = self.main_window.wallet
+        network = wallet.network
+        assert network
         found = []
-        i = 0
+        searched = 0
+        recv_begin = len(wallet.get_receiving_addresses())
+        change_begin = len(wallet.get_change_addresses())
+        paths = (False, recv_begin), (True, change_begin)
+
+        if which == 1:
+            paths = paths[:1]
+        elif which == 2:
+            paths = paths[1:]
+        total *= len(paths)  # if change & addresses, will be * 2, otherwise * 1
+        i, ct = 0, 0
         try:
-            while not self.stop_flag and i < total:
-                import time  # TESTING
-                time.sleep(.1)
+            self.progress_sig.emit(0, 0, total, 0)  # initial clear of status text to indicate we began
+            while not self.stop_flag and ct < total:
+                for is_change, start in paths:
+                    n = start + i
+                    pks = wallet.derive_pubkeys(is_change, n)
+                    addr = wallet.pubkeys_to_address(pks)
+                    self.print_error("Scanning:", addr, "(Change)" if is_change else "(Receiving)", n)
+                    if self.stop_flag:
+                        return
+                    if self._addr_has_history(addr, network):
+                        self.print_error("FOUND:", addr, "(Change)" if is_change else "(Receiving)", n)
+                        found.append((is_change, n))
+                    ct += 1
+                    self.progress_sig.emit(ct*100//total, ct, total, len(found))
                 i += 1
-                self.progress_sig.emit(i*100//total, i, total, i//10)
-                if not (i % 50):
-                    raise RuntimeError("Hmm, bad network")
-            time.sleep(1.0)
-            self.done_sig.emit(found, None)
+            added = 0
+            if found:
+                added = self._add_addresses(found)
+            self.done_sig.emit((found, added), None)
         except BaseException as e:
             self.done_sig.emit(None, e)
