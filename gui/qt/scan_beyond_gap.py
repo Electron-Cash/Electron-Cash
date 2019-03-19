@@ -21,6 +21,8 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import threading
+
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
@@ -30,6 +32,7 @@ from electroncash.util import PrintError
 from electroncash.i18n import _
 
 class ScanBeyondGap(WindowModalDialog, PrintError):
+    progress_sig = pyqtSignal(int, int, int, int)
 
     def __init__(self, main_window):
         super().__init__(parent=main_window, title=_("Scan Beyond Gap"))
@@ -53,9 +56,9 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.num_sb.setValue(100)
         hbox.addWidget(self.num_sb)
         self.which_cb = QComboBox()
-        self.which_cb.addItem(_("Scan Both Change & Receiving"))
-        self.which_cb.addItem(_("Change Addresses Only"))
+        self.which_cb.addItem(_("Scan Both Receiving & Change"))
         self.which_cb.addItem(_("Receiving Addresses Only"))
+        self.which_cb.addItem(_("Change Addresses Only"))
         self.which_cb.setCurrentIndex(0)
         hbox.addWidget(self.which_cb)
         hbox.addStretch(1)
@@ -74,14 +77,50 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.cancel_but.clicked.connect(self.cancel)
         self.scan_but.clicked.connect(self.scan)
 
+        self.thread = threading.Thread(target=self.scan_thread, daemon=True)
+        self.stop_flag = False
+
+        self.progress_sig.connect(self.progress_slot)
+
     def cancel(self):
+        self.scan_but.setDisabled(True)
+        self.cancel_but.setDisabled(True)
+        self.found_label.setText('')
+        if self.thread.isAlive():
+            self.prog_label.setText(_("Canceling..."))
+            self.stop_flag = True
+            QApplication.processEvents(QEventLoop.ExcludeUserInputEvents|QEventLoop.WaitForMoreEvents, 500)
+            self.thread.join()
         self.prog_label.setText(_("Canceled"))
-        self.reject()
+        super().reject()
+
+    def reject(self):
+        ''' overrides super and calls cancel for us '''
+        self.cancel()
 
     def scan(self):
         self.scan_but.setDisabled(True)
         self.prog_label.setVisible(True)
         self.found_label.setVisible(False)
-        total = self.num_sb.value()
-        self.prog_label.setText(_("Scanning {} of {} addresses ...").format(0, total))
+        self.which_cb.setDisabled(True)
+        self.num_sb.setDisabled(True)
         self.found_label.setText('')
+        self.thread.start()
+
+    def progress_slot(self, pct, scanned, total, found):
+        found_txt = ''
+        if found:
+            found_txt = _(' {} found').format(found)
+        self.prog_label.setText(_("Scanning {} of {} addresses ...{}").format(scanned, total, found_txt))
+        self.prog.setValue(pct)
+
+    def scan_thread(self):
+        total = self.num_sb.value()
+        which = self.which_cb.currentIndex()
+        i = 0
+        while not self.stop_flag and i < total:
+            import time
+            time.sleep(1.0)
+            i += 1
+            self.progress_sig.emit(i*100//total, i, total, i//10)
+        time.sleep(1.0)
