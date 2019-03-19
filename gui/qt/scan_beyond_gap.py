@@ -33,6 +33,7 @@ from electroncash.i18n import _
 
 class ScanBeyondGap(WindowModalDialog, PrintError):
     progress_sig = pyqtSignal(int, int, int, int)
+    done_sig = pyqtSignal(object, object)
 
     def __init__(self, main_window):
         super().__init__(parent=main_window, title=_("Scan Beyond Gap"))
@@ -79,23 +80,39 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
 
         self.thread = threading.Thread(target=self.scan_thread, daemon=True)
         self.stop_flag = False
+        self.canceling = False
 
         self.progress_sig.connect(self.progress_slot)
+        self.done_sig.connect(self.done_slot)
 
     def cancel(self):
+        if self.canceling:
+            return
+        self.canceling = True  # reentrancy preventer
         self.scan_but.setDisabled(True)
         self.cancel_but.setDisabled(True)
         self.found_label.setText('')
+        def reject():
+            super(ScanBeyondGap, self).reject()
         if self.thread.isAlive():
-            self.prog_label.setText(_("Canceling..."))
+            # We do the below so the user can get the "Canceling..." text
+            # before we begin waiting for the worker thread and blocking the
+            # UI thread.
             self.stop_flag = True
-            QApplication.processEvents(QEventLoop.ExcludeUserInputEvents|QEventLoop.WaitForMoreEvents, 500)
-            self.thread.join()
-        self.prog_label.setText(_("Canceled"))
-        super().reject()
+            def wait_for_thread():
+                self.thread.join()
+                self.prog_label.setText(_("Canceled"))
+                QTimer.singleShot(100, reject)
+            self.prog_label.setText(_("Canceling..."))
+            QTimer.singleShot(10, wait_for_thread)
+        else:
+            reject()
 
     def reject(self):
         ''' overrides super and calls cancel for us '''
+        self.cancel()
+
+    def accept(self):
         self.cancel()
 
     def scan(self):
@@ -108,19 +125,47 @@ class ScanBeyondGap(WindowModalDialog, PrintError):
         self.thread.start()
 
     def progress_slot(self, pct, scanned, total, found):
+        if self.canceling:
+            return
         found_txt = ''
         if found:
             found_txt = _(' {} found').format(found)
         self.prog_label.setText(_("Scanning {} of {} addresses ...{}").format(scanned, total, found_txt))
         self.prog.setValue(pct)
 
+    def done_slot(self, found, exc):
+        if self.canceling:
+            return
+        self.cancel_but.setText(_("Close"))
+        if exc:
+            self.prog_label.setText("<font color=red><b>Error:</b></font> <i>{}</i>".format(repr(exc)))
+            return
+        if found:
+            self.add_addresses(found)
+            self.show_message(_("{} addresses were successfully discovered and added to your wallet.").format(len(found)))
+        else:
+            self.show_message(_("No addresses with transaction histories were found in the specified scan range."))
+        self.accept()
+
+    def add_addresses(self, found):
+        # TODO
+        pass
+
+
     def scan_thread(self):
         total = self.num_sb.value()
         which = self.which_cb.currentIndex()
+        found = []
         i = 0
-        while not self.stop_flag and i < total:
-            import time
+        try:
+            while not self.stop_flag and i < total:
+                import time  # TESTING
+                time.sleep(.1)
+                i += 1
+                self.progress_sig.emit(i*100//total, i, total, i//10)
+                if not (i % 50):
+                    raise RuntimeError("Hmm, bad network")
             time.sleep(1.0)
-            i += 1
-            self.progress_sig.emit(i*100//total, i, total, i//10)
-        time.sleep(1.0)
+            self.done_sig.emit(found, None)
+        except BaseException as e:
+            self.done_sig.emit(None, e)
