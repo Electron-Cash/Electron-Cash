@@ -524,7 +524,8 @@ class MyTreeWidget(QTreeWidget):
             # Now do any pending updates
             if self.editor is None and self.pending_update:
                 self.pending_update = False
-                self.update()
+                self.on_update()
+                self.deferred_update_ct = 0
 
     def on_edited(self, item, column, prior):
         '''Called only when the text actually changes'''
