@@ -77,7 +77,7 @@ class Test_bitcoin(unittest.TestCase):
         # NOTE: you cannot rely on exact binary patterns of signatures
         # produced by libsecp versus python ecdsa, etc. This is because nonces
         # may differ.  We ran into this when switching from Bitcoin Core libsecp
-        # to Bitcoin ABC libsecp.  Amaury Sechet confirms ths.
+        # to Bitcoin ABC libsecp.  Amaury Sechet confirmed this to be true.
         # So.. the below test is flawed.  Instead, we verify that both
         # signatures pass. The hard-coded one as well as the generated one.
         #self.assertEqual(sig1_b64, b'H/9jMOnj4MFbH3d7t4yCQ9i7DgZU/VZ278w3+ySv2F4yIsdqjsc5ng3kmN8OZAThgyfCZOQxZCWza9V5XzlVY0Y=')
