@@ -74,14 +74,24 @@ class Test_bitcoin(unittest.TestCase):
         sig1_b64 = base64.b64encode(sig1)
         sig2_b64 = base64.b64encode(sig2)
 
-        self.assertEqual(sig1_b64, b'H/9jMOnj4MFbH3d7t4yCQ9i7DgZU/VZ278w3+ySv2F4yIsdqjsc5ng3kmN8OZAThgyfCZOQxZCWza9V5XzlVY0Y=')
-        self.assertEqual(sig2_b64, b'G84dmJ8TKIDKMT9qBRhpX2sNmR0y5t+POcYnFFJCs66lJmAs3T8A6Sbpx7KA6yTQ9djQMabwQXRrDomOkIKGn18=')
+        # NOTE: you cannot rely on exact binary patterns of signatures
+        # produced by libsecp versus python ecdsa, etc. The below test is
+        # flawed.  Instead, verify that both signatures pass.
+        #self.assertEqual(sig1_b64, b'H/9jMOnj4MFbH3d7t4yCQ9i7DgZU/VZ278w3+ySv2F4yIsdqjsc5ng3kmN8OZAThgyfCZOQxZCWza9V5XzlVY0Y=')
+        #self.assertEqual(sig2_b64, b'G84dmJ8TKIDKMT9qBRhpX2sNmR0y5t+POcYnFFJCs66lJmAs3T8A6Sbpx7KA6yTQ9djQMabwQXRrDomOkIKGn18=')
+        our_sig1 = base64.b64decode(b'H/9jMOnj4MFbH3d7t4yCQ9i7DgZU/VZ278w3+ySv2F4yIsdqjsc5ng3kmN8OZAThgyfCZOQxZCWza9V5XzlVY0Y=')
+        our_sig2 = base64.b64decode(b'G84dmJ8TKIDKMT9qBRhpX2sNmR0y5t+POcYnFFJCs66lJmAs3T8A6Sbpx7KA6yTQ9djQMabwQXRrDomOkIKGn18=')
 
         self.assertTrue(verify_message(addr1, sig1, msg1))
         self.assertTrue(verify_message(addr2, sig2, msg2))
+        self.assertTrue(verify_message(addr1, our_sig1, msg1))
+        self.assertTrue(verify_message(addr2, our_sig2, msg2))
 
         self.assertRaises(Exception, verify_message, addr1, b'wrong', msg1)
         self.assertFalse(verify_message(addr1, sig2, msg1))
+        self.assertFalse(verify_message(addr1, our_sig2, msg1))
+        self.assertFalse(verify_message(addr2, sig1, msg2))
+        self.assertFalse(verify_message(addr2, our_sig1, msg2))
 
     def test_aes_homomorphic(self):
         """Make sure AES is homomorphic."""
