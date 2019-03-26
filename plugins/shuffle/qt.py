@@ -503,6 +503,9 @@ class Plugin(BasePlugin):
         self._hide_history_txs = False
         self.initted = False
 
+    def is_defunct(self):
+        return Plugin.instance is not self
+
     @hook
     def init_qt(self, gui):
         if self.initted:
@@ -615,6 +618,7 @@ class Plugin(BasePlugin):
                 icon=QMessageBox.Critical):
             self.print_error("Refusing to enable CashShuffle for window '{}' because no libsecp :(".format(name))
             return
+        if self.is_defunct(): return  # we need to do this because presentation of above dialog box may mean user had the opportunity to close the plugin in another window
         cached_password = window.gui_object.get_cached_password(window.wallet)
         password = None
         while window.wallet.has_password():
@@ -625,6 +629,7 @@ class Plugin(BasePlugin):
             else:
                 pwdlg = PasswordDialog(parent=window.top_level_window(), msg=msg)
                 password = pwdlg.run()
+            if self.is_defunct(): return  # we need to do this because presentation of above dialog box may mean user had the opportunity to close the plugin in another window
             if password is None:
                 # User cancelled password input
                 if not self.warn_if_shuffle_disable_not_ok(window, msg=_('CashShuffle will now be <i>disabled</i> for a wallet which has previously had it <b>enabled</b>. Are you sure?')):
@@ -638,10 +643,12 @@ class Plugin(BasePlugin):
                 break
             except Exception as e:
                 window.show_error(str(e), parent=window)
+                if self.is_defunct(): return  # we need to do this because presentation of above dialog box may mean user had the opportunity to close the plugin in another window
                 continue
         network_settings = Plugin.get_network_settings(window.config)
         if not network_settings:
             network_settings = self.settings_dialog(window, msg=_("Please choose a CashShuffle server"), restart_ask = False)
+        if self.is_defunct(): return  # we need to do this because presentation of above dialog box may mean user had the opportunity to close the plugin in another window
         if not network_settings:
             self.window_set_cashshuffle(window, False)
             window.show_error(_("Can't get network, disabling CashShuffle."), parent=window)
