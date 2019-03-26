@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import *
 
 from electroncash.i18n import _
 from electroncash.plugins import ExternalPluginCodes, run_hook
-from .util import MyTreeWidget, MessageBoxMixin, WindowModalDialog, Buttons, CloseButton
+from .util import MyTreeWidget, MessageBoxMixin, WindowModalDialog, AppModalDialog, Buttons, CloseButton
 
 
 INSTALL_ERROR_MESSAGES = {
@@ -54,7 +54,7 @@ INSTALL_ERROR_MESSAGES = {
 
 class ExternalPluginsPreviewDialog(WindowModalDialog):
     def __init__(self, plugin_dialog, main_window, title, plugin_path=None, plugin_metadata=None):
-        WindowModalDialog.__init__(self, main_window.top_level_window(), title)
+        WindowModalDialog.__init__(self, parent=main_window.top_level_window(), title=title)
 
         self.is_preview = plugin_metadata is None
 
@@ -246,9 +246,9 @@ class ExternalPluginsPreviewDialog(WindowModalDialog):
         self.plugin_dialog.install_plugin_confirmed(self.plugin_path)
 
 
-class ExternalPluginsDialog(WindowModalDialog, MessageBoxMixin):
+class ExternalPluginsDialog(AppModalDialog, MessageBoxMixin):
     def __init__(self, parent, title):
-        WindowModalDialog.__init__(self, parent.top_level_window(), title)
+        AppModalDialog.__init__(self, parent=parent.top_level_window(), title=title)
 
         self.main_window = parent
         self.config = parent.config
