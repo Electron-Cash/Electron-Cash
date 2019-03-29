@@ -522,8 +522,9 @@ class SettingsDialog(WindowModalDialog):
         homescreen_clear_button.clicked.connect(clear_homescreen)
         homescreen_msg = QLabel(_("You can set the homescreen on your "
                                   "device to personalize it. You can choose any "
-                                  "image and it will be converted to {} x {} monochrome "
-                                  "for the device. Use a monochrome input image for best results.").format(hs_cols, hs_rows))
+                                  "image and it will be dithered, scaled and "
+                                  "converted to {} x {} monochrome "
+                                  "for the device.").format(hs_cols, hs_rows))
         homescreen_msg.setWordWrap(True)
         settings_glayout.addWidget(homescreen_label, 4, 0)
         settings_glayout.addWidget(homescreen_change_button, 4, 1)
