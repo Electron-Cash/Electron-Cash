@@ -368,18 +368,22 @@ class SettingsDialog(WindowModalDialog):
                     handler.show_error('File is not a TOIF file with size of 144x144')
                     return
             else:
-                from PIL import Image # FIXME
-                im = Image.open(filename)
-                if im.size != (128, 64):
-                    handler.show_error('Image must be 128 x 64 pixels')
+                try:
+                    from PIL import Image # FIXME
+                    im = Image.open(filename)
+                    if im.size != (hs_cols, hs_rows):
+                        handler.show_error('Image must be {} x {} pixels'.format(hs_cols, hs_rows))
+                        return
+                    im = im.convert('1')
+                    pix = im.load()
+                except (ImportError, AttributeError, NameError, OSError, ValueError) as e:
+                    handler.show_error('Error opening image: {}'.format(e))
                     return
-                im = im.convert('1')
-                pix = im.load()
-                img = bytearray(1024)
-                for j in range(64):
-                    for i in range(128):
+                img = bytearray((hs_rows * hs_cols) // 8)  # 1024 bytes
+                for j in range(hs_rows):
+                    for i in range(hs_cols):
                         if pix[i, j]:
-                            o = (i + j * 128)
+                            o = (i + j * hs_cols)
                             img[o // 8] |= (1 << (7 - o % 8))
                 img = bytes(img)
             invoke_client('change_homescreen', img)
