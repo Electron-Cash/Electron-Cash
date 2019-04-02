@@ -411,7 +411,6 @@ class Ledger_KeyStore(Hardware_KeyStore):
 
             # Sign all inputs
             inputIndex = 0
-            rawTx = tx.serialize()
             self.get_client().enableAlternate2fa(False)
             cashaddr = Address.FMT_UI == Address.FMT_CASHADDR
             if cashaddr and self.get_client_electrum().supports_cashaddr():
@@ -420,7 +419,9 @@ class Ledger_KeyStore(Hardware_KeyStore):
             else:
                 self.get_client().startUntrustedTransaction(True, inputIndex,
                                                             chipInputs, redeemScripts[inputIndex])
-            outputData = self.get_client().finalizeInputFull(txOutput)
+            # we don't set meaningful outputAddress, amount and fees
+            # as we only care about the alternateEncoding==True branch
+            outputData = self.get_client().finalizeInput(b'', 0, 0, changePath, bfh(tx.serialize(True)))
             outputData['outputData'] = txOutput
             transactionOutput = outputData['outputData']
             if outputData['confirmationNeeded']:
