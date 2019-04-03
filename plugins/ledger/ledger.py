@@ -2,6 +2,7 @@ from struct import pack, unpack
 import hashlib
 import sys
 import traceback
+import inspect
 
 from electroncash import bitcoin
 from electroncash.address import Address
@@ -176,17 +177,8 @@ class Ledger_Client():
                 pin = pin.encode()
                 self.dongleObject.verifyPin(pin)
 
-            try:
-                try:
-                    self.dongleObject.getWalletPublicKey("44'/145'/0'/0/0", showOnScreen=False, cashAddr=True)
-                except BTChipException as e:
-                    # This call fails on HW1/Nano with a specific error, due to it not supporting cashaddr
-                    if (e.sw != 0x6b00):
-                        raise e
-                self.cashaddrSWSupported = True
-            except TypeError:
-                self.cashaddrSWSupported = False
-
+            gwpkArgSpecs = inspect.getfullargspec(self.dongleObject.getWalletPublicKey)
+            self.cashaddrSWSupported = 'cashAddr' in gwpkArgSpecs.args
         except BTChipException as e:
             if (e.sw == 0x6faa):
                 raise Exception("Dongle is temporarily locked - please unplug it and replug it again")
