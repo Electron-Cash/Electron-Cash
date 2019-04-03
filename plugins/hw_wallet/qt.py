@@ -224,6 +224,11 @@ class QtPluginBase(object):
             except UserCancelled:
                 return
             device_id = info.device.id_
+
+            # Check that no pairing thread is still running
+            if keystore.thread.tasks.empty():
+                # Retry the pairing
+                keystore.thread.add(partial(self.get_client, keystore))
         return device_id
 
     def show_settings_dialog(self, window, keystore):
