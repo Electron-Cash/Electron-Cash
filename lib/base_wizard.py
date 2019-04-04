@@ -24,6 +24,7 @@
 # SOFTWARE.
 
 import os
+import sys
 from . import bitcoin
 from . import keystore
 from .keystore import bip44_derivation, bip44_derivation_145
@@ -189,12 +190,18 @@ class BaseWizard(object):
                 continue
             devices += list(map(lambda x: (name, x), u))
         if not devices:
-            msg = ''.join([
+            msgs = [
                 _('No hardware device detected.') + '\n',
-                _('To trigger a rescan, press \'Next\'.') + '\n\n',
-                _('If your device is not detected on Windows, go to "Settings", "Devices", "Connected devices", and do "Remove device". Then, plug your device again.') + ' ',
-                _('On Linux, you might have to add a new permission to your udev rules.'),
-            ])
+                _('To trigger a rescan, press \'Next\'.') + '\n\n'
+            ]
+
+            if sys.platform in ('win32', 'win64', 'windows'):
+                msgs.append(_('Go to "Settings", "Devices", "Connected devices", and do "Remove device". Then, plug your device again.') + '\n')
+
+            if sys.platform in ('linux', 'linux2', 'linux3'):
+                msgs.append(_('You might have to add a new permission to your udev rules.') + '\n')
+
+            msg = ''.join(msgs)
             self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device())
             return
         # select device
