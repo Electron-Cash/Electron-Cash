@@ -30,7 +30,7 @@ binaries += [('C:/tmp/libsecp256k1.dll', '.')]
 binaries += [
     ('C:/python*/libEGL.dll', '.'),
     ('C:/python*/libGLESv2.dll', '.'),
-    ('C:/python*/d3dcompiler_47.dll', '.'),
+    ('C:/python*/d3dcompiler_*.dll', '.'),
 ]
 
 # Workaround for "Retro Look":
