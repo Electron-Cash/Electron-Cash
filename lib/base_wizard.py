@@ -201,6 +201,13 @@ class BaseWizard(object):
             if sys.platform in ('linux', 'linux2', 'linux3'):
                 msgs.append(_('You might have to add a new permission to your udev rules.') + '\n')
 
+            support_no_libs = [s for s in support if not s[2].libraries_available]
+            if len(support_no_libs) > 0:
+                msgs.append('\n' + _('Please install the relevant libraries for these plugins: '))
+                msgs.append(', '.join(s[2].name for s in support_no_libs))
+                msgs.append('\n' + _('On most systems you can do so with this command:') + '\n')
+                msgs.append('pip3 install -r contrib/requirements/requirements-hw.txt')
+
             msg = ''.join(msgs)
             self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device())
             return
