@@ -176,7 +176,7 @@ class BaseWizard(object):
                 _('On most systems you can do so with this command:'),
                 'pip3 install -r contrib/requirements/requirements-hw.txt'
             ])
-            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device())
+            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device(), select=True)
             return
         # scan devices
         devices = []
@@ -191,25 +191,25 @@ class BaseWizard(object):
             devices += list(map(lambda x: (name, x), u))
         if not devices:
             msgs = [
-                _('No hardware device detected.') + '\n',
-                _('To trigger a rescan, press \'Next\'.') + '\n\n'
+                _('No hardware device detected.') + '<br><br>',
+                _('To trigger a rescan, press \'Next\'.') + '<br><br>'
             ]
 
             if sys.platform in ('win32', 'win64', 'windows'):
-                msgs.append(_('Go to "Settings", "Devices", "Connected devices", and do "Remove device". Then, plug your device again.') + '\n')
+                msgs.append(_('Go to "Settings", "Devices", "Connected devices", and do "Remove device". Then, plug your device again.') + '<br>')
 
             if sys.platform in ('linux', 'linux2', 'linux3'):
-                msgs.append(_('You might have to add a new permission to your udev rules.') + '\n')
+                msgs.append(_('You might have to add a new permission to your udev rules.') + '<br>')
 
             support_no_libs = [s for s in support if not s[2].libraries_available]
             if len(support_no_libs) > 0:
-                msgs.append('\n' + _('Please install the relevant libraries for these plugins: '))
+                msgs.append('<br>' + _('Please install the relevant libraries for these plugins: '))
                 msgs.append(', '.join(s[2].name for s in support_no_libs))
-                msgs.append('\n' + _('On most systems you can do so with this command:') + '\n')
-                msgs.append('pip3 install -r contrib/requirements/requirements-hw.txt')
+                msgs.append('<br>' + _('On most systems you can do so with this command:') + '<br>')
+                msgs.append('pip3 install -r contrib/requirements/requirements-hw.txt<br>')
 
             msg = ''.join(msgs)
-            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device())
+            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device(), rich=True, select=True, links=True)
             return
         # select device
         self.devices = devices
