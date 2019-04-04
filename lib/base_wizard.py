@@ -168,16 +168,6 @@ class BaseWizard(object):
         title = _('Hardware Keystore')
         # check available plugins
         support = self.plugins.get_hardware_support()
-        # if no enabled plugins have their libraries available
-        if not any(s[2].libraries_available for s in support):
-            msg = '\n'.join([
-                _('No hardware wallet support found on your system.'),
-                _('Please install the relevant libraries (eg python-trezor for Trezor).'),
-                _('On most systems you can do so with this command:'),
-                'pip3 install -r contrib/requirements/requirements-hw.txt'
-            ])
-            self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device(), select=True)
-            return
         # scan devices
         devices = []
         devmgr = self.plugins.device_manager
