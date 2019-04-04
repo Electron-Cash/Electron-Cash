@@ -208,6 +208,10 @@ class BaseWizard(object):
                 msgs.append('<br>' + _('On most systems you can do so with this command:') + '<br>')
                 msgs.append('pip3 install -r contrib/requirements/requirements-hw.txt<br>')
 
+            msgs.append(_("<br>If this problem persists (and you really do have a hardware device connected), "
+                          "please visit <a href=\"{0}\">{0}</a> to file an issue "
+                          "report with the developers.").format('https://github.com/Electron-Cash/Electron-Cash/issues'))
+
             msg = ''.join(msgs)
             self.confirm_dialog(title=title, message=msg, run_next= lambda x: self.choose_hw_device(), rich=True, select=True, links=True)
             return
