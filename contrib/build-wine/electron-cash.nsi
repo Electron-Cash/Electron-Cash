@@ -2,7 +2,6 @@
 ;Include Modern UI
   !include "TextFunc.nsh" ;Needed for the $GetSize fuction. I know, doesn't sound logical, it isn't.
   !include "MUI2.nsh"
-  !include "LogicLib.nsh" ;For flow control ${If}, ${FileExists}, etc
 
 ;--------------------------------
 ;Variables
@@ -105,13 +104,15 @@ FunctionEnd
 
 ; Ask the user if they want to blow away an existing directory
 Function RemoveAskIfExists
-    ${If} ${FileExists} "${INSTDIR}\*"
-            MessageBox MB_YESNO `"${INSTDIR}" already exists, delete its content and continue installing?` IDYES yes IDNO no
-        no:
-            Abort "Select a different install destination and try again."
-        yes:
-            RMDir /r "${INSTDIR}\*.*"
-    ${EndIf}
+    IfFileExists "${INSTDIR}\*" DoesExist DoesNotExist
+    DoesExist:
+        MessageBox MB_YESNO `"${INSTDIR}" already exists, delete its content and continue installing?` IDYES yes IDNO no
+            no:
+                Abort "Select a different install destination and try again."
+            yes:
+                RMDir /r "${INSTDIR}\*.*"
+    DoesNotExist:
+        Return
 FunctionEnd
 
 Section
