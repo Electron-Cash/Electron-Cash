@@ -102,24 +102,12 @@ Function .onInit
 	${EndIf}
 FunctionEnd
 
-; Ask the user if they want to blow away an existing directory
-Function RemoveAskIfExists
-    IfFileExists "${INSTDIR}\*.*" DoesExist DoesNotExist
-    DoesExist:
-        MessageBox MB_YESNO `"${INSTDIR}" already exists, delete its content and continue installing?` IDYES yes IDNO no
-            no:
-                Abort "Select a different install destination and try again."
-            yes:
-                RMDir /r "${INSTDIR}\*.*"
-    DoesNotExist:
-        Return
-FunctionEnd
-
 Section
   SetOutPath $INSTDIR
 
   ;Uninstall previous version files
   ;RMDir /r "$INSTDIR\*.*"
+  Push $INSTDIR
   Call RemoveAskIfExists
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\*.*"
@@ -168,6 +156,20 @@ Section
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKCU "${PRODUCT_UNINST_KEY}" "EstimatedSize" "$0"
 SectionEnd
+
+; Ask the user if they want to blow away an existing directory
+Function RemoveAskIfExists
+    Pop $R0
+    IfFileExists "$R0\*.*" DoesExist DoesNotExist
+    DoesExist:
+        MessageBox MB_YESNO `"$R0" already exists, delete its content and continue installing?` IDYES yes IDNO no
+            no:
+                Abort "Select a different install destination and try again."
+            yes:
+                RMDir /r "$R0\*.*"
+    DoesNotExist:
+        Return
+FunctionEnd
 
 ;--------------------------------
 ;Descriptions
