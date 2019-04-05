@@ -79,10 +79,10 @@ for d in a.datas:
 # This is a hack of sorts that works to keep the binary file size reasonable.
 bins2remove=('qtweb', 'qt3d', 'qtgame', 'qtdesigner', 'qtquick', 'qtlocation',
              'qttest', 'qtxml', 'qtqml', 'qtsql', 'qtserialport', 'qtsensors',
-             'qtprintsupport', 'qtpositioning', 'qtnfc', 'qthelp', 'qtdbus',
-             'qtbluetooth', 'qtmultimedia', 'pyqt5/qt/qml',
-             'pyqt5/qt/plugins/position', 'pyqt5/qt/plugins/mediaservice',
-             'pyqt5/qt/plugins/audio', 'pyqt5/qt/plugins/sqldrivers', )
+             'qtpositioning', 'qtnfc', 'qthelp', 'qtbluetooth', 'qtmultimedia',
+             'pyqt5/qt/qml', 'pyqt5/qt/plugins/position',
+             'pyqt5/qt/plugins/mediaservice', 'pyqt5/qt/plugins/audio',
+             'pyqt5/qt/plugins/sqldrivers', )
 files2remove=('libqsqlmysql.dylib', 'libdeclarative_multimedia.dylib',
               'libqtquickscene2dplugin.dylib', 'libqtquickscene3dplugin.dylib', )
 print("Removing", *(bins2remove + files2remove))
