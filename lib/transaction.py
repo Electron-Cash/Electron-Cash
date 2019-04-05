@@ -346,13 +346,14 @@ def parse_input(vds):
         d['scriptSig'] = bh2u(scriptSig)
         try:
             parse_scriptSig(d, scriptSig)
-        except:
+        except BaseException as e:
+            print_error('{}: Failed to parse tx input {}:{}, probably a p2sh (non multisig?). Exception was: {}'.format(__name__, prevout_hash, prevout_n, repr(e)))
             # that whole heuristic codepath is fragile; just ignore it when it dies.
             # failing tx examples:
             # 1c671eb25a20aaff28b2fa4254003c201155b54c73ac7cf9c309d835deed85ee
             # 08e1026eaf044127d7103415570afd564dfac3131d7a5e4b645f591cd349bb2c
             # override these once more just to make sure
-            d['address'] = None
+            d['address'] = UnknownAddress()
             d['type'] = 'unknown'
         if not Transaction.is_txin_complete(d):
             d['value'] = vds.read_uint64()
@@ -423,7 +424,7 @@ class Transaction:
         self._outputs = None
         self.locktime = 0
         self.version = 1
-        
+
         # Ephemeral meta-data used internally to keep track of interesting things.
         # This is currently written-to by coinchooser to tell UI code about 'dust_to_fee', which
         # is change that's too small to go to change outputs (below dust threshold) and needed
