@@ -284,12 +284,14 @@ def parse_scriptSig(d, _bytes):
 
 def parse_redeemScript(s):
     dec2 = [ x for x in script_GetOp(s) ]
+    # the following throw exception when redeemscript has one or zero opcodes
     m = dec2[0][0] - opcodes.OP_1 + 1
     n = dec2[-2][0] - opcodes.OP_1 + 1
     op_m = opcodes.OP_1 + m - 1
     op_n = opcodes.OP_1 + n - 1
     match_multisig = [ op_m ] + [opcodes.OP_PUSHDATA4]*n + [ op_n, opcodes.OP_CHECKMULTISIG ]
     if not match_decoded(dec2, match_multisig):
+        # causes exception in caller when mismatched
         print_error("cannot find address in input script", bh2u(s))
         return
     x_pubkeys = [bh2u(x[1]) for x in dec2[1:-2]]
@@ -342,8 +344,16 @@ def parse_input(vds):
         d['type'] = 'unknown'
         d['num_sig'] = 0
         d['scriptSig'] = bh2u(scriptSig)
-        parse_scriptSig(d, scriptSig)
-
+        try:
+            parse_scriptSig(d, scriptSig)
+        except:
+            # that whole heuristic codepath is fragile; just ignore it when it dies.
+            # failing tx examples:
+            # 1c671eb25a20aaff28b2fa4254003c201155b54c73ac7cf9c309d835deed85ee
+            # 08e1026eaf044127d7103415570afd564dfac3131d7a5e4b645f591cd349bb2c
+            # override these once more just to make sure
+            d['address'] = None
+            d['type'] = 'unknown'
         if not Transaction.is_txin_complete(d):
             d['value'] = vds.read_uint64()
     return d
