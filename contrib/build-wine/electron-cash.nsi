@@ -104,7 +104,7 @@ FunctionEnd
 
 ; Ask the user if they want to blow away an existing directory
 Function RemoveAskIfExists
-    IfFileExists "${INSTDIR}\*" DoesExist DoesNotExist
+    IfFileExists "${INSTDIR}\*.*" DoesExist DoesNotExist
     DoesExist:
         MessageBox MB_YESNO `"${INSTDIR}" already exists, delete its content and continue installing?` IDYES yes IDNO no
             no:
