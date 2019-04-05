@@ -103,12 +103,12 @@ Function .onInit
 FunctionEnd
 
 Section
-  SetOutPath $INSTDIR
-
   ;Uninstall previous version files
-  ;RMDir /r "$INSTDIR\*.*"
   Push $INSTDIR
   Call RemoveAskIfExists
+
+  SetOutPath $INSTDIR ; side-effect is it creates dir if not exist
+
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\*.*"
 
