@@ -130,6 +130,8 @@ Section
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${INTERNAL_NAME}-${PRODUCT_VERSION}.exe" "" "$INSTDIR\${INTERNAL_NAME}-${PRODUCT_VERSION}.exe" 0
+  ;See #1255 where some users have bad opengl drivers and need to use software-only rendering. Requires we package openglsw32.dll with the app.
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME} (Software OpenGL).lnk" "$INSTDIR\${INTERNAL_NAME}-${PRODUCT_VERSION}.exe" "--qt_opengl software" "$INSTDIR\${INTERNAL_NAME}-${PRODUCT_VERSION}.exe" 0
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME} Testnet.lnk" "$INSTDIR\${INTERNAL_NAME}-${PRODUCT_VERSION}.exe" "--testnet" "$INSTDIR\${INTERNAL_NAME}-${PRODUCT_VERSION}.exe" 0
 
 
