@@ -31,6 +31,7 @@ binaries += [
     ('C:/python*/libEGL.dll', '.'),
     ('C:/python*/libGLESv2.dll', '.'),
     ('C:/python*/d3dcompiler_*.dll', '.'),
+    ('C:/python*/opengl32sw.dll', '.'),
 ]
 
 # Workaround for "Retro Look":
@@ -83,7 +84,8 @@ for d in a.datas:
 
 # Strip out parts of Qt that we never use. Reduces binary size by tens of MBs. see #4815
 qt_bins2remove=('qt5web', 'qt53d', 'qt5game', 'qt5designer', 'qt5quick',
-                'qt5location', 'qt5test', 'qt5xml', r'pyqt5\qt\qml\qtquick')
+                'qt5location', 'qt5test', 'qt5xml', r'pyqt5\qt\qml\qtquick',
+                'qt5qml')
 print("Removing Qt binaries:", *qt_bins2remove)
 for x in a.binaries.copy():
     for r in qt_bins2remove:
@@ -100,6 +102,11 @@ for x in a.datas.copy():
 
 # hotfix for #3171 (pre-Win10 binaries)
 a.binaries = [x for x in a.binaries if not x[1].lower().startswith(r'c:\windows')]
+
+# DEBUG
+print("**** BINARIES TO ADD:", a.binaries)
+print("**** DATAS TO ADD:", a.datas)
+# /DEBUG
 
 pyz = PYZ(a.pure)
 
