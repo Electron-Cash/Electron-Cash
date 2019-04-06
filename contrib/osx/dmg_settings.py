@@ -12,6 +12,7 @@ symlinks = {
     'Applications': '/Applications',
 }
 
+badge_icon = './electron.icns'
 icon = './electron.icns'
 
 files = [
@@ -19,8 +20,11 @@ files = [
 ]
 
 icon_locations = {
-    '{}.app'.format(PACKAGE) :       (0, 140),
-    'Applications'           :     (230, 135),
+    '{}.app'.format(PACKAGE) :       (100, 190),
+    'Applications'           :     (335, 190),
 }
 
-window_rect = ((400, 250), (450, 300))
+icon_size = 96
+text_size = 12
+
+window_rect = ((400, 250), (430, 330))
