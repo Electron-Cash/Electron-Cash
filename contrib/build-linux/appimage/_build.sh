@@ -99,7 +99,7 @@ info "Preparing electrum-locale"
 )
 
 
-info "Installing Electron Cash and its dependencies."
+info "Installing Electron Cash and its dependencies"
 mkdir -p "$CACHEDIR/pip_cache"
 "$python" -m pip install --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
 "$python" -m pip install --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
