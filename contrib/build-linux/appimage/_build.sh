@@ -108,6 +108,7 @@ mkdir -p "$CACHEDIR/pip_cache"
 
 
 info "Copying zbar"
+mkdir -p "$APPDIR/usr/lib/x86_64-linux-gnu"
 cp "/usr/lib/x86_64-linux-gnu/libzbar.so.0" "$APPDIR/usr/lib/x86_64-linux-gnu/libzbar.so.0" || fail "Could not copy zbar"
 
 
