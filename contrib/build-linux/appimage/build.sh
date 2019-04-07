@@ -72,6 +72,10 @@ FRESH_CLONE_DIR=$FRESH_CLONE/$GIT_DIR_NAME
 
 popd
 
+info "Copying built files out of working clone..."
+mkdir -p dist/
+cp -fpvR $FRESH_CLONE_DIR/dist/* dist/ || fail "Could not copy files"
+
 info "Removing $FRESH_CLONE ..."
 $SUDO rm -fr $FRESH_CLONE
 
