@@ -29,9 +29,10 @@ function verify_hash {
     if [ ! -e "$file" ]; then
         fail "Cannot verify hash for $file -- not found!"
     fi
+    bn=`basename $file`
     actual_hash=$($sha_prog $file | awk '{print $1}')
     if [ "$actual_hash" == "$expected_hash" ]; then
-        printok "'$file' hash verified"
+        printok "'$bn' hash verified"
         return 0
     else
         warn "Hash verify failed, removing '$file' as a safety measure"
