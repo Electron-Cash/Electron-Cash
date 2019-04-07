@@ -49,7 +49,7 @@ tar xf "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" -C "$BUILDDIR"
       --enable-shared \
       --with-threads \
       -q
-    TZ=UTC faketime -f '2019-01-01 01:01:01' make -s || fail "Could not build Python"
+    TZ=UTC faketime -f '2019-01-01 01:01:01' make -j 4 -s || fail "Could not build Python"
     make -s install > /dev/null || fail "Failed to install Python"
 )
 
