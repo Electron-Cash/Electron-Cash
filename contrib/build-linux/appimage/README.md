@@ -36,10 +36,10 @@ folder.
 
     _Note:_ If you are using a MacOS host, run the above **without** `sudo`.
 
-4. The generated binary is in `./dist`.
+4. The generated .AppImage binary is in `./dist`.
 
 
 ## FAQ
 
 ### How can I see what is included in the AppImage?
-Execute the binary as follows: `./electron*.AppImage --appimage-extract`
+Execute the binary as follows: `./Electron-Cash*.AppImage --appimage-extract`
