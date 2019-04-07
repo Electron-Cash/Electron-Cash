@@ -37,7 +37,7 @@ verify_hash "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "35446241e995773b1bed7d196
 
 
 
-info "building python."
+info "Building Python"
 tar xf "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" -C "$BUILDDIR"
 (
     cd "$BUILDDIR/Python-$PYTHON_VERSION"
@@ -54,25 +54,16 @@ tar xf "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" -C "$BUILDDIR"
 )
 
 
-info "building libsecp256k1."
+info "Building libsecp256k1"
 (
-    git clone https://github.com/bitcoin-core/secp256k1 "$CACHEDIR"/secp256k1 \
-        || (cd "$CACHEDIR"/secp256k1 && git reset --hard && git pull)
-    cd "$CACHEDIR"/secp256k1
-    git reset --hard "$LIBSECP_VERSION"
-    git clean -f -x -q
-    export SOURCE_DATE_EPOCH=1530212462
-    ./autogen.sh
-    echo "LDFLAGS = -no-undefined" >> Makefile.am
-    ./configure \
-      --prefix="$APPDIR/usr" \
-      --enable-module-recovery \
-      --enable-experimental \
-      --enable-module-ecdh \
-      --disable-jni \
-      -q
-    make -s
-    make -s install > /dev/null
+    pushd "$PROJECT_ROOT"
+    git submodule update --init
+
+    "$CONTRIB"/make_secp || fail "Could not build libsecp"
+
+    find lib -type f -name libsecp\* -exec touch -d '2000-11-11T11:11:11+00:00' {} +
+
+    popd
 )
 
 
@@ -86,11 +77,11 @@ appdir_python() {
 python='appdir_python'
 
 
-info "installing pip."
+info "Installing pip"
 "$python" -m ensurepip
 
 
-info "preparing electrum-locale."
+info "Preparing electrum-locale"
 (
     cd "$PROJECT_ROOT"
     git submodule update --init
@@ -108,7 +99,7 @@ info "preparing electrum-locale."
 )
 
 
-info "installing electron cash and its dependencies."
+info "Installing Electron Cash and its dependencies."
 mkdir -p "$CACHEDIR/pip_cache"
 "$python" -m pip install --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
 "$python" -m pip install --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
@@ -116,19 +107,20 @@ mkdir -p "$CACHEDIR/pip_cache"
 "$python" -m pip install --cache-dir "$CACHEDIR/pip_cache" "$PROJECT_ROOT"
 
 
-info "copying zbar"
-cp "/usr/lib/libzbar.so.0" "$APPDIR/usr/lib/libzbar.so.0" || fail "Could not copy zbar"
+info "Copying zbar"
+cp "/usr/lib/x86_64-linux-gnu/libzbar.so.0" "$APPDIR/usr/lib/x86_64-linux-gnu/libzbar.so.0" || fail "Could not copy zbar"
 
 
-info "desktop integration."
+info "Copying desktop integration"
 cp "$PROJECT_ROOT/electron-cash.desktop" "$APPDIR/electron-cash.desktop"
 cp "$PROJECT_ROOT/icons/electron-cash.png" "$APPDIR/electron-cash.png"
 
 
 # add launcher
+info "Adding launcher"
 cp "$CONTRIB/build-linux/appimage/apprun.sh" "$APPDIR/AppRun"
 
-info "finalizing AppDir."
+info "Finalizing AppDir"
 (
     export PKG2AICOMMIT="$PKG2APPIMAGE_COMMIT"
     . "$CACHEDIR/functions.sh"
@@ -147,10 +139,10 @@ info "finalizing AppDir."
     mv usr/include usr/include.tmp
     delete_blacklisted
     mv usr/include.tmp usr/include
-)
+) || fail "Could not finalize AppDir"
 
 
-info "stripping binaries from debug symbols."
+info "Stripping binaries of debug symbols"
 # "-R .note.gnu.build-id" also strips the build id
 strip_binaries()
 {
@@ -169,7 +161,7 @@ remove_emptydirs()
 remove_emptydirs
 
 
-info "removing some unneeded stuff to decrease binary size."
+info "Removing some unneeded files to decrease binary size"
 rm -rf "$APPDIR"/usr/lib/python3.6/test
 rm -rf "$APPDIR"/usr/lib/python3.6/config-3.6m-x86_64-linux-gnu
 rm -rf "$APPDIR"/usr/lib/python3.6/site-packages/PyQt5/Qt/translations/qtwebengine_locales
@@ -185,7 +177,6 @@ rm -rf "$APPDIR"/usr/lib/python3.6/site-packages/PyQt5/Qt/lib/libQt5Xml*
 
 # these are deleted as they were not deterministic; and are not needed anyway
 find "$APPDIR" -path '*/__pycache__*' -delete
-rm "$APPDIR"/usr/lib/libsecp256k1.a
 rm "$APPDIR"/usr/lib/python3.6/site-packages/pyblake2-*.dist-info/RECORD
 rm "$APPDIR"/usr/lib/python3.6/site-packages/hidapi-*.dist-info/RECORD
 
@@ -193,7 +184,7 @@ rm "$APPDIR"/usr/lib/python3.6/site-packages/hidapi-*.dist-info/RECORD
 find -exec touch -d '2000-11-11T11:11:11+00:00' {} +
 
 
-info "creating the AppImage."
+info "Creating the AppImage"
 (
     cd "$BUILDDIR"
     chmod +x "$CACHEDIR/appimagetool"
@@ -202,6 +193,6 @@ info "creating the AppImage."
 )
 
 
-info "done."
+info "Done"
 ls -la "$DISTDIR"
 sha256sum "$DISTDIR"/*
