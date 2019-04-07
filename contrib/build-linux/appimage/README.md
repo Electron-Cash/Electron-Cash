@@ -1,4 +1,4 @@
-AppImage binary for Electrum
+AppImage binary for Electron Cash
 ============================
 
 This assumes an Ubuntu host, but it should not be too hard to adapt to another
