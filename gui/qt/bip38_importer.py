@@ -24,6 +24,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
     def __init__(self, bip38_keys, *,
                  parent=None, title=None,
                  message=None,  # The message to display as a label up top
+                 show_count=True, # If false, don't show 'Key 1/n:' in UI instead just say: 'Key: '
                  on_success=None,  # Callback will be called with a dict of bip38key -> (decoded_wif_str, Address) objects
                  on_cancel=None):  # Callback will be called if user hits cancel
         ''' bip38_keys should be a list of '6P' strings, representing bip38
@@ -31,14 +32,17 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
         and will be shown the decoded address and WIF key. Note that this
         method will raise RuntimeError if not bitcion.is_bip38_available().
 
-        on_succes, if specified, will be called after the window has closed
-                   (exec_ has finished) with a single argument: a dict of
-                   bip38key -> (decoded_wif, Address).
-        on_cancel, if specified, will be called after the window was closed
-                   (exec_ has finished) with no arguments.
+        on_success: if specified, will be called after the window has closed
+                    (exec_ has finished) with a single argument: a dict of
+                    bip38key -> (decoded_wif, Address).
+        on_cancel:  if specified, will be called after the window was closed
+                    (exec_ has finished) with no arguments.
 
         If you don't specify any callbacks, results are still available in
         the self.decoded_keys dict.
+
+        The dialog will always terminate with either all keys successfully
+        decrypted or a user cancel.
         '''
         if not title:
             title = 'Electron Cash - ' + _('BIP38 Import')
@@ -54,10 +58,13 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
         self.success_cb, self.cancel_cb = on_success, on_cancel
         self.cur, self.decoded_wif, self.decoded_address = 0, None, None
         self.decrypter = None
+        self.show_count = show_count
 
         self.decrypted_sig.connect(self.on_decrypted)
 
         self._setup_ui(message)
+
+        util.finalization_print_error(self)
 
     def _setup_ui(self, message=None):
         num = len(self.bip38_keys)
@@ -77,6 +84,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
         f = self.key_lbl.font()
         f.setBold(True); f.setFamily(MONOSPACE_FONT)
         self.key_lbl.setFont(f)
+        self.key_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.TextSelectableByKeyboard)
 
         grid.addWidget(self.key_tit, 1, 0)
         grid.addWidget(self.key_lbl, 1, 1)
@@ -89,7 +97,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
         timer = QTimer(self)
         timer.setSingleShot(True)
 
-        def on_edited():
+        def start_decrypter():
             if not self.isVisible():
                 return
             # starts a new thread. note that the old thread is not cancelled and just allowed to run until completion, with its results ignored
@@ -103,23 +111,32 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
             else:
                 self.decrypter = None
 
-        timer.timeout.connect(on_edited)
+        def on_edit():
+            self.ok.setDisabled(True)  # Disable the Next/Ok button right away
+            self.decrypter = None # Indicate the current decryptor is totally defunct (its results will now be ignored)
+            # re-start the timer to fire in 500 ms. this way there is some
+            # delay before we start another decrypter thread, in case the user
+            # wants to type more characters
+            timer.start(500)
 
-        self.pw_le.textEdited.connect(lambda: timer.start(500))  # re-start the timer to fire in 500 ms. this way there is some delay before we start another decrypter thread
+        timer.timeout.connect(start_decrypter)
+        self.pw_le.textEdited.connect(on_edit)
 
         grid.addWidget(pw_tit, 2, 0)
         grid.addWidget(self.pw_le, 2, 1)
 
         hlp = _('The decrypted private key (WIF key) originally used to create this BIP38 key.')
         wif_tit = HelpLabel(_('Decrypted Private Key:'), hlp)
-        self.wif_lbl = HelpLabel('     ', hlp)
+        self.wif_lbl = QLabel('     ', self)
+        self.wif_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.TextSelectableByKeyboard)
 
         grid.addWidget(wif_tit, 3, 0)
         grid.addWidget(self.wif_lbl, 3, 1)
 
         hlp = _('The address for the decrypted private key.')
         adr_tit = HelpLabel(_('Address:'), hlp)
-        self.adr_lbl = HelpLabel('    ', hlp)
+        self.adr_lbl = QLabel('    ', self)
+        self.adr_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.TextSelectableByKeyboard)
 
         grid.addWidget(adr_tit, 4, 0)
         grid.addWidget(self.adr_lbl, 4, 1)
@@ -151,17 +168,17 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
     def refresh(self):
         num = len(self.bip38_keys)
         cur = self.cur
-        self.key_tit.setText(_('Encrypted Key ({} of {}):').format(cur+1, num))
+        self.key_tit.setText(_('Encrypted Key') + ( (' ' + _('({} of {}):').format(cur+1, num)) if self.show_count else ':') )
         self.key_lbl.setText(self.bip38_keys[cur])
 
         pw_req = _('(password required)') if self.decoded_wif != 'decrypting' else _('decrypting...')
         is_ok = bool(self.decoded_wif and self.decoded_wif not in ('bad', 'decrypting'))
         bad_txt = pw_req if not self.decoded_wif or self.decoded_wif != 'bad' else '<font color={}>{}</font>'.format(ColorScheme.RED._get_color(False), _('password incorrect'))
-        # annoyingly, HelpLabel.font overrides the Qt method QWidget.font(). Grr.
-        f = self.wif_lbl.font; f.setFamily(MONOSPACE_FONT if is_ok else QFont().family()); f.setItalic(not is_ok); self.wif_lbl.setFont(f); self.wif_lbl.font=f
+        # set wif_lbl font
+        f = self.wif_lbl.font(); f.setFamily(MONOSPACE_FONT if is_ok else QFont().family()); f.setItalic(not is_ok); self.wif_lbl.setFont(f)
         self.wif_lbl.setText((is_ok and self.decoded_wif) or bad_txt)
-        # annoyingly, HelpLabel.font overrides the Qt method QWidget.font(). Grr.
-        f = self.adr_lbl.font; f.setFamily(MONOSPACE_FONT if is_ok else QFont().family()); f.setItalic(not is_ok); self.adr_lbl.setFont(f); self.adr_lbl.font=f
+        # set adr_lbl font
+        f = self.adr_lbl.font(); f.setFamily(MONOSPACE_FONT if is_ok else QFont().family()); f.setItalic(not is_ok); self.adr_lbl.setFont(f)
         self.adr_lbl.setText((is_ok and self.decoded_address.to_ui_string()) or bad_txt)
 
         self.ok.setEnabled(isinstance(self.decoded_address, address.Address))
@@ -178,7 +195,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
             super().accept()
             if self.success_cb:
                 # we call the callback after we are definitely off-screen
-                QTimer.singleShot(250, lambda: self.success_cb(self.decoded_keys))
+                QTimer.singleShot(250, lambda: self.success_cb(self.decoded_keys.copy()))
         else:
             self.clear()
             self.refresh()
@@ -187,6 +204,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
         ''' Overrides QDialog.reject '''
         super().reject()
         self.decrypter = None # just in case a decrypter was running
+        self.decoded_keys.clear() # indicate to caller it was cancelled.
         if self.cancel_cb:
             # we call the callback after we are definitely off-screen
             QTimer.singleShot(250, lambda: self.cancel_cb())

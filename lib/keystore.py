@@ -727,9 +727,9 @@ def get_private_keys(text, *, allow_bip38=False):
     parts = list(filter(bool, (''.join(x.split()) for x in parts)))
 
     if parts and all((bitcoin.is_private_key(x)
-                        and (not allow_bip38 or (bitcoin.is_bip38_available()
-                                                 and bitcoin.is_bip38_key(x))
-                             )
+                        or (allow_bip38
+                            and bitcoin.is_bip38_available()
+                            and bitcoin.is_bip38_key(x) )
                      )
                      for x in parts):
         return parts
