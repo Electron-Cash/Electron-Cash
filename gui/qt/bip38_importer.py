@@ -19,7 +19,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
     Requires bitcoin.is_bip38_available() == True otherwise will raise
     RuntimeError on instantiation. '''
 
-    decrypted_sig = pyqtSignal(object, object)  # Decrypt thread emits this with _decrypt_thread.self, (bip38_key, decrypted_wif, Address) or _decrypt_thread.self, () on failure
+    decrypted_sig = pyqtSignal(object, object)  # Decrypt thread emits this with _decrypt_thread.self, (decrypted_wif, Address) or _decrypt_thread.self, () on failure due to bad password
 
     def __init__(self, bip38_keys, *,
                  parent=None, title=None,
