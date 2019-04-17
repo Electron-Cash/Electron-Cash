@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# -*- mode: python3 -*-
 #
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2016 Thomas Voegtlin
