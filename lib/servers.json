@@ -102,5 +102,11 @@
         "t": "50001",
         "version": "1.4"
     }
+        "jh3jgcrwweh6yvmprtjnp72u2hqn34nlftlg3msrr4vmlapft4yvt2id.onion": {
+        "pruning": "-",
+        "s": "50002",
+        "t": "50001",
+        "version": "1.4"
+    },
 }
 
