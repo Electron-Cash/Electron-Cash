@@ -28,6 +28,7 @@ import os, json, traceback
 import shutil
 import webbrowser
 import csv
+import re
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 import base64
 from functools import partial
@@ -1643,6 +1644,22 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.show_error(_('Payment request has expired'))
             return
         label = self.message_e.text()
+    
+        # Cointext payment request activates if user enters "cointext:" followed by country code and number, fills the amount, and pushes "send"
+        cointextPayTo=self.payto_e.lines()[0].lower()
+        isCointext = re.search("^cointext:",cointextPayTo)
+        if isCointext is not None:
+            cointextSats=self.amount_e.get_amount()
+            cointextPhone=''.join(i for i in cointextPayTo[9:len(cointextPayTo)] if i.isdigit())
+            cointextURL="https://pay.cointext.io/p/"+cointextPhone+"/"+str(cointextSats) 
+            self.amount_e.setFrozen(True) 
+            def get_payment_request_thread():
+                pr=paymentrequest.get_payment_request(cointextURL)
+                self.on_pr(pr)
+            t = threading.Thread(target=get_payment_request_thread)
+            t.setDaemon(True)
+            t.start()
+            return
 
         if self.payment_request:
             isInvoice = True;
