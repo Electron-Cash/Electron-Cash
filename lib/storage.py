@@ -177,6 +177,9 @@ class WalletStorage(PrintError):
             self._write()
 
     def _write(self):
+        if not self.path:
+            # allow memory-only wallets
+            return
         if threading.currentThread().isDaemon():
             self.print_error('warning: daemon thread cannot write wallet')
             return
