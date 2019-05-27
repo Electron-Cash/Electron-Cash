@@ -914,9 +914,10 @@ class Transaction:
         if not self.is_complete() or not network or not self._inputs:
             return False
         eph = self.ephemeral
-        if len(self._inputs) == len(eph.get('fetched_inputs', [])):
+        inps = self.fetched_inputs() # may be a new list or list that was already in dict
+        if len(self._inputs) == len(inps):
             return False
-        eph['fetched_inputs'] = inps = []
+        eph['fetched_inputs'] = inps
         import threading
         from copy import deepcopy
         t = None
