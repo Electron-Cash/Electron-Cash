@@ -972,7 +972,7 @@ class Transaction:
                         value = outp[2]
                         inp['value'] = value
                         inp['address'] = addr
-                        print_error("fetched", i, addr, value)
+                        print_error("fetch_input_data: fetched", i, addr, value)
                     else:
                         print_error('fetch_input_data: Fail on txin #{} {}:{} for tx {}'.format(i, prevout_hash, n, self.txid()))
                 inps.append(inp)
@@ -988,7 +988,8 @@ class Transaction:
     def fetched_inputs(self):
         ''' Returns the complete list of asynchronously fetched inputs for
         this tx, if they exist. If the list is not yet fully retrieved or no
-        list exists, returns the empty list.'''
+        list exists, returns the empty list. Note that some inputs may still
+        lack 'value' if there was a network error in retrieving them.'''
         ret = self.ephemeral.get('fetched_inputs') or []
         if self._inputs and len(ret) == len(self._inputs): #and all(inp.get('value') is not None for inp in ret):
             return ret
