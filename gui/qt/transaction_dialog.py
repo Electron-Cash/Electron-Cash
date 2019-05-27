@@ -59,6 +59,8 @@ def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False):
 
 class TxDialog(QDialog, MessageBoxMixin):
 
+    update_sig = pyqtSignal()  # connected to self.update -- emit from thread to do update in main thread
+
     def __init__(self, tx, parent, desc, prompt_if_unsaved):
         '''Transactions in the wallet will show their description.
         Pass desc to give a description for txs not yet in the wallet.
@@ -76,6 +78,8 @@ class TxDialog(QDialog, MessageBoxMixin):
         self.saved = False
         self.desc = desc
         self.cashaddr_signal_slots = []
+
+        self.update_sig.connect(self.update)
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -144,6 +148,9 @@ class TxDialog(QDialog, MessageBoxMixin):
         parent.history_updated_signal.connect(self.update_tx_if_in_wallet)
         parent.labels_updated_signal.connect(self.update_tx_if_in_wallet)
         parent.network_signal.connect(self.got_verified_tx)
+
+
+        self.tx.fetch_input_data(self.wallet.network, lambda: weakSelfRef() and weakSelfRef().update_sig.emit())
 
     def got_verified_tx(self, event, args):
         if event == 'verified' and args[0] == self.tx.txid():
@@ -343,7 +350,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         i_text.clear()
         cursor = i_text.textCursor()
         has_schnorr = False
-        for i, x in enumerate(self.tx.inputs()):
+        for i, x in enumerate(self.tx.fetched_inputs() or self.tx.inputs()):
             if x['type'] == 'coinbase':
                 cursor.insertText('coinbase')
             else:

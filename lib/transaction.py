@@ -756,7 +756,7 @@ class Transaction:
         self.raw = None
 
     def input_value(self):
-        return sum(x['value'] for x in self.inputs())
+        return sum(x['value'] for x in (self.fetched_inputs() or self.inputs()))
 
     def output_value(self):
         return sum(val for tp, addr, val in self.outputs())
@@ -901,6 +901,66 @@ class Transaction:
             'final': self.is_final(),
         }
         return out
+
+    def fetch_input_data(self, network, done_callback=None, done_args=tuple()):
+        '''
+        Fetch all input data and put it in the 'ephemeral' dictionary, under
+        'fetched_inputs'.
+        This data is advisory and basically used for the Transaction dialog
+        to be able to display fee, actual address, and other niceties.
+        `network` is the network object. `done_callback` is called with `done_args`
+        on completion. Note that done_callback won't be called if this function
+        returns False. '''
+        if not self.is_complete() or not network or not self._inputs:
+            return False
+        eph = self.ephemeral
+        if len(self._inputs) == len(eph.get('fetched_inputs', [])):
+            return False
+        eph['fetched_inputs'] = inps = []
+        import threading
+        from copy import deepcopy
+        t = None
+        def doIt():
+            tx_cache = {}  # todo: put this in a global place or something
+            while eph.get('_fetch') == t and len(inps) < len(self._inputs):
+                i = len(inps)
+                inp = deepcopy(self._inputs[i])
+                prevout_hash, n, addr, value = inp.get('prevout_hash'), inp.get('prevout_n'), inp.get('address'), inp.get('value')
+                if not prevout_hash or n is None:
+                    raise RuntimeError('Missing prevout_hash and/or prevout_n')
+                if not isinstance(addr, Address) or value is None:
+                    # todo: use wallet here and/or a global cache, if possible
+                    tx = tx_cache.get(prevout_hash) or Transaction(network.synchronous_get(('blockchain.transaction.get', [prevout_hash])))
+                    tx.deserialize()  # no-op if already deserialized
+                    tx_cache[prevout_hash] = tx
+                    if n < len(tx.outputs()):
+                        outp = tx.outputs()[n]
+                        addr = outp[1]
+                        value = outp[2]
+                        inp['value'] = value
+                        inp['address'] = addr
+                        print_error("fetched", i, addr, value)
+                    else:
+                        print_error('fetch_input_data: Bad txin #{} {}:{} for tx {}'.format(i, prevout_hash, n, self.txid()))
+                inps.append(inp)
+            if len(inps) == len(self._inputs) and eph.get('_fetch') == t:
+                eph.pop('_fetch', None)
+                if done_callback:
+                    done_callback(*done_args)
+        t = threading.Thread(target=doIt, daemon=True)
+        eph['_fetch'] = t
+        t.start()
+        return True
+
+    def fetched_inputs(self):
+        ''' Returns the complete list of asynchronously fetched inputs for
+        this tx, if they exist. If the list is not yet fully retrieved or no
+        list exists, returns the empty list.'''
+        ret = self.ephemeral.get('fetched_inputs') or []
+        if len(ret) == len(self._inputs) and all(inp.get('value') is not None for inp in ret):
+            return ret
+        return []
+
 
 
 def tx_from_str(txt):
