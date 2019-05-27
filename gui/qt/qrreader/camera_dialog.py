@@ -74,6 +74,8 @@ class QrReaderCameraDialog(PrintError, MessageBoxMixin, QDialog):
         self._error_message: str = None
         self._ok_done: bool = False
         self.camera_sc_conn = None
+        self.resolution: QSize = None
+        self.warned_scaled_resolution: bool = False
 
         self.config = get_config()
 
@@ -273,6 +275,8 @@ class QrReaderCameraDialog(PrintError, MessageBoxMixin, QDialog):
                 self._error_message = str(e)
                 self.reject()
                 return
+            self.resolution = resolution
+            self.warned_scaled_resolution = False
             self.qr_crop = self._get_crop(resolution, self.SCAN_SIZE)
 
             # Initialize the video widget
@@ -351,6 +355,15 @@ class QrReaderCameraDialog(PrintError, MessageBoxMixin, QDialog):
             return
 
         self.frame_id += 1
+
+        if frame.size() != self.resolution:
+            if not self.warned_scaled_resolution:
+                self.print_error('Getting video data at {}x{}, scaling to {}x{} will impact performance.'.format(
+                    frame.size().width(), frame.size().height(),
+                    self.resolution.width(), self.resolution.height()
+                    ))
+                self.warned_scaled_resolution = True
+            frame = frame.scaled(self.resolution)
 
         flip_x = self.flip_x.isChecked()
 
