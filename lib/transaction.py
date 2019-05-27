@@ -909,14 +909,28 @@ class Transaction:
     def fetch_input_data(self, wallet, done_callback=None, done_args=tuple()):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
-        'fetched_inputs'.
-        This data is advisory and basically used for the Transaction dialog
-        to be able to display fee, actual address, and other niceties.
-        `wallet` should have a network object, but this function still will work
-        if it does not.
-        `done_callback` is called with `done_args`, only if True was returned,
-        on completion. Note that done_callback won't be called if this function
-        returns False. '''
+        'fetched_inputs'. This requires fetching transactions from the network.
+
+        The fetched data is basically used for the Transaction dialog to be able
+        to display fee, actual address, and amount (value) for tx inputs.
+
+        `wallet` should ideally have a network object, but this function still
+        will work and is still useful if it does not.
+
+        `done_callback` is called with `done_args` (only if True was returned),
+        upon completion. Note that done_callback won't be called if this function
+        returns False. Also note that done_callback runs in the network thread
+        context and as such, if you want to do GUI work from within it, use
+        the appropriate Qt signal/slot mechanism to dispatch work to the GUI.
+
+        Note 1: Results (fetched transactions) are cached, so subsequent
+        calls to this function for the same transaction are cheap.
+
+        Note 2: Multiple, rapid calls to this function will cause the previous
+        asynchronous fetch operation (if active) to be canceled and only the
+        latest call will result in the invocation of the done_callback if/when
+        it completes.
+        '''
         if not self.is_complete() or not self._inputs:
             return False
         eph = self.ephemeral
