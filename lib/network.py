@@ -1622,7 +1622,7 @@ class Network(util.DaemonThread):
         try:
             r = q.get(True, timeout)
         except queue.Empty:
-            raise BaseException('Server did not answer')
+            raise util.TimeoutException('Server did not answer')
         if r.get('error'):
             raise util.ServerError(r.get('error'))
         return r.get('result')

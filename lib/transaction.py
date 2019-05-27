@@ -27,13 +27,14 @@
 
 # Note: The deserialization code originally comes from ABE.
 
-from .util import print_error, profiler, ServerError
+from .util import print_error, profiler
 from .caches import ExpiringCache
 
 from .bitcoin import *
 from .address import (PublicKey, Address, Script, ScriptOutput, hash160,
                       UnknownAddress, OpCodes as opcodes)
 from . import schnorr
+from . import util
 import struct
 import warnings
 
@@ -937,8 +938,8 @@ class Transaction:
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
                     try:
                         # Todo: Add stuff to network class to spread the load aronund to other servers we are connected to
-                        tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash) or (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]))))
-                    except ServerError as e:
+                        tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash) or (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]), timeout=5)))
+                    except (util.ServerError, util.TimeoutException) as e:
                         print_error("fetch_input_data:", repr(e))
                         tx = None
                     if tx:
