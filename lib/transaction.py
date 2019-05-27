@@ -990,7 +990,7 @@ class Transaction:
         this tx, if they exist. If the list is not yet fully retrieved or no
         list exists, returns the empty list.'''
         ret = self.ephemeral.get('fetched_inputs') or []
-        if len(ret) == len(self._inputs) and all(inp.get('value') is not None for inp in ret):
+        if self._inputs and len(ret) == len(self._inputs): #and all(inp.get('value') is not None for inp in ret):
             return ret
         return []
 
