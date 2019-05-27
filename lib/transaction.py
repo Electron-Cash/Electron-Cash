@@ -28,6 +28,7 @@
 # Note: The deserialization code originally comes from ABE.
 
 from .util import print_error, profiler, ServerError
+from .caches import ExpiringCache
 
 from .bitcoin import *
 from .address import (PublicKey, Address, Script, ScriptOutput, hash160,
@@ -902,6 +903,8 @@ class Transaction:
         }
         return out
 
+    _fetched_tx_cache = ExpiringCache(maxlen=1000, name="TransactionFetchCache")
+
     def fetch_input_data(self, wallet, done_callback=None, done_args=tuple()):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
@@ -923,8 +926,8 @@ class Transaction:
         import threading
         from copy import deepcopy
         t = None
+        tx_cache = __class__._fetched_tx_cache
         def doIt():
-            tx_cache = {}  # todo: put this in a global place or something, perhaps wallet-specific or global caches.ExpiringCache
             while eph.get('_fetch') == t and len(inps) < len(self._inputs):
                 i = len(inps)
                 inp = deepcopy(self._inputs[i])
@@ -940,7 +943,7 @@ class Transaction:
                         tx = None
                     if tx:
                         tx.deserialize()  # no-op if already deserialized
-                        tx_cache[prevout_hash] = tx
+                        tx_cache.put(prevout_hash, tx)
                     if tx and n < len(tx.outputs()):
                         outp = tx.outputs()[n]
                         addr = outp[1]
