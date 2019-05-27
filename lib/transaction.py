@@ -949,7 +949,7 @@ class Transaction:
                         inp['address'] = addr
                         print_error("fetched", i, addr, value)
                     else:
-                        print_error('fetch_input_data: Bad txin #{} {}:{} for tx {}'.format(i, prevout_hash, n, self.txid()))
+                        print_error('fetch_input_data: Fail on txin #{} {}:{} for tx {}'.format(i, prevout_hash, n, self.txid()))
                 inps.append(inp)
             if len(inps) == len(self._inputs) and eph.get('_fetch') == t:
                 eph.pop('_fetch', None)
