@@ -150,7 +150,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         parent.network_signal.connect(self.got_verified_tx)
 
 
-        self.tx.fetch_input_data(self.wallet.network, lambda: weakSelfRef() and weakSelfRef().update_sig.emit())
+        self.tx.fetch_input_data(self.wallet, lambda: weakSelfRef() and weakSelfRef().update_sig.emit())
 
     def got_verified_tx(self, event, args):
         if event == 'verified' and args[0] == self.tx.txid():

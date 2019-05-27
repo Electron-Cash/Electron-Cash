@@ -27,7 +27,7 @@
 
 # Note: The deserialization code originally comes from ABE.
 
-from .util import print_error, profiler
+from .util import print_error, profiler, ServerError
 
 from .bitcoin import *
 from .address import (PublicKey, Address, Script, ScriptOutput, hash160,
@@ -902,16 +902,18 @@ class Transaction:
         }
         return out
 
-    def fetch_input_data(self, network, done_callback=None, done_args=tuple()):
+    def fetch_input_data(self, wallet, done_callback=None, done_args=tuple()):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
         'fetched_inputs'.
         This data is advisory and basically used for the Transaction dialog
         to be able to display fee, actual address, and other niceties.
-        `network` is the network object. `done_callback` is called with `done_args`
+        `wallet` should have a network object, but this function still will work
+        if it does not.
+        `done_callback` is called with `done_args`, only if True was returned,
         on completion. Note that done_callback won't be called if this function
         returns False. '''
-        if not self.is_complete() or not network or not self._inputs:
+        if not self.is_complete() or not self._inputs:
             return False
         eph = self.ephemeral
         inps = self.fetched_inputs() # may be a new list or list that was already in dict
@@ -922,7 +924,7 @@ class Transaction:
         from copy import deepcopy
         t = None
         def doIt():
-            tx_cache = {}  # todo: put this in a global place or something
+            tx_cache = {}  # todo: put this in a global place or something, perhaps wallet-specific or global caches.ExpiringCache
             while eph.get('_fetch') == t and len(inps) < len(self._inputs):
                 i = len(inps)
                 inp = deepcopy(self._inputs[i])
@@ -930,11 +932,16 @@ class Transaction:
                 if not prevout_hash or n is None:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
-                    # todo: use wallet here and/or a global cache, if possible
-                    tx = tx_cache.get(prevout_hash) or Transaction(network.synchronous_get(('blockchain.transaction.get', [prevout_hash])))
-                    tx.deserialize()  # no-op if already deserialized
-                    tx_cache[prevout_hash] = tx
-                    if n < len(tx.outputs()):
+                    # todo: cache a limited number of foreign tx's to wallet using caches.ExpiringCache
+                    try:
+                        tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash) or (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]))))
+                    except ServerError as e:
+                        print_error("fetch_input_data:", repr(e))
+                        tx = None
+                    if tx:
+                        tx.deserialize()  # no-op if already deserialized
+                        tx_cache[prevout_hash] = tx
+                    if tx and n < len(tx.outputs()):
                         outp = tx.outputs()[n]
                         addr = outp[1]
                         value = outp[2]
