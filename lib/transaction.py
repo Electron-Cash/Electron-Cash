@@ -935,8 +935,8 @@ class Transaction:
                 if not prevout_hash or n is None:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
-                    # todo: cache a limited number of foreign tx's to wallet using caches.ExpiringCache
                     try:
+                        # Todo: Add stuff to network class to spread the load aronund to other servers we are connected to
                         tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash) or (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]))))
                     except ServerError as e:
                         print_error("fetch_input_data:", repr(e))
