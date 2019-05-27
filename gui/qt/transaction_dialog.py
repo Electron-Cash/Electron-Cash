@@ -358,9 +358,7 @@ class TxDialog(QDialog, MessageBoxMixin):
                 prevout_n = x.get('prevout_n')
                 cursor.insertText(prevout_hash[0:8] + '...', ext)
                 cursor.insertText(prevout_hash[-8:] + ":%-4d " % prevout_n, ext)
-                addr = x['address']
-                if isinstance(addr, PublicKey):
-                    addr = addr.toAddress()
+                addr = x.get('address')
                 if addr is None:
                     addr_text = _('unknown')
                 else:

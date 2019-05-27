@@ -926,10 +926,10 @@ class Transaction:
             while eph.get('_fetch') == t and len(inps) < len(self._inputs):
                 i = len(inps)
                 inp = deepcopy(self._inputs[i])
-                prevout_hash, n, addr, value = inp.get('prevout_hash'), inp.get('prevout_n'), inp.get('address'), inp.get('value')
+                typ, prevout_hash, n, addr, value = inp.get('type'), inp.get('prevout_hash'), inp.get('prevout_n'), inp.get('address'), inp.get('value')
                 if not prevout_hash or n is None:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
-                if not isinstance(addr, Address) or value is None:
+                if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
                     # todo: use wallet here and/or a global cache, if possible
                     tx = tx_cache.get(prevout_hash) or Transaction(network.synchronous_get(('blockchain.transaction.get', [prevout_hash])))
                     tx.deserialize()  # no-op if already deserialized
