@@ -203,7 +203,7 @@ class TxDialog(QDialog, MessageBoxMixin):
                     except TypeError: pass
                 self.cashaddr_signal_slots = []
 
-            __class__._pyqt_bug_gc_workaround = self  # <--- keep this object alive in PyQt. This is because on some platforms Python deletes the C++ object right away inside this event handler -- which crashes Qt!
+            __class__._pyqt_bug_gc_workaround = self  # <--- keep this object alive in PyQt until at least after this event handler completes. This is because on some platforms Python deletes the C++ object right away inside this event handler (QObject with no parent) -- which crashes Qt!
             def clr_workaround():
                 __class__._pyqt_bug_gc_workaround = None
             QTimer.singleShot(0, clr_workaround)
