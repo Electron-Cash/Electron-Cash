@@ -80,7 +80,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         self._dl_pct = None
         self._closed = False
 
-        self.update_sig.connect(self.throttled_update)
+        self.update_sig.connect(self.throttled_update, Qt.QueuedConnection)
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
