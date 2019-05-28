@@ -937,8 +937,8 @@ class Transaction:
         the appropriate Qt signal/slot mechanism to dispatch work to the GUI.
 
         `prog_callback`, if specified, is called periodically to indicate
-        progress after input are retrieved, and it is passed single percent arg
-        (eg: 10.3, 50.0, 100.0) to indicate progress.
+        progress after inputs are retrieved, and it is passed a single arg,
+        "percent" (eg: 5.1, 10.3, 26.3, 76.1, etc) to indicate percent progress.
 
         Note 1: Results (fetched transactions) are cached, so subsequent
         calls to this function for the same transaction are cheap.
