@@ -309,7 +309,7 @@ class TxDialog(QDialog, MessageBoxMixin):
             if dusty_fee:
                 fee_str += ' <font color=#999999>' + (_("( %s in dust was added to fee )") % format_amount(dusty_fee)) + '</font>'
         elif self._dl_pct is not None:
-            fee_str += _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
+            fee_str = _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
         else:
             fee_str += _("unknown")
         self.amount_label.setText(amount_str)
