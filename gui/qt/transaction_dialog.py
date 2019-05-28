@@ -188,6 +188,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         else:
             event.accept()
             self._closed = True
+            self.tx.fetch_cancel()
             parent = self.main_window
             if parent:
                 # clean up connections so window gets gc'd

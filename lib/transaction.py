@@ -965,15 +965,18 @@ class Transaction:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
                     cache_miss = False
+                    tx = None
                     try:
-                        # Todo: Add stuff to network class to spread the load aronund to other servers we are connected to
+                        # Todo: Add stuff to network class to spread the load
+                        # around to other servers we are connected to
                         tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash)
                         if not tx:
                             cache_miss = True
                             tx = (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]), timeout=5)))
-                    except (util.ServerError, util.TimeoutException) as e:
+                    except (util.ServerError, util.TimeoutException,  # network errors
+                            # Tx deserialization errors
+                            AssertionError, ValueError, TypeError, KeyError, IndexError) as e:
                         print_error("fetch_input_data:", repr(e))
-                        tx = None
                     if tx:
                         tx.deserialize()  # no-op if already deserialized
                         if cache_miss:
@@ -1025,6 +1028,10 @@ class Transaction:
                 # finished, return full list
                 return ret
         return []
+
+    def fetch_cancel(self) -> bool:
+        ''' Cancels the currently-active running fetch operation, if any '''
+        return bool(self.ephemeral.pop('_fetch', None))
 
 
 
