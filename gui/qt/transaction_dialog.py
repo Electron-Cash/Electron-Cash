@@ -144,7 +144,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         vbox.addLayout(hbox)
 
         self.throttled_update_sig.connect(self.throttled_update, Qt.QueuedConnection)
-        self.initiate_dl_input_data(True)
+        self.initiate_fetch_input_data(True)
 
         self.update()
 
@@ -153,7 +153,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         parent.labels_updated_signal.connect(self.update_tx_if_in_wallet)
         parent.network_signal.connect(self.got_verified_tx)
 
-    def initiate_dl_input_data(self, force):
+    def initiate_fetch_input_data(self, force):
         weakSelfRef = Weak.ref(self)
         def dl_prog(pct):
             slf = weakSelfRef()
@@ -176,12 +176,12 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 dl_retries += 1
                 fee = slf.try_calculate_fee()
                 if fee is None and dl_retries < 2:
-                    if not self.is_dl_input_data():
+                    if not self.is_fetch_input_data():
                         slf.print_error("input fetch incomplete; network use is disabled in GUI")
                         return
                     # retry at most once -- in case a slow server scrwed us up
                     slf.print_error("input fetch appears incomplete; retrying download once ...")
-                    slf.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True, use_network=self.is_dl_input_data())  # in this case we reallly do force
+                    slf.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True, use_network=self.is_fetch_input_data())  # in this case we reallly do force
                 elif fee is not None:
                     slf.print_error("input fetch success")
                 else:
@@ -189,7 +189,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         try: self.dl_done_sig.disconnect()  # disconnect previous
         except TypeError: pass
         self.dl_done_sig.connect(dl_done_mainthread, Qt.QueuedConnection)
-        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=force, use_network=self.is_dl_input_data())
+        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=force, use_network=self.is_fetch_input_data())
 
 
 
@@ -362,13 +362,13 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.update_io()
         run_hook('transaction_dialog_update', self)
 
-    def is_dl_input_data(self):
+    def is_fetch_input_data(self):
         return self.main_window.config.get('fetch_input_data', False)
 
-    def set_dl_input_data(self, b):
+    def set_fetch_input_data(self, b):
         self.main_window.config.set_key('fetch_input_data', bool(b))
         if b:
-            self.initiate_dl_input_data(bool(self.try_calculate_fee() is None))
+            self.initiate_fetch_input_data(bool(self.try_calculate_fee() is None))
         else:
             self.tx.fetch_cancel()
             self._dl_pct = None  # makes the "download progress" thing clear
@@ -387,8 +387,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
 
         hbox.addSpacerItem(QSpacerItem(20, 0))  # 20 px padding
         self.dl_input_chk = chk = QCheckBox(_("Download input data"))
-        chk.setChecked(self.is_dl_input_data())
-        chk.clicked.connect(self.set_dl_input_data)
+        chk.setChecked(self.is_fetch_input_data())
+        chk.clicked.connect(self.set_fetch_input_data)
         hbox.addWidget(chk)
         hbox.addStretch(1)
 
