@@ -177,7 +177,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 fee = slf.try_calculate_fee()
                 if fee is None and dl_retries < 2:
                     if not self.is_dl_input_data():
-                        slf.print_error("input fetch incomplete; network use is disable in GUI setting")
+                        slf.print_error("input fetch incomplete; network use is disabled in GUI")
                         return
                     # retry at most once -- in case a slow server scrwed us up
                     slf.print_error("input fetch appears incomplete; retrying download once ...")
