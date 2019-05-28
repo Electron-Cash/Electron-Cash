@@ -998,6 +998,11 @@ class Transaction:
                     else:
                         # Tx was in cache or wallet.transactions, proceed
                         tx.deserialize()  # no-op if already deserialized
+                        # The below eats up CPU. We'll forego the paranoia
+                        # in favor of performance.
+                        #txid = tx.txid()
+                        #if txid != prevout_hash: # sanity check
+                        #    print_error("fetch_input_data: cached prevout_hash {} != tx.txid() {}, ignoring.".format(prevout_hash, txid))
                         if n < len(tx.outputs()):
                             outp = tx.outputs()[n]
                             addr, value = outp[1], outp[2]
@@ -1013,8 +1018,26 @@ class Transaction:
                 # Next, queue the transaction.get requests, spreading them out randomly over the connected interfaces
                 q = queue.Queue()
                 q_ct = 0
+                def put_in_queue_and_cache(r):
+                    ''' we cache the results directly in the network callback
+                    as even if the user cancels the operation, we would like
+                    to save the returned tx in our cache, since we did the
+                    work to retrieve it anyway. '''
+                    q.put(r)  # put the result in the queue no matter what it is
+                    try:
+                        # Below will raise if response was 'error' or otherwise
+                        # invalid. Note: for performance reasons we don't
+                        # validate the tx here or deserialize it as this
+                        # function runs in the network thread and we don't want
+                        # to eat up that thread's CPU time needlessly.
+                        tx = Transaction(r['result'])
+                        txid = r['params'][0]
+                        tx_cache.put(txid, tx)  # save tx to cache here
+                    except:
+                        # response was not valid, ignore (don't cache)
+                        pass
                 for txid, l in need_dl_txids.items():
-                    wallet.network.queue_request('blockchain.transaction.get', [txid], interface='random', callback=q.put)
+                    wallet.network.queue_request('blockchain.transaction.get', [txid], interface='random', callback=put_in_queue_and_cache)
                     q_ct += 1
                 class ErrorResp(Exception):
                     pass
@@ -1032,7 +1055,6 @@ class Transaction:
                         txid = r['params'][0]
                         tx = Transaction(rawhex); tx.deserialize()
                         assert tx and txid == tx.txid()  # protection against phony responses
-                        tx_cache.put(txid, tx)  # save tx to cache
                         for item in need_dl_txids[txid]:
                             ii, n = item
                             assert n < len(tx.outputs())
