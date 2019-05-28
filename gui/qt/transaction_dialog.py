@@ -81,8 +81,6 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self._dl_pct = None
         self._closed = False
 
-        self.throttled_update_sig.connect(self.throttled_update, Qt.QueuedConnection)
-
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
 
@@ -145,6 +143,18 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         hbox.addLayout(Buttons(*self.buttons))
         vbox.addLayout(hbox)
 
+        self.throttled_update_sig.connect(self.throttled_update, Qt.QueuedConnection)
+        self.initiate_dl_input_data(True)
+
+        self.update()
+
+        # connect slots so we update in realtime as blocks come in, etc
+        parent.history_updated_signal.connect(self.update_tx_if_in_wallet)
+        parent.labels_updated_signal.connect(self.update_tx_if_in_wallet)
+        parent.network_signal.connect(self.got_verified_tx)
+
+    def initiate_dl_input_data(self, force):
+        weakSelfRef = Weak.ref(self)
         def dl_prog(pct):
             slf = weakSelfRef()
             if slf:
@@ -166,22 +176,21 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 dl_retries += 1
                 fee = slf.try_calculate_fee()
                 if fee is None and dl_retries < 2:
+                    if not self.is_dl_input_data():
+                        slf.print_error("input fetch incomplete; network use is disable in GUI setting")
+                        return
                     # retry at most once -- in case a slow server scrwed us up
                     slf.print_error("input fetch appears incomplete; retrying download once ...")
-                    slf.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True)
+                    slf.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True, use_network=self.is_dl_input_data())  # in this case we reallly do force
                 elif fee is not None:
                     slf.print_error("input fetch success")
                 else:
                     slf.print_error("input fetch failed")
+        try: self.dl_done_sig.disconnect()  # disconnect previous
+        except TypeError: pass
         self.dl_done_sig.connect(dl_done_mainthread, Qt.QueuedConnection)
-        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True)
+        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=force, use_network=self.is_dl_input_data())
 
-        self.update()
-
-        # connect slots so we update in realtime as blocks come in, etc
-        parent.history_updated_signal.connect(self.update_tx_if_in_wallet)
-        parent.labels_updated_signal.connect(self.update_tx_if_in_wallet)
-        parent.network_signal.connect(self.got_verified_tx)
 
 
     def got_verified_tx(self, event, args):
@@ -353,14 +362,35 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.update_io()
         run_hook('transaction_dialog_update', self)
 
+    def is_dl_input_data(self):
+        return self.main_window.config.get('fetch_input_data', False)
+
+    def set_dl_input_data(self, b):
+        self.main_window.config.set_key('fetch_input_data', bool(b))
+        if b:
+            self.initiate_dl_input_data(bool(self.try_calculate_fee() is None))
+        else:
+            self.tx.fetch_cancel()
+            self._dl_pct = None  # makes the "download progress" thing clear
+            self.update()
+
     def add_io(self, vbox):
         if self.tx.locktime > 0:
             vbox.addWidget(QLabel("LockTime: %d\n" % self.tx.locktime))
+
 
         hbox = QHBoxLayout()
         hbox.setContentsMargins(0,0,0,0)
 
         hbox.addWidget(QLabel(_("Inputs") + ' (%d)'%len(self.tx.inputs())))
+
+
+        hbox.addSpacerItem(QSpacerItem(20, 0))  # 20 px padding
+        self.dl_input_chk = chk = QCheckBox(_("Download input data"))
+        chk.setChecked(self.is_dl_input_data())
+        chk.clicked.connect(self.set_dl_input_data)
+        hbox.addWidget(chk)
+        hbox.addStretch(1)
 
         self.schnorr_label = QLabel(_('{} = Schnorr signed').format(SCHNORR_SIGIL))
         self.schnorr_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)

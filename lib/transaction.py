@@ -918,7 +918,7 @@ class Transaction:
     _fetched_tx_cache = ExpiringCache(maxlen=1000, name="TransactionFetchCache")
 
     def fetch_input_data(self, wallet, done_callback=None, done_args=tuple(),
-                         prog_callback=None, *, force=False):
+                         prog_callback=None, *, force=False, use_network=True):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
         'fetched_inputs'. This call potentially initiates fetching of
@@ -1023,7 +1023,9 @@ class Transaction:
                             print_error("fetch_input_data: ** FIXME ** should never happen -- n={} >= len(tx.outputs())={} for prevout {}".format(n, len(tx.outputs()), prevout_hash))
                 inps.append(inp) # append either cached result or as-yet-incomplete copy of _inputs[i]
             # Now, download the tx's we didn't find above if network is available
-            if eph.get('_fetch') == t and wallet.network and need_dl_txids:
+            # and caller said it's ok to go out ot network.. otherwise just return
+            # what we have
+            if use_network and eph.get('_fetch') == t and wallet.network and need_dl_txids:
                 try:  # the whole point of this try block is the `finally` way below...
                     prog(-1)  # tell interested code that progress is now 0%
                     # Next, queue the transaction.get requests, spreading them
