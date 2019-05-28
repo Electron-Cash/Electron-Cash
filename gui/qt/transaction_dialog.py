@@ -59,7 +59,7 @@ def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False):
 
 class TxDialog(QDialog, MessageBoxMixin):
 
-    update_sig = pyqtSignal()  # connected to self.update -- emit from thread to do update in main thread
+    update_sig = pyqtSignal()  # connected to self.throttled_update -- emit from thread to do update in main thread
 
     def __init__(self, tx, parent, desc, prompt_if_unsaved):
         '''Transactions in the wallet will show their description.
@@ -78,8 +78,10 @@ class TxDialog(QDialog, MessageBoxMixin):
         self.saved = False
         self.desc = desc
         self.cashaddr_signal_slots = []
+        self._dl_pct = None
+        self._closed = False
 
-        self.update_sig.connect(self.update)
+        self.update_sig.connect(self.throttled_update)
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -142,6 +144,19 @@ class TxDialog(QDialog, MessageBoxMixin):
         hbox.addStretch(1)
         hbox.addLayout(Buttons(*self.buttons))
         vbox.addLayout(hbox)
+
+        def dl_prog(pct):
+            slf = weakSelfRef()
+            if slf:
+                slf._dl_pct = pct
+                slf.update_sig.emit()
+        def dl_done():
+            slf = weakSelfRef()
+            if slf:
+                slf._dl_pct = None
+                slf.update_sig.emit()
+        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog)
+
         self.update()
 
         # connect slots so we update in realtime as blocks come in, etc
@@ -149,8 +164,6 @@ class TxDialog(QDialog, MessageBoxMixin):
         parent.labels_updated_signal.connect(self.update_tx_if_in_wallet)
         parent.network_signal.connect(self.got_verified_tx)
 
-
-        self.tx.fetch_input_data(self.wallet, lambda: weakSelfRef() and weakSelfRef().update_sig.emit())
 
     def got_verified_tx(self, event, args):
         if event == 'verified' and args[0] == self.tx.txid():
@@ -175,6 +188,7 @@ class TxDialog(QDialog, MessageBoxMixin):
             event.ignore()
         else:
             event.accept()
+            self._closed = True
             parent = self.main_window
             if parent:
                 # clean up connections so window gets gc'd
@@ -242,6 +256,11 @@ class TxDialog(QDialog, MessageBoxMixin):
             self.show_message(_("Transaction saved successfully"))
             self.saved = True
 
+    @rate_limited(0.5, ts_after=True)
+    def throttled_update(self):
+        if not self._closed:
+            self.update()
+
     def update(self):
         desc = self.desc
         base_unit = self.main_window.base_unit()
@@ -283,12 +302,17 @@ class TxDialog(QDialog, MessageBoxMixin):
         else:
             amount_str = _("Amount sent:") + ' %s'% format_amount(-amount) + ' ' + base_unit
         size_str = _("Size:") + ' %d bytes'% size
-        fee_str = _("Fee") + ': %s'% (format_amount(fee) + ' ' + base_unit if fee is not None else _('unknown'))
-        dusty_fee = self.tx.ephemeral.get('dust_to_fee', 0)
+        fee_str = _("Fee") + ": "
         if fee is not None:
+            fee_str += format_amount(fee) + ' ' + base_unit
             fee_str += '  ( %s ) '%  self.main_window.format_fee_rate(fee/size*1000)
+            dusty_fee = self.tx.ephemeral.get('dust_to_fee', 0)
             if dusty_fee:
                 fee_str += ' <font color=#999999>' + (_("( %s in dust was added to fee )") % format_amount(dusty_fee)) + '</font>'
+        elif self._dl_pct is not None:
+            fee_str += _('Downloading input data, please wait...') + ' {:.0f}%'.format(self._dl_pct)
+        else:
+            fee_str += _("unknown")
         self.amount_label.setText(amount_str)
         self.fee_label.setText(fee_str)
         self.size_label.setText(size_str)

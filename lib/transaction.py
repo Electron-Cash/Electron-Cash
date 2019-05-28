@@ -911,9 +911,10 @@ class Transaction:
         }
         return out
 
-    _fetched_tx_cache = ExpiringCache(maxlen=1000, name="TransactionFetchCache")
+    _fetched_tx_cache = ExpiringCache(maxlen=250, name="TransactionFetchCache")
 
-    def fetch_input_data(self, wallet, done_callback=None, done_args=tuple()):
+    def fetch_input_data(self, wallet, done_callback=None, done_args=tuple(),
+                         prog_callback=None):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
         'fetched_inputs'. This requires fetching transactions from the network.
@@ -929,6 +930,10 @@ class Transaction:
         returns False. Also note that done_callback runs in the network thread
         context and as such, if you want to do GUI work from within it, use
         the appropriate Qt signal/slot mechanism to dispatch work to the GUI.
+
+        `prog_callback`, if specified, is called periodically to indicate
+        progress after input are retrieved, and it is passed single percent arg
+        (eg: 10.3, 50.0, 100.0) to indicate progress.
 
         Note 1: Results (fetched transactions) are cached, so subsequent
         calls to this function for the same transaction are cheap.
@@ -950,6 +955,7 @@ class Transaction:
         t = None
         tx_cache = __class__._fetched_tx_cache
         def doIt():
+            last_prog = -9999.0
             while eph.get('_fetch') == t and len(inps) < len(self._inputs):
                 i = len(inps)
                 inp = deepcopy(self._inputs[i])
@@ -957,15 +963,21 @@ class Transaction:
                 if not prevout_hash or n is None:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
+                    cache_miss = False
                     try:
                         # Todo: Add stuff to network class to spread the load aronund to other servers we are connected to
-                        tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash) or (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]), timeout=5)))
+                        tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash)
+                        if not tx:
+                            cache_miss = True
+                            tx = (wallet.network and Transaction(wallet.network.synchronous_get(('blockchain.transaction.get', [prevout_hash]), timeout=5)))
                     except (util.ServerError, util.TimeoutException) as e:
                         print_error("fetch_input_data:", repr(e))
                         tx = None
                     if tx:
                         tx.deserialize()  # no-op if already deserialized
-                        tx_cache.put(prevout_hash, tx)
+                        if cache_miss:
+                            # cache it if it didn't come from wallet or our cache
+                            tx_cache.put(prevout_hash, tx)
                     if tx and n < len(tx.outputs()):
                         outp = tx.outputs()[n]
                         addr = outp[1]
@@ -973,6 +985,11 @@ class Transaction:
                         inp['value'] = value
                         inp['address'] = addr
                         print_error("fetch_input_data: fetched", i, addr, value)
+                        if prog_callback:
+                            prog = ((i+1)*100.0)/len(self._inputs)
+                            if prog - last_prog > 5.0:
+                                prog_callback(prog)
+                                last_prog = prog
                     else:
                         print_error('fetch_input_data: Fail on txin #{} {}:{} for tx {}'.format(i, prevout_hash, n, self.txid()))
                 inps.append(inp)
