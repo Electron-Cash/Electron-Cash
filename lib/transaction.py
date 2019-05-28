@@ -932,7 +932,7 @@ class Transaction:
 
         `done_callback` is called with `done_args` (only if True was returned),
         upon completion. Note that done_callback won't be called if this function
-        returns False. Also note that done_callback runs in the network thread
+        returns False. Also note that done_callback runs in a non-main thread
         context and as such, if you want to do GUI work from within it, use
         the appropriate Qt signal/slot mechanism to dispatch work to the GUI.
 
