@@ -26,7 +26,6 @@
 import sys
 import copy
 import datetime
-from functools import partial
 import json
 
 from PyQt5.QtCore import *
@@ -316,7 +315,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         self.amount_label.setText(amount_str)
         self.fee_label.setText(fee_str)
         self.size_label.setText(size_str)
-        self.update_io(self.i_text, self.o_text)
+        self.update_io()
         run_hook('transaction_dialog_update', self)
 
     def add_io(self, vbox):
@@ -343,18 +342,18 @@ class TxDialog(QDialog, MessageBoxMixin):
         i_text.setReadOnly(True)
         vbox.addWidget(i_text)
 
-
         vbox.addWidget(QLabel(_("Outputs") + ' (%d)'%len(self.tx.outputs())))
         self.o_text = o_text = QTextEdit()
         o_text.setFont(QFont(MONOSPACE_FONT))
         o_text.setReadOnly(True)
         vbox.addWidget(o_text)
-        slot = partial(self.update_io, i_text, o_text)
-        self.cashaddr_signal_slots.append(slot)
-        self.main_window.cashaddr_toggled_signal.connect(slot)
-        self.update_io(i_text, o_text)
+        self.cashaddr_signal_slots.append(self.update_io)
+        self.main_window.cashaddr_toggled_signal.connect(self.update_io)
+        self.update_io()
 
-    def update_io(self, i_text, o_text):
+    def update_io(self):
+        i_text = self.i_text
+        o_text = self.o_text
         ext = QTextCharFormat()
         rec = QTextCharFormat()
         rec.setBackground(QBrush(ColorScheme.GREEN.as_color(background=True)))
@@ -395,7 +394,6 @@ class TxDialog(QDialog, MessageBoxMixin):
                     cursor.insertText(' {}'.format(SCHNORR_SIGIL), ext)
                     has_schnorr = True
             cursor.insertBlock()
-
 
         self.schnorr_label.setVisible(has_schnorr)
 
