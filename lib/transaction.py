@@ -917,7 +917,8 @@ class Transaction:
                          prog_callback=None):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
-        'fetched_inputs'. This requires fetching transactions from the network.
+        'fetched_inputs'. This call potentially initiates fetching of
+        prevout_hash transactions from the network for all inputs to this tx.
 
         The fetched data is basically used for the Transaction dialog to be able
         to display fee, actual address, and amount (value) for tx inputs.
@@ -945,10 +946,10 @@ class Transaction:
         '''
         if not self.is_complete() or not self._inputs:
             return False
-        eph = self.ephemeral
-        inps = self.fetched_inputs() # may be a new list or list that was already in dict
+        inps = self.fetched_inputs(require_complete = True) # may be a new list or list that was already in dict
         if len(self._inputs) == len(inps):
             return False
+        eph = self.ephemeral
         eph['fetched_inputs'] = inps
         import threading
         from copy import deepcopy
@@ -1002,14 +1003,27 @@ class Transaction:
         t.start()
         return True
 
-    def fetched_inputs(self):
+    def fetched_inputs(self, *, require_complete=False):
         ''' Returns the complete list of asynchronously fetched inputs for
-        this tx, if they exist. If the list is not yet fully retrieved or no
-        list exists, returns the empty list. Note that some inputs may still
-        lack 'value' if there was a network error in retrieving them.'''
-        ret = self.ephemeral.get('fetched_inputs') or []
-        if self._inputs and len(ret) == len(self._inputs): #and all(inp.get('value') is not None for inp in ret):
-            return ret
+        this tx, if they exist. If the list is not yet fully retrieved, and
+        require_complete == False, returns what it has so far
+        (the returned list will always be exactly equal to len(self._inputs),
+        with not-yet downloaded inputs coming from self._inputs).
+
+        If the download failed completely or was never started, will return the
+        empty list [].
+
+        Note that some inputs may still lack 'value' if there was a network
+        error in retrieving them or if the download is still in progress.'''
+        if self._inputs:
+            ret = self.ephemeral.get('fetched_inputs') or []
+            diff = len(self._inputs) - len(ret)
+            if diff > 0 and self.ephemeral.get('_fetch') and not require_complete:
+                # in progress.. so return what we have so far
+                return ret + self._inputs[len(ret):]
+            elif diff == 0:
+                # finished, return full list
+                return ret
         return []
 
 
