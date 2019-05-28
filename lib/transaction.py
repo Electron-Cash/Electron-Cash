@@ -954,7 +954,7 @@ class Transaction:
         if len(self._inputs) == len(inps):
             return False
         eph = self.ephemeral
-        eph['fetched_inputs'] = inps
+        eph['fetched_inputs'] = inps = inps.copy()  # paranoia: in case another thread is running on this list
         # Lazy imports to keep this functionality very self-contained
         # These modules are always available so no need to globally import them.
         import threading
@@ -1051,6 +1051,7 @@ class Transaction:
                 eph.pop('_fetch', None)  # potential race condition here, popping wrong t -- but in practice w/ CPython threading it won't matter
                 if done_callback:
                     done_callback(*done_args)
+        # /doIt
         t = threading.Thread(target=doIt, daemon=True)
         eph['_fetch'] = t
         t.start()
