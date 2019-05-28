@@ -785,7 +785,7 @@ class Network(util.DaemonThread):
                 client_req = self.unanswered_requests.pop(message_id, None)
                 if client_req:
                     if interface != self.interface:
-                        self.print_error(("advisory: response from '{}' != self.interface '{}'")
+                        self.print_error(("advisory: response from non-primary {}")
                                          .format(interface, self.interface))
                     callbacks = [client_req[2]]
                 else:
