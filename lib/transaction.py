@@ -918,7 +918,7 @@ class Transaction:
     _fetched_tx_cache = ExpiringCache(maxlen=1000, name="TransactionFetchCache")
 
     def fetch_input_data(self, wallet, done_callback=None, done_args=tuple(),
-                         prog_callback=None):
+                         prog_callback=None, *, force=False):
         '''
         Fetch all input data and put it in the 'ephemeral' dictionary, under
         'fetched_inputs'. This call potentially initiates fetching of
@@ -950,8 +950,14 @@ class Transaction:
         '''
         if not self.is_complete() or not self._inputs:
             return False
-        inps = self.fetched_inputs(require_complete = True) # may be a new list or list that was already in dict
+        if force:
+            # forced-run -- start with empty list
+            inps = []
+        else:
+            # may be a new list or list that was already in dict
+            inps = self.fetched_inputs(require_complete = True)
         if len(self._inputs) == len(inps):
+            # we already have results, don't do anything.
             return False
         eph = self.ephemeral
         eph['fetched_inputs'] = inps = inps.copy()  # paranoia: in case another thread is running on this list
@@ -964,11 +970,14 @@ class Transaction:
         t = None
         tx_cache = __class__._fetched_tx_cache
         def doIt():
-            ''' This is seemingly complex, but it's really conceptually simple:
+            '''
+            This function is seemingly complex, but it's really conceptually
+            simple:
             1. Fetch all prevouts either from cache (wallet or global tx_cache)
             2. Or, if they aren't in either cache, then we will asynchronously
-            queue the raw tx gets to the network in parallel, across *all* our
-            connected servers. This is very fast, and spreads the load around.
+               queue the raw tx gets to the network in parallel, across *all*
+               our connected servers. This is very fast, and spreads the load
+               around.
 
             Tested with a huge tx of 600+ inputs all coming from different
             prevout_hashes on mainnet, and it's super fast:
@@ -998,8 +1007,9 @@ class Transaction:
                     else:
                         # Tx was in cache or wallet.transactions, proceed
                         tx.deserialize()  # no-op if already deserialized
-                        # The below eats up CPU. We'll forego the paranoia
-                        # in favor of performance.
+                        # The below txid check eats up CPU. We'll forego the
+                        # paranoia in favor of performance, hence why it's
+                        # commented-out.
                         #txid = tx.txid()
                         #if txid != prevout_hash: # sanity check
                         #    print_error("fetch_input_data: cached prevout_hash {} != tx.txid() {}, ignoring.".format(prevout_hash, txid))
@@ -1014,61 +1024,70 @@ class Transaction:
                 inps.append(inp) # append either cached result or as-yet-incomplete copy of _inputs[i]
             # Now, download the tx's we didn't find above if network is available
             if eph.get('_fetch') == t and wallet.network and need_dl_txids:
-                prog(-1)  # tell interested code that progress is now 0%
-                # Next, queue the transaction.get requests, spreading them out randomly over the connected interfaces
-                q = queue.Queue()
-                q_ct = 0
-                def put_in_queue_and_cache(r):
-                    ''' we cache the results directly in the network callback
-                    as even if the user cancels the operation, we would like
-                    to save the returned tx in our cache, since we did the
-                    work to retrieve it anyway. '''
-                    q.put(r)  # put the result in the queue no matter what it is
-                    try:
-                        # Below will raise if response was 'error' or otherwise
-                        # invalid. Note: for performance reasons we don't
-                        # validate the tx here or deserialize it as this
-                        # function runs in the network thread and we don't want
-                        # to eat up that thread's CPU time needlessly.
-                        tx = Transaction(r['result'])
-                        txid = r['params'][0]
-                        tx_cache.put(txid, tx)  # save tx to cache here
-                    except:
-                        # response was not valid, ignore (don't cache)
+                try:  # the whole point of this try block is the `finally` way below...
+                    prog(-1)  # tell interested code that progress is now 0%
+                    # Next, queue the transaction.get requests, spreading them
+                    # out randomly over the connected interfaces
+                    q = queue.Queue()
+                    q_ct = 0
+                    def put_in_queue_and_cache(r):
+                        ''' we cache the results directly in the network callback
+                        as even if the user cancels the operation, we would like
+                        to save the returned tx in our cache, since we did the
+                        work to retrieve it anyway. '''
+                        q.put(r)  # put the result in the queue no matter what it is
+                        try:
+                            # Below will raise if response was 'error' or
+                            # otherwise invalid. Note: for performance reasons
+                            # we don't validate the tx here or deserialize it as
+                            # this function runs in the network thread and we
+                            # don't want to eat up that thread's CPU time
+                            # needlessly.
+                            tx = Transaction(r['result'])
+                            txid = r['params'][0]
+                            tx_cache.put(txid, tx)  # save tx to cache here
+                        except:
+                            # response was not valid, ignore (don't cache)
+                            pass
+                    for txid, l in need_dl_txids.items():
+                        wallet.network.queue_request('blockchain.transaction.get', [txid],
+                                                     interface='random',
+                                                     callback=put_in_queue_and_cache)
+                        q_ct += 1
+                    class ErrorResp(Exception):
                         pass
-                for txid, l in need_dl_txids.items():
-                    wallet.network.queue_request('blockchain.transaction.get', [txid], interface='random', callback=put_in_queue_and_cache)
-                    q_ct += 1
-                class ErrorResp(Exception):
-                    pass
-                for i in range(q_ct):
-                    # now, read the q back, with a 10 second timeout, and populate
-                    # the inputs
-                    try:
-                        r = q.get(timeout=10)
-                        if eph.get('_fetch') != t:
-                            # early abort from func, canceled
+                    for i in range(q_ct):
+                        # now, read the q back, with a 10 second timeout, and
+                        # populate the inputs
+                        try:
+                            r = q.get(timeout=10)
+                            if eph.get('_fetch') != t:
+                                # early abort from func, canceled
+                                break
+                            if r.get('error'):
+                                raise ErrorResp(r.get('error').get('message'))
+                            rawhex = r['result']
+                            txid = r['params'][0]
+                            tx = Transaction(rawhex); tx.deserialize()
+                            assert tx and txid == tx.txid()  # protection against phony responses
+                            for item in need_dl_txids[txid]:
+                                ii, n = item
+                                assert n < len(tx.outputs())
+                                outp = tx.outputs()[n]
+                                addr, value = outp[1], outp[2]
+                                inps[ii]['value'] = value
+                                inps[ii]['address'] = addr
+                                print_error("fetch_input_data: fetched from network", ii, addr, value)
+                            prog(i, q_ct)  # tell interested code of progress
+                        except queue.Empty:
+                            print_error("fetch_input_data: timed out after 10.0s fetching from network, giving up.")
                             break
-                        if r.get('error'):
-                            raise ErrorResp(r.get('error').get('message'))
-                        rawhex = r['result']
-                        txid = r['params'][0]
-                        tx = Transaction(rawhex); tx.deserialize()
-                        assert tx and txid == tx.txid()  # protection against phony responses
-                        for item in need_dl_txids[txid]:
-                            ii, n = item
-                            assert n < len(tx.outputs())
-                            outp = tx.outputs()[n]
-                            addr, value = outp[1], outp[2]
-                            inps[ii]['value'] = value
-                            inps[ii]['address'] = addr
-                            print_error("fetch_input_data: fetched from network", ii, addr, value)
-                        prog(i, q_ct)  # tell interested code of progress
-                    except queue.Empty:
-                        print_error("fetch_input_data: timed out after 10.0s fetching from network, giving up.")
-                        break
-                    except (AssertionError, ValueError, TypeError, KeyError, IndexError, ErrorResp) as e:
-                        print_error("fetch_input_data:", repr(e))
+                        except (AssertionError, ValueError, TypeError, KeyError, IndexError, ErrorResp) as e:
+                            print_error("fetch_input_data:", repr(e))
+                finally:
+                    # force-cancel any extant requests -- this is especially
+                    # crucial on error/timeout/failure.
+                    wallet.network.cancel_requests(put_in_queue_and_cache)
             if len(inps) == len(self._inputs) and eph.get('_fetch') == t:  # sanity check
                 eph.pop('_fetch', None)  # potential race condition here, popping wrong t -- but in practice w/ CPython threading it won't matter
                 if done_callback:

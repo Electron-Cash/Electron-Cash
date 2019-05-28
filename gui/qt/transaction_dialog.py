@@ -37,7 +37,7 @@ from electroncash.bitcoin import base_encode
 from electroncash.i18n import _
 from electroncash.plugins import run_hook
 
-from electroncash.util import bfh, Weak
+from electroncash.util import bfh, Weak, PrintError
 from .util import *
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
@@ -56,9 +56,10 @@ def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False):
     d.show()
     return d
 
-class TxDialog(QDialog, MessageBoxMixin):
+class TxDialog(QDialog, MessageBoxMixin, PrintError):
 
-    update_sig = pyqtSignal()  # connected to self.throttled_update -- emit from thread to do update in main thread
+    throttled_update_sig = pyqtSignal()  # connected to self.throttled_update -- emit from thread to do update in main thread
+    dl_done_sig = pyqtSignal()  # connected to an inner function to get a callback in main thread upon dl completion
 
     def __init__(self, tx, parent, desc, prompt_if_unsaved):
         '''Transactions in the wallet will show their description.
@@ -80,7 +81,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         self._dl_pct = None
         self._closed = False
 
-        self.update_sig.connect(self.throttled_update, Qt.QueuedConnection)
+        self.throttled_update_sig.connect(self.throttled_update, Qt.QueuedConnection)
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -148,13 +149,32 @@ class TxDialog(QDialog, MessageBoxMixin):
             slf = weakSelfRef()
             if slf:
                 slf._dl_pct = pct
-                slf.update_sig.emit()
+                slf.throttled_update_sig.emit()
         def dl_done():
             slf = weakSelfRef()
             if slf:
                 slf._dl_pct = None
-                slf.update_sig.emit()
-        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog)
+                slf.throttled_update_sig.emit()
+                slf.dl_done_sig.emit()
+        dl_retries = 0
+        def dl_done_mainthread():
+            nonlocal dl_retries
+            slf = weakSelfRef()
+            if slf:
+                if slf._closed:
+                    return
+                dl_retries += 1
+                fee = slf.try_calculate_fee()
+                if fee is None and dl_retries < 2:
+                    # retry at most once -- in case a slow server scrwed us up
+                    slf.print_error("input fetch appears incomplete; retrying download once ...")
+                    slf.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True)
+                elif fee is not None:
+                    slf.print_error("input fetch success")
+                else:
+                    slf.print_error("input fetch failed")
+        self.dl_done_sig.connect(dl_done_mainthread, Qt.QueuedConnection)
+        self.tx.fetch_input_data(self.wallet, done_callback=dl_done, prog_callback=dl_prog, force=True)
 
         self.update()
 
@@ -266,6 +286,18 @@ class TxDialog(QDialog, MessageBoxMixin):
         if not self._closed:
             self.update()
 
+    def try_calculate_fee(self):
+        ''' Try and compute fee by summing all the input values and subtracting
+        the output values. We don't always have 'value' in all the inputs,
+        so in that case None will be returned. '''
+        fee = None
+        try:
+            fee = self.tx.get_fee()
+        except (KeyError, TypeError, ValueError):
+            # 'value' key missing or bad from an input
+            pass
+        return fee
+
     def update(self):
         desc = self.desc
         base_unit = self.main_window.base_unit()
@@ -279,10 +311,7 @@ class TxDialog(QDialog, MessageBoxMixin):
         self.sign_button.setEnabled(can_sign)
         self.tx_hash_e.setText(tx_hash or _('Unknown'))
         if fee is None:
-            try:
-                fee = self.tx.get_fee() # Try and compute fee. We don't always have 'value' in all the inputs though. :/
-            except KeyError: # Value key missing from an input
-                pass
+            fee = self.try_calculate_fee()
         if desc is None:
             self.tx_desc.hide()
         else:
