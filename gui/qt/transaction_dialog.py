@@ -363,11 +363,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         run_hook('transaction_dialog_update', self)
 
     def is_fetch_input_data(self):
-        return self.main_window.config.get('fetch_input_data', False)
+        return bool(self.wallet.network and self.main_window.config.get('fetch_input_data', False))
 
     def set_fetch_input_data(self, b):
         self.main_window.config.set_key('fetch_input_data', bool(b))
-        if b:
+        if self.is_fetch_input_data():
             self.initiate_fetch_input_data(bool(self.try_calculate_fee() is None))
         else:
             self.tx.fetch_cancel()
@@ -391,6 +391,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         chk.clicked.connect(self.set_fetch_input_data)
         hbox.addWidget(chk)
         hbox.addStretch(1)
+        if not self.wallet.network:
+            # it makes no sense to enable this checkbox if the network is offline
+            chk.setHidden(True)
 
         self.schnorr_label = QLabel(_('{} = Schnorr signed').format(SCHNORR_SIGIL))
         self.schnorr_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)

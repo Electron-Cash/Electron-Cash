@@ -948,7 +948,7 @@ class Transaction:
         latest call will result in the invocation of the done_callback if/when
         it completes.
         '''
-        if not self.is_complete() or not self._inputs:
+        if not self._inputs:
             return False
         if force:
             # forced-run -- start with empty list
@@ -965,8 +965,10 @@ class Transaction:
         # These modules are always available so no need to globally import them.
         import threading
         import queue
+        import time
         from copy import deepcopy
         from collections import defaultdict
+        t0 = time.time()
         t = None
         tx_cache = __class__._fetched_tx_cache
         def doIt():
@@ -1000,19 +1002,36 @@ class Transaction:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
                     tx = tx_cache.get(prevout_hash) or wallet.transactions.get(prevout_hash)
-                    if not tx:
-                        # tx was not in cache or wallet.transactions, mark
-                        # it for download below
-                        need_dl_txids[prevout_hash].append((i, n))  # remember the input# as well as the prevout_n
-                    else:
+                    if tx:
                         # Tx was in cache or wallet.transactions, proceed
-                        tx.deserialize()  # no-op if already deserialized
-                        # The below txid check eats up CPU. We'll forego the
-                        # paranoia in favor of performance, hence why it's
-                        # commented-out.
-                        #txid = tx.txid()
-                        #if txid != prevout_hash: # sanity check
-                        #    print_error("fetch_input_data: cached prevout_hash {} != tx.txid() {}, ignoring.".format(prevout_hash, txid))
+                        # note that the tx here should be in the "not
+                        # deserialized" state
+                        if tx.raw:
+                            # Note we deserialize a *copy* of the tx so as to
+                            # save memory.  We do not want to deserialize the
+                            # cached tx because if we do so, the cache will
+                            # contain a deserialized tx which will take up
+                            # several times the memory when deserialized due to
+                            # Python's memory use being less efficient than the
+                            # binary-only raw bytes.  So if you modify this code
+                            # do bear that in mind.
+                            tx = Transaction(tx.raw)
+                            try:
+                                tx.deserialize()
+                                # The below txid check eats up CPU. We'll forego the
+                                # paranoia in favor of performance, hence why it's
+                                # commented-out.
+                                #txid = tx.txid()
+                                #if txid != prevout_hash: # sanity check
+                                #    print_error("fetch_input_data: cached prevout_hash {} != tx.txid() {}, ignoring.".format(prevout_hash, txid))
+                            except Exception as e:
+                                print_error("fetch_input_data: WARNING failed to deserialize {}: {}".format(prevout_hash, str(e)))
+                                tx = None
+                        else:
+                            tx = None
+                            print_error("fetch_input_data: WARNING cached tx lacked any 'raw' bytes for {}".format(prevout_hash))
+                    # now, examine the deserialized tx, if it's still good
+                    if tx:
                         if n < len(tx.outputs()):
                             outp = tx.outputs()[n]
                             addr, value = outp[1], outp[2]
@@ -1021,6 +1040,12 @@ class Transaction:
                             print_error("fetch_input_data: fetched cached", i, addr, value)
                         else:
                             print_error("fetch_input_data: ** FIXME ** should never happen -- n={} >= len(tx.outputs())={} for prevout {}".format(n, len(tx.outputs()), prevout_hash))
+                    else:
+                        # tx was not in cache or wallet.transactions, mark
+                        # it for download below (this branch can also execute
+                        # in the unlikely case where there was an error above)
+                        need_dl_txids[prevout_hash].append((i, n))  # remember the input# as well as the prevout_n
+
                 inps.append(inp) # append either cached result or as-yet-incomplete copy of _inputs[i]
             # Now, download the tx's we didn't find above if network is available
             # and caller said it's ok to go out ot network.. otherwise just return
@@ -1044,7 +1069,9 @@ class Transaction:
                             # we don't validate the tx here or deserialize it as
                             # this function runs in the network thread and we
                             # don't want to eat up that thread's CPU time
-                            # needlessly.
+                            # needlessly. Also note the cache doesn't store
+                            # deserializd tx's so as to save memory. We
+                            # always deserialize a copy when reading the cache.
                             tx = Transaction(r['result'])
                             txid = r['params'][0]
                             tx_cache.put(txid, tx)  # save tx to cache here
@@ -1092,6 +1119,7 @@ class Transaction:
                     wallet.network.cancel_requests(put_in_queue_and_cache)
             if len(inps) == len(self._inputs) and eph.get('_fetch') == t:  # sanity check
                 eph.pop('_fetch', None)  # potential race condition here, popping wrong t -- but in practice w/ CPython threading it won't matter
+                print_error("fetch_input_data: elapsed {} sec".format(time.time()-t0))
                 if done_callback:
                     done_callback(*done_args)
         # /doIt
