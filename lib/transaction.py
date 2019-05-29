@@ -911,10 +911,19 @@ class Transaction:
         }
         return out
 
-    # In even aggressive/pathological cases this cache usually doesn't
-    # ever exceed 100MB even when full. [see ExpiringCache.size_bytes()]
+    # This cache stores foreign (non-wallet) tx's we fetched from the network
+    # for the purposes of the "fetch_input_data" mechanism. Its max size has
+    # been thoughtfully calibrated to provide a decent tradeoff between
+    # memory consumption and UX.
+    #
+    # In even aggressive/pathological cases this cache won't ever exceed
+    # 100MB even when full. [see ExpiringCache.size_bytes() to test it].
     # This is acceptable considering this is Python + Qt and it eats memory
-    # anyway.. and also this is 2019 ;)
+    # anyway.. and also this is 2019 ;). Note that all tx's in this cache
+    # are in the non-deserialized state (hex encoded bytes only) as a memory
+    # savings optimization.  Please maintain that invariant if you modify this
+    # code, otherwise the cache may grow to 10x memory consumption if you
+    # put deserialized tx's in here.
     _fetched_tx_cache = ExpiringCache(maxlen=1000, name="TransactionFetchCache")
 
     def fetch_input_data(self, wallet, done_callback=None, done_args=tuple(),
