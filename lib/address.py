@@ -379,7 +379,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
             ops = Script.get_ops(self.script)
         except ScriptError:
             # Truncated script -- so just default to hex string.
-            return self.script.hex()
+            return 'Invalid script: ' + self.script.hex()
         def lookup(x):
             try:
                 return OpCodes(x).name
