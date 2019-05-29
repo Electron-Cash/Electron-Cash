@@ -829,7 +829,7 @@ class RateLimiter(PrintError):
                 if 'c++ object' in str(e).lower():
                     # This can happen if the attached object which actually owns
                     # QTimer is deleted by Qt before this call path executes.
-                    # This call path may executed from a queued connection in
+                    # This call path may be executed from a queued connection in
                     # some circumstances, hence the crazyness (I think).
                     self.print_error("advisory: QTimer was already deleted by Qt, ignoring...")
                 else:
