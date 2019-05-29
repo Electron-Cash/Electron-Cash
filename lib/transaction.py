@@ -1034,7 +1034,7 @@ class Transaction:
                                 #if txid != prevout_hash: # sanity check
                                 #    print_error("fetch_input_data: cached prevout_hash {} != tx.txid() {}, ignoring.".format(prevout_hash, txid))
                             except Exception as e:
-                                print_error("fetch_input_data: WARNING failed to deserialize {}: {}".format(prevout_hash, str(e)))
+                                print_error("fetch_input_data: WARNING failed to deserialize {}: {}".format(prevout_hash, repr(e)))
                                 tx = None
                         else:
                             tx = None
