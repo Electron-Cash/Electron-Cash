@@ -378,7 +378,6 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         if self.tx.locktime > 0:
             vbox.addWidget(QLabel("LockTime: %d\n" % self.tx.locktime))
 
-
         hbox = QHBoxLayout()
         hbox.setContentsMargins(0,0,0,0)
 
