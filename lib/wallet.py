@@ -42,7 +42,7 @@ from functools import partial
 from .i18n import _
 from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
 
-from .address import Address, Script, ScriptOutput, PublicKey
+from .address import Address, Script, ScriptOutput, PublicKey, P2PKOutput
 from .bitcoin import *
 from .version import *
 from .keystore import load_keystore, Hardware_KeyStore, Imported_KeyStore, BIP32_KeyStore, xpubkey_to_address
@@ -90,7 +90,7 @@ def append_utxos_to_inputs(inputs, network, pubkey, txin_type, imax):
     if txin_type == 'p2pkh':
         address = Address.from_pubkey(pubkey)
     else:
-        address = PublicKey.from_pubkey(pubkey)
+        address = P2PKOutput.from_pubkey(pubkey)
     sh = address.to_scripthash_hex()
     u = network.synchronous_get(('blockchain.scripthash.listunspent', [sh]))
     for item in u:

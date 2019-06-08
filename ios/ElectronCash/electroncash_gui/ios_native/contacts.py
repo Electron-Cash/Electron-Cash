@@ -9,7 +9,7 @@ from . import gui
 from electroncash import WalletStorage, Wallet
 from electroncash.util import timestamp_to_datetime
 from electroncash.i18n import _, language
-from electroncash.address import Address, PublicKey
+from electroncash.address import Address
 from .uikit_bindings import *
 from .custom_objc import *
 from collections import namedtuple

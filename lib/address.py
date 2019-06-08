@@ -248,9 +248,10 @@ class UnknownAddress(object):
 
 
 class PublicKey(namedtuple("PublicKeyTuple", "pubkey")):
-
-    TO_ADDRESS_OPS = [OpCodes.OP_DUP, OpCodes.OP_HASH160, -1,
-                      OpCodes.OP_EQUALVERIFY, OpCodes.OP_CHECKSIG]
+    """
+    Generic object for holding a public key; does NOT represent any particular
+    output type but can be converted to one.
+    """
 
     @classmethod
     def from_pubkey(cls, pubkey):
@@ -311,7 +312,7 @@ class PublicKey(namedtuple("PublicKeyTuple", "pubkey")):
 
     @cachedproperty
     def address(self):
-        '''Convert to an Address object.'''
+        '''Convert to a P2PKH Address object.'''
         return Address(hash160(self.pubkey), Address.ADDR_P2PKH)
 
     def is_compressed(self):
@@ -319,12 +320,40 @@ class PublicKey(namedtuple("PublicKeyTuple", "pubkey")):
         return len(self.pubkey) == 33
 
     def to_ui_string(self):
-        '''Convert to a hexadecimal string.'''
+        '''Convert to a hexadecimal string.
+
+        (do not change this -- many places rely on this to be hexadecimal)
+        '''
         return self.pubkey.hex()
 
     def to_storage_string(self):
         '''Convert to a hexadecimal string for storage.'''
         return self.pubkey.hex()
+
+    def to_P2PKH_script(self):
+        '''Return a P2PKH script.'''
+        return self.address.to_script()
+
+    def __str__(self):
+        return self.to_ui_string()
+
+    def __repr__(self):
+        return '<PubKey {}>'.format(self.__str__())
+
+
+class P2PKOutput(namedtuple("P2PKTuple", "pubkey")):
+    """ Output type for pay-to-pubkey scripts (<pubkey> OP_CHECKSIG) """
+
+    @classmethod
+    def from_pubkey(cls, pubkey):
+        # expects bytes
+        PublicKey.validate(pubkey)
+        return cls(bytes(pubkey))
+
+    def to_ui_string(self):
+        '''Convert to a human-friendly string.
+        '''
+        return 'P2PK(%s)'%(self.pubkey.hex())
 
     def to_script(self):
         '''Note this returns the P2PK script.'''
@@ -342,15 +371,9 @@ class PublicKey(namedtuple("PublicKeyTuple", "pubkey")):
         '''Like other bitcoin hashes this is reversed when written in hex.'''
         return hash_to_hex_str(self.to_scripthash())
 
-    def to_P2PKH_script(self):
-        '''Return a P2PKH script.'''
-        return self.address.to_script()
-
-    def __str__(self):
-        return self.to_ui_string()
-
+    # no __str__ method
     def __repr__(self):
-        return '<PubKey {}>'.format(self.__str__())
+        return '<P2PKOutput {}>'.format(self.__str__())
 
 
 class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):

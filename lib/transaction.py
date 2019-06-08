@@ -31,8 +31,8 @@ from .util import print_error, profiler
 from .caches import ExpiringCache
 
 from .bitcoin import *
-from .address import (PublicKey, Address, Script, ScriptOutput, hash160,
-                      UnknownAddress, OpCodes as opcodes)
+from .address import (P2PKOutput, Address, Script, ScriptOutput,
+                      hash160, UnknownAddress, OpCodes as opcodes)
 from . import schnorr
 from . import util
 import struct
@@ -271,7 +271,7 @@ def get_address_from_output_script(_bytes):
         # 65 BYTES:... CHECKSIG
         match = [ opcodes.OP_PUSHDATA4, opcodes.OP_CHECKSIG ]
         if match_decoded(decoded, match):
-            return TYPE_PUBKEY, PublicKey.from_pubkey(decoded[0][1])
+            return TYPE_PUBKEY, P2PKOutput.from_pubkey(decoded[0][1])
 
         # Pay-by-Bitcoin-address TxOuts look like:
         # DUP HASH160 20 BYTES:... EQUALVERIFY CHECKSIG
@@ -514,7 +514,7 @@ class Transaction:
         d = deserialize(self.raw)
         self._inputs = d['inputs']
         self._outputs = [(x['type'], x['address'], x['value']) for x in d['outputs']]
-        assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
+        assert all(isinstance(output[1], (P2PKOutput, Address, ScriptOutput))
                    for output in self._outputs)
         self.locktime = d['lockTime']
         self.version = d['version']
@@ -522,7 +522,7 @@ class Transaction:
 
     @classmethod
     def from_io(klass, inputs, outputs, locktime=0, sign_schnorr=False):
-        assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
+        assert all(isinstance(output[1], (P2PKOutput, Address, ScriptOutput))
                    for output in outputs)
         self = klass(None)
         self._inputs = inputs
@@ -722,7 +722,7 @@ class Transaction:
         self.raw = None
 
     def add_outputs(self, outputs):
-        assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
+        assert all(isinstance(output[1], (P2PKOutput, Address, ScriptOutput))
                    for output in outputs)
         self._outputs.extend(outputs)
         self.raw = None

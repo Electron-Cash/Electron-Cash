@@ -12,7 +12,7 @@ from .uikit_bindings import *
 from .history import HistoryEntry, StatusImages
 from . import addresses
 from electroncash.transaction import Transaction
-from electroncash.address import Address, PublicKey, ScriptOutput
+from electroncash.address import Address, ScriptOutput
 from electroncash.util import timestamp_to_datetime
 import json, sys
 from . import coins
@@ -169,9 +169,7 @@ class TxInputsOutputsTVC(TxInputsOutputsTVCBase):
                     mytxt = ""
                     mytxt += prevout_hash[0:8] + '...'
                     mytxt += prevout_hash[-8:] + (":%-4d " % prevout_n)
-                    addr = x['address']
-                    if isinstance(addr, PublicKey):
-                        addr = addr.toAddress()
+                    addr = x.get('address')
                     if addr is None:
                         addr_text = _('unknown')
                     else:
@@ -236,9 +234,7 @@ class TxInputsOutputsTVC(TxInputsOutputsTVCBase):
             data = ""
             if isAddr:
                 if isInput:
-                    addr = x['address']
-                    if isinstance(addr, PublicKey):
-                        addr = addr.toAddress()
+                    addr = x.get('address')
                     if addr is None:
                         addr_text = _('unknown')
                     else:
