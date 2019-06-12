@@ -142,6 +142,9 @@ class Plugins(DaemonThread):
                 raise Exception(f"Error pre-loading {full_name}: no spec")
             try:
                 module = importlib.util.module_from_spec(spec)
+                # sys.modules needs to be modified for relative imports to work
+                # see https://stackoverflow.com/a/50395128
+                sys.modules[spec.name] = module
                 spec.loader.exec_module(module)
             except Exception as e:
                 raise Exception(f"Error pre-loading {full_name}: {repr(e)}") from e
