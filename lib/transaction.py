@@ -1097,7 +1097,8 @@ class Transaction:
                         except queue.Empty:
                             print_error("fetch_input_data: timed out after 10.0s fetching from network, giving up.")
                             break
-                        except (AssertionError, ValueError, TypeError, KeyError, IndexError, ErrorResp) as e:
+                        except (AssertionError, ValueError, TypeError, KeyError,
+                                IndexError, ErrorResp, InputValueMissing, SerializationError) as e:
                             print_error("fetch_input_data:", repr(e))
                 finally:
                     # force-cancel any extant requests -- this is especially
