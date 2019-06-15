@@ -22,10 +22,14 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
-from __future__ import absolute_import
-
-import os, sys, json, copy, socket, time, threading, queue
+import os
+import sys
+import json
+import copy
+import socket
+import time
+import threading
+import queue
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
