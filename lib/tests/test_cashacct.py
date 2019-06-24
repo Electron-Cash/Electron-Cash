@@ -25,6 +25,7 @@
 Cash Accounts tests.
 '''
 import unittest
+import random
 
 from .. import cashacct
 from ..address import Address
@@ -93,3 +94,28 @@ class TestCashAccounts(unittest.TestCase):
             self.assertRaises(cashacct.ArgumentError, cashacct.ScriptOutput, b)
             self.assertRaises(cashacct.ArgumentError, cashacct.ScriptOutput.from_script, b)
             self.assertRaises(cashacct.ArgumentError, cashacct.ScriptOutput.parse_script, b)
+
+    def test_collision_hash_and_emoji_and_number(self):
+        ''' Tests collision_hash code and other stuff. '''
+        bh = '000000000000000002abbeff5f6fb22a0b3b5c2685c6ef4ed2d2257ed54e9dcb'
+        th = '590d1fdf7e04af0ee08f9194bb9e8d1971bdcbf55d29303d5bf32d4eae5e7136'
+        # ensure accepts both hex encoded and bytes args
+        self.assertEqual(cashacct.collision_hash(bh, th), cashacct.collision_hash(bytes.fromhex(bh), bytes.fromhex(th)))
+        # ensure it works as expected
+        self.assertEqual(cashacct.collision_hash(bh, th), '5876958390')
+        # ensure raises on invalid args
+        self.assertRaises(ValueError, cashacct.collision_hash, bh[1:10], th)
+        self.assertRaises(ValueError, cashacct.collision_hash, bh, th[:-1])
+        self.assertRaises(ValueError, cashacct.collision_hash, 'blab'*8, 'he'*16)
+        # ensure collision_hash always length 10 for random inputs
+        for i in range(10):
+            bas = [bytearray(32), bytearray(32)]
+            for j in range(32):
+                bas[0][j] = random.randint(0, 255)
+                bas[1][j] = random.randint(0, 255)
+            self.assertEqual(len(cashacct.collision_hash(bas[0], bas[1])), 10)
+
+        # emoji
+        self.assertEqual(cashacct.emoji(bh, th), chr(9775))  # == '☯'
+        # block height modification -> number
+        self.assertEqual(cashacct.number_from_block_height(563720), 100)
