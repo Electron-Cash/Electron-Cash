@@ -191,6 +191,7 @@ class ScriptOutput(ScriptOutputBase):
             ops = Script.get_ops(script_short)  # unpack ops
         except Exception as e:
             raise ArgumentError('Bad CashAcct script', script_short.hex()) from e
+        # Check for extra garbage at the end, too few items and/or other nonsense
         if not ops or not len(ops) == 2 or not all(len(op) == 2 and op[1] for op in ops):
             raise ArgumentError('CashAcct script parse error', ops)
         name_bytes = ops[0][1]
