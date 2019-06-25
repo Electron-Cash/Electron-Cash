@@ -82,6 +82,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self._dl_pct = None
         self._closed = False
         self.tx_height = None
+        self.tx_hash = None
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -334,6 +335,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         format_amount = self.main_window.format_amount
         tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n = self.wallet.get_tx_info(self.tx)
         self.tx_height = height
+        self.tx_hash = tx_hash
         desc = label or desc
         size = self.tx.estimated_size()
         self.broadcast_button.setEnabled(can_broadcast)
@@ -493,6 +495,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
     def update_io(self):
         i_text = self.i_text
         o_text = self.o_text
+        block_hash = None
         ext = QTextCharFormat()
         ext.setToolTip(_("Right-click for context menu"))
         lnk = QTextCharFormat()
@@ -565,6 +568,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             typ, addr, v = tup
             for fmt in (ext, rec, chg, lnk):
                 fmt.setAnchorNames([f"output {i}"])  # anchor name for this line (remember input#); used by context menu creation
+            # CashAccounts support
+            if isinstance(addr, ScriptOutput) and not addr.is_complete() and self.tx_hash and self.tx_height:
+                block_hash = block_hash or self.wallet.get_block_hash(self.tx_height) or None
+                addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
+            # /CashAccounts support
             addrstr = addr.to_ui_string()
             cursor.insertText(addrstr, text_format(addr))
             if v is not None:

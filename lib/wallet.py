@@ -544,6 +544,19 @@ class Abstract_Wallet(PrintError):
             else:
                 return 0, 0, 0
 
+    def get_tx_block_hash(self, tx_hash):
+        ''' Only works for tx's in wallet, for which we know the height. '''
+        height, ign, ign2 = self.get_tx_height(tx_hash)
+        return self.get_block_hash(height)
+
+    def get_block_hash(self, height):
+        ''' Convenience method equivalent to blockchain.get_hegiht(). '''
+        if self.network and height is not None and height >= 0 and height <= self.get_local_height():
+            bchain = self.network.blockchain()
+            if bchain:
+                return bchain.get_hash(height)
+
+
     def get_txpos(self, tx_hash):
         "return position, even if the tx is unverified"
         with self.lock:
