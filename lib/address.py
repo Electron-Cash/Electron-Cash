@@ -439,7 +439,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
         ''' Scans the protocol_classes set, and if the passed-in script matches
         a known protocol, returns that class, otherwise returns our class. '''
         for c in cls.protocol_classes:
-            if c.protocol_match_fast(script_bytes) and c.protocol_match(script_bytes):
+            if c.protocol_match(script_bytes):
                 return c
         return __class__
 

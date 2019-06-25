@@ -20,6 +20,7 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from abc import ABC, abstractmethod
 from .util import ThreadJob, bh2u
 from .bitcoin import Hash, hash_decode, hash_encode
 from . import networks
@@ -27,11 +28,58 @@ from .transaction import Transaction
 
 class InnerNodeOfSpvProofIsValidTx(Exception): pass
 
+class SPVDelegate(ABC):
+    ''' Abstract base class for an object that is SPV-able, such as a wallet.
+    wallet.py 'Abstract_Wallet' implements this interface, as does the
+    CashAccount subsystem which also has its own private SPV verifier running.
+
+    The verifier (SPV) class later in this file relies on this interface to
+    know what to verify. '''
+
+    @abstractmethod
+    def get_unverified_txs(self) -> dict:
+        ''' Return a dict of tx_hash (hex encoded) -> height (int)'''
+
+    @abstractmethod
+    def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple) -> None:
+        ''' Called when a verification is successful.
+        Params:
+            #1 tx_hash - hex string
+            #2 tuple of: (tx_height: int, timestamp: int, pos : int) '''
+
+    @abstractmethod
+    def is_up_to_date(self) -> bool:
+        ''' Called periodically to determine if more verifications are forth-
+        coming.
+
+        If True is returned:
+                1. save_verified_tx will then be called,
+                2. and the network 'wallet_updated' callback will fire.
+
+        Return False if you do not want the above to happen and/or if you
+        have more work for the SPV to do in the near future. '''
+
+    @abstractmethod
+    def save_verified_tx(self, write : bool = False):
+        ''' Called if is_up_to_date returns True to tell wallet to save verified
+        tx's '''
+
+    @abstractmethod
+    def undo_verifications(self, blkchain : object, height : int) -> set:
+        ''' Called when the blockchain has changed to tell the wallet to undo
+        verifications when a reorg has happened. Returns a set of tx_hashes that
+        were undone.'''
+
+    @abstractmethod
+    def diagnostic_name(self):
+        ''' Make sure delegate classes have this method (PrintError interface). '''
+
 class SPV(ThreadJob):
     """ Simple Payment Verification """
 
     def __init__(self, network, wallet):
-        self.wallet = wallet
+        assert isinstance(wallet, SPVDelegate), "Verifier instance needs to be passed a wallet that is an object implementing the SPVDelegate interface."
+        self.wallet = wallet  # despite the name, might not always be a wallet instance, may be SPVDelete (CashAcct)
         self.network = network
         self.blockchain = network.blockchain()
         self.merkle_roots = {}  # txid -> merkle root (once it has been verified)
@@ -39,6 +87,10 @@ class SPV(ThreadJob):
         self.qbusy = False
         self.cleaned_up = False
         self._need_release = False
+        self._tick_ct = 0
+
+    def diagnostic_name(self):
+        return f"{__class__.__name__}/{self.wallet.diagnostic_name()}"
 
     def _release(self):
         ''' Called from the Network (DaemonThread) -- to prevent race conditions
@@ -59,6 +111,11 @@ class SPV(ThreadJob):
             self._release()
         if self.cleaned_up:
             return
+
+        if not self._tick_ct:
+            self.print_error("started")
+        self._tick_ct += 1
+
         interface = self.network.interface
         if not interface:
             self.print_error("v.no interface")

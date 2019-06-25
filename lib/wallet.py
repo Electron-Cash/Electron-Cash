@@ -55,7 +55,7 @@ from .plugins import run_hook
 from . import bitcoin
 from . import coinchooser
 from .synchronizer import Synchronizer
-from .verifier import SPV
+from .verifier import SPV, SPVDelegate
 from . import schnorr
 from . import ecc_fast
 from .blockchain import NULL_HASH_HEX
@@ -65,6 +65,7 @@ from . import paymentrequest
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .paymentrequest import InvoiceStore
 from .contacts import Contacts
+from . import cashacct
 
 TX_STATUS = [
     _('Unconfirmed parent'),
@@ -157,7 +158,7 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
     return tx
 
 
-class Abstract_Wallet(PrintError):
+class Abstract_Wallet(PrintError, SPVDelegate):
     """
     Wallet classes are created to handle various address generation methods.
     Completion states (watching-only, single account, no seed, etc) are handled inside classes.
@@ -1324,16 +1325,20 @@ class Abstract_Wallet(PrintError):
 
     def start_threads(self, network):
         self.network = network
-        if self.network is not None:
+        if self.network:
             self.prepare_for_verifier()
             self.verifier = SPV(self.network, self)
             self.synchronizer = Synchronizer(self, network)
-            finalization_print_error(self.verifier, "[{}.{}] finalized".format(self.diagnostic_name(), self.verifier.diagnostic_name()))
-            finalization_print_error(self.synchronizer, "[{}.{}] finalized".format(self.diagnostic_name(), self.synchronizer.diagnostic_name()))
+            self.cashacct = cashacct.CashAcct(self.network, self)
+            finalization_print_error(self.verifier)
+            finalization_print_error(self.synchronizer)
+            finalization_print_error(self.cashacct)
             network.add_jobs([self.verifier, self.synchronizer])
+            self.cashacct.start()  # start cashacct subsystem, nework.add_jobs, etc
         else:
             self.verifier = None
             self.synchronizer = None
+            self.cashacct = None
 
     def stop_threads(self):
         if self.network:
@@ -1344,10 +1349,12 @@ class Abstract_Wallet(PrintError):
             # because these objects need to do thier clean-up actions in a
             # thread-safe fashion from within the thread where they normally
             # operate on their data structures.
+            self.cashacct.stop()
             self.synchronizer.release()
             self.verifier.release()
             self.synchronizer = None
             self.verifier = None
+            self.cashacct = None
             # Now no references to the syncronizer or verifier
             # remain so they will be GC-ed
             self.storage.put('stored_height', self.get_local_height())
