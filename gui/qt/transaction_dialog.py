@@ -81,8 +81,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.cashaddr_signal_slots = []
         self._dl_pct = None
         self._closed = False
-        self.tx_height = None
-        self.tx_hash = None
+        self.tx_hash = self.tx._txid(self.tx.raw) if self.tx.raw else None
+        self.tx_height = self.wallet.get_tx_height(self.tx_hash)[0] or None
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -164,6 +164,10 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         hbox.addStretch(1)
         hbox.addLayout(Buttons(*self.buttons))
         vbox.addLayout(hbox)
+
+        if self.tx_height:
+            # this avoids downloading the block_height info if we already have it.
+            self.tx.ephemeral['block_height'] = self.tx_height
 
         self.throttled_update_sig.connect(self.throttled_update, Qt.QueuedConnection)
         self.initiate_fetch_input_data(True)

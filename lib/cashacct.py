@@ -182,7 +182,7 @@ class ScriptOutput(ScriptOutputBase):
         extra = []
         for a in __class__.attrs_extra:
             val = getattr(self, a, None)
-            if val:
+            if val is not None:
                 extra.append(f'{a}={val}')
         extra = ' '.join(extra)
         return f'{s} [CashAcct: {extra}]' if extra else f'{s} [CashAcct]'
