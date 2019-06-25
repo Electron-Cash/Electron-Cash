@@ -69,6 +69,9 @@ class ScriptOutput(ScriptOutputBase):
 
     _protocol_prefix = _i2b(OpCodes.OP_RETURN) + _i2b(4) + int.to_bytes(protocol_code, 4, byteorder='big')
 
+    # Additional attributes outside of the tuple's 1 attribute
+    attrs_extra = ( 'name', 'address', 'number', 'collision_hash', 'emoji' )
+
     @classmethod
     def protocol_match_fast(cls, script_bytes):
         '''Returns true iff the `script_bytes` at least START with the correct
@@ -101,20 +104,23 @@ class ScriptOutput(ScriptOutputBase):
         registration script.'''
         return cls.protocol_match(script)
 
-    def __new__(cls, script, *, number=None, collision_hash=None):
+    def __new__(cls, script, *, number=None, collision_hash=None, emoji=None):
         '''Instantiate from a script (or address.ScriptOutput) you wish to parse.
-        Use number= and collision_hash= kwargs if you also have that
-        information, otherwise the script will be parsed and self.name and
-        self.address will be set.  Raises ArgumentError on invalid script.
+        Use number=, collision_hash=, emoji= kwargs if you also have that
+        information and want to store it in this instance.
+
+        The script will be parsed and self.name and self.address will be set
+        regardless.  Raises ArgumentError on invalid script.
 
         Always has the following attributes defined (even if None):
 
-                name, address, number, collision_hash
+                name, address, number, collision_hash, emoji
         '''
         script = cls._ensure_script(script)
         self = super(__class__, cls).__new__(cls, script)
         self.name, self.address = self.parse_script(self.script)  # raises on error
-        self.make_complete(number, collision_hash)  # raises if number is not None and is bad and/or if collision_hash is not None and is bad, otherwise just sets attributes
+        self.number, self.collision_hash, self.emoji = None, None, None  # ensure attributes defined
+        self.make_complete(number, collision_hash, emoji=emoji)  # raises if number is not None and is bad and/or if collision_hash is not None and is bad, otherwise just sets attributes
         return self
 
     @staticmethod
@@ -137,8 +143,9 @@ class ScriptOutput(ScriptOutputBase):
             if not isinstance(number, int) or number < 100:
                 raise ArgumentError('Number must be an int >= 100')
         if collision_hash is not None:  # We don't raise on None
+            if isinstance(collision_hash, int): collision_hash = str(collision_hash)  # grr.. it was an int
             if not isinstance(collision_hash, str) or not collision_hash_accept_re.match(collision_hash):
-                raise ArgumentError('Collision hash must be a string numbers, right-padded with zeroes, of length 10')
+                raise ArgumentError('Collision hash must be a number string, right-padded with zeroes, of length 10')
         return number is not None and collision_hash is not None
 
     def is_complete(self, fast_check=False):
@@ -151,19 +158,43 @@ class ScriptOutput(ScriptOutputBase):
         except ArgumentError:
             return False
 
-    def make_complete(self, number, collision_hash):
+    def make_complete(self, number, collision_hash, *, emoji=None):
         '''Make this ScriptOutput instance complete by filling in the number and
         collision_hash info. Raises ArgumentError on bad/out-of-spec args (None
         args are ok though, the cashacct just won't be complete).'''
         ok = self._check_number_collision_hash(number, collision_hash)
         self.number = number
         self.collision_hash = collision_hash
+        self.emoji = emoji or self.emoji
         return ok
 
+    def make_complete2(self, block_height, block_hash, txid):
+        '''Make this ScriptOutput instance complete by specifying block height,
+        block_hash (hex string or bytes), and txid (hex string or bytes)'''
+        ch = collision_hash(block_hash, txid)
+        num = bh2num(block_height)
+        em = emoji(block_hash, txid)
+        return self.make_complete(num, ch, emoji=em)
+
     def __repr__(self):
-        return ( f'<ScriptOutput (CashAcct) {self.__str__()} '
-                 + f' name={self.name} address={self.address}'
-                 + f' number={self.number} collision_hash={self.collision_hash}>' )
+        extra = []
+        for a in __class__.attrs_extra:
+            extra.append(f'{a}={getattr(self, a, None)}')
+        extra = ' '.join(extra)
+        return f'<ScriptOutput (CashAcct) {self.__str__()}  {extra}>'
+
+    def __eq__(self, other):
+        res = super().__eq__(other)
+        if res and isinstance(other, __class__) and self is not other:
+            # awkward.. we do a deep check if self and other are both this type
+            for a in __class__.attrs_extra:
+                res = res and getattr(self, a, None) == getattr(other, a, None)
+                if not res:
+                    break
+        return res
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     @staticmethod
     def _ensure_script(script):
@@ -172,8 +203,7 @@ class ScriptOutput(ScriptOutputBase):
         a bytes-like-object.'''
         if isinstance(script, ScriptOutputBase):
             script = script.script
-        if not isinstance(script, (bytes, bytearray)):
-            raise ArgumentError('Script argument must be either a valid ScriptOutput instance or a bytes-like-object')
+        script = _ensure_bytes(script, "Script")
         return script
 
     @classmethod
@@ -261,21 +291,52 @@ class ScriptOutput(ScriptOutputBase):
         return cls(bytes(bcd.input))
 
     @classmethod
-    def from_script(cls, script):
+    def from_script(cls, script, *,
+                    # these two optional args, if specified, take precedence
+                    number=None, collision_hash=None,
+                    # additionally these other args can be specified to
+                    # have this class calculate number and collision_hash
+                    # for you. Use either set of optional args but not both.
+                    block_height=None,  # if set, self.number will be set. Cannot specify this & number
+                    # Cannot specify these & collision_hash at the same time
+                    block_hash=None, txid=None  # if block_hash and txid are set, .emoji will be set too on returned class (along with .collision_hash)
+                    ):
         '''Create an instance from a `script`, which may be either a
         ScriptOutput class, or raw bytes data. Will raise various exceptions if
-        it cannot parse and/or script is invalid.'''
-        return cls(script)
+        it cannot parse and/or script or args are invalid.'''
+        if block_height is not None:
+            if number is not None:
+                raise ArgumentError('Cannot specify both block_height and number')
+            number = number_from_block_height(block_height)
+        tup = (block_hash, txid)
+        myemoji=None
+        if any(tup):
+            if not all(tup):
+                raise ArgumentError('block_hash and txid must both be specified or not specified at all')
+            if collision_hash is not None:
+                raise ArgumentError('Cannot specify collision_hash, block_hash & txid together')
+            collision_hash = chash(block_hash, txid)
+            myemoji = emoji(block_hash, txid)
+        return cls(script, number=number, collision_hash=collision_hash, emoji=myemoji)
 
 
 # Helper Functions
+def _ensure_bytes(arg, argname='Arg'):
+    if isinstance(arg, str):
+        try:
+            arg = bytes.fromhex(arg)
+        except ValueError as e:
+            raise ArgumentError(f'{argname} could not be binhex decoded', arg) from e
+    if not isinstance(arg, (bytes, bytearray)):
+        raise ArgumentError(f'{argname} argument not a bytes-like-object', arg)
+    return arg
 
 def _collision_hash(block_hash, txid):
     ''' Returns the full sha256 collision hash as bytes given the hex strings
     and/or raw bytes as input. May raise ValueError or other. '''
-    bh = bytes.fromhex(block_hash) if isinstance(block_hash, str) else block_hash
-    tx = bytes.fromhex(txid) if isinstance(txid, str) else txid
-    if not all( isinstance(x, (bytes, bytearray)) and len(x) == 32 for x in (bh, tx) ):
+    bh = _ensure_bytes(block_hash, 'block_hash')
+    tx = _ensure_bytes(txid, 'txid')
+    if not all( len(x) == 32 for x in (bh, tx) ):
         raise ArgumentError('Invalid arguments', block_hash, txid)
     return bitcoin.sha256(bh + tx)
 
@@ -287,6 +348,8 @@ def collision_hash(block_hash, txid):
     ch = ''.join(reversed(str(int.from_bytes(ch, byteorder='big'))))  # convert int to string, reverse it
     ch += '0' * (10 - len(ch))  # pad with 0's at the end
     return ch
+
+chash = collision_hash  # alias.
 
 def emoji_index(block_hash, txid):
     ''' May raise. Otherwise returns an emoji index from 0 to 99. '''
@@ -311,7 +374,11 @@ def emoji(block_hash, txid):
     ''' Returns the emoji character givern a block hash and txid. May raise.'''
     return chr(emoji_list[emoji_index(block_hash, txid)])
 
+_emoji = emoji  # alias for internal use if names clash
+
 def number_from_block_height(block_height):
     ''' Given a block height, returns the cash account 'number' (as int).
     This is simply the block height minus 563620. '''
     return block_height - height_modification
+
+bh2num = number_from_block_height  # alias
