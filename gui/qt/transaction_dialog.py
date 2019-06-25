@@ -334,7 +334,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         base_unit = self.main_window.base_unit()
         format_amount = self.main_window.format_amount
         tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n = self.wallet.get_tx_info(self.tx)
-        self.tx_height = height
+        self.tx_height = height or self.tx.ephemeral.get('block_height') or None
         self.tx_hash = tx_hash
         desc = label or desc
         size = self.tx.estimated_size()

@@ -181,9 +181,11 @@ class ScriptOutput(ScriptOutputBase):
         s = super().to_ui_string(ignored)
         extra = []
         for a in __class__.attrs_extra:
-            extra.append(f'{a}={getattr(self, a, None)}')
+            val = getattr(self, a, None)
+            if val:
+                extra.append(f'{a}={val}')
         extra = ' '.join(extra)
-        return f'{s} [CashAcct: {extra}]'
+        return f'{s} [CashAcct: {extra}]' if extra else f'{s} [CashAcct]'
 
     def __repr__(self):
         return f'<ScriptOutput (CashAcct) {self.__str__()}>'
