@@ -951,7 +951,7 @@ class Transaction:
         t0 = time.time()
         t = None
         cls = __class__
-        self_txid = (self.is_complete() and self.txid()) or None
+        self_txid = self.txid()
         def doIt():
             '''
             This function is seemingly complex, but it's really conceptually
