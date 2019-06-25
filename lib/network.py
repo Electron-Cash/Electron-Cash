@@ -1167,10 +1167,10 @@ class Network(util.DaemonThread):
         handling for the 'default' mode.
 
         A server interface does not get associated with a blockchain
-        until it gets handled in the response to it's first header
+        until it gets handled in the response to its first header
         request.
         '''
-        interface.print_error("requesting header %d" % height)
+        interface.print_error(f"requesting header {height}")
         if height > networks.net.VERIFICATION_BLOCK_HEIGHT:
             params = [height]
         else:
@@ -1401,7 +1401,8 @@ class Network(util.DaemonThread):
     def init_headers_file(self):
         b = self.blockchains[0]
         filename = b.path()
-        length = 80 * (networks.net.VERIFICATION_BLOCK_HEIGHT + 1)
+        # NB: HEADER_SIZE = 80 bytes
+        length = blockchain.HEADER_SIZE * (networks.net.VERIFICATION_BLOCK_HEIGHT + 1)
         if not os.path.exists(filename) or os.path.getsize(filename) < length:
             with open(filename, 'wb') as f:
                 if length>0:
@@ -1673,19 +1674,23 @@ class Network(util.DaemonThread):
                 msg = _("Could not retrieve transaction for the specified hash.")
             return False, msg
 
-    def get_raw_block_header_for_height(self, height, timeout=30):
-        ''' Used by wallet code (Wallet.get_block_hash) as a fallback to
-        retrieve a block header for a given height.
-
-        Returns the raw header as a hex encoded string or None on failure.
-        '''
-        try:
-            if not self.interface or self.interface.mode != Interface.MODE_DEFAULT:
-                raise RuntimeError('Cannot get raw block header from network while interface is not connected and/or not in MODE_DEFFAULT')
-            return self.synchronous_get(('blockchain.block.header', [height]), timeout=timeout)
-        except Exception as e:
-            self.print_error(f"Exception retrieving block header at height {height}: {repr(e)}")
-
+    #def get_raw_block_header_for_height(self, height, timeout=30):
+    #    ''' Used by wallet code (Wallet.get_block_hash) as a fallback to
+    #    retrieve a block header for a given height.
+    #
+    #    Note this only actually works if Interface.mode == MODE_DEFAULT, and
+    #    even then I am not entirely sure it's race-condition-proof and totally
+    #    safe (see on_block_header for all the gotchas).  Do not use this
+    #    function for now.
+    #
+    #    Returns the raw header as a hex encoded string or None on failure. '''
+    #    try:
+    #        if not self.interface or self.interface.mode != Interface.MODE_DEFAULT:
+    #            raise RuntimeError('Cannot get raw block header from network while interface is not connected and/or not in MODE_DEFFAULT')
+    #        return self.synchronous_get(('blockchain.block.header', [height]), timeout=timeout)
+    #    except Exception as e:
+    #        self.print_error(f"Exception retrieving block header at height {height}: {repr(e)}")
+    #
 
     @staticmethod
     def __wait_for(it, timeout=30):
