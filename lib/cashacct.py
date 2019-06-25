@@ -30,11 +30,13 @@ carefully if also importing address.py.
 '''
 
 import re
+import requests
 from . import bitcoin
 from . import util
 from .address import Address, OpCodes, Script, ScriptError
 from .address import ScriptOutput as ScriptOutputBase
 from .transaction import BCDataStream
+from . import verifier
 
 # Cash Accounts protocol code prefix is 0x01010101
 # See OP_RETURN prefix guideline: https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/op_return-prefix-guideline.md
@@ -73,25 +75,19 @@ class ScriptOutput(ScriptOutputBase):
     attrs_extra = ( 'name', 'address', 'number', 'collision_hash', 'emoji' )
 
     @classmethod
-    def protocol_match_fast(cls, script_bytes):
+    def _protocol_match_fast(cls, script_bytes):
         '''Returns true iff the `script_bytes` at least START with the correct
         protocol code. Useful for fast-matching script outputs and testing
         if they are potential CashAcct registrations.
 
         `script_bytes` should be the full script as a bytes-like-object,
         including the OP_RETURN byte prefix.'''
-        script_bytes = cls._ensure_script(script_bytes)
         return script_bytes.startswith(cls._protocol_prefix)
 
     @classmethod
     def protocol_match(cls, script_bytes):
         '''Returns true iff the `script_bytes` is a valid Cash Accounts
-        registration script (has all the requisite fields, etc).
-
-        This check does parsing and thus is a bit slower than
-        `protocol_match_fast` which just looks for a prefix and does no
-        parsing.'''
-        script_bytes = cls._ensure_script(script_bytes)
+        registration script (has all the requisite fields, etc).'''
         try:
             res = cls.parse_script(script_bytes)
             return bool(res)
@@ -120,7 +116,7 @@ class ScriptOutput(ScriptOutputBase):
         self = super(__class__, cls).__new__(cls, script)
         self.name, self.address = self.parse_script(self.script)  # raises on error
         self.number, self.collision_hash, self.emoji = None, None, None  # ensure attributes defined
-        self.make_complete2(number, collision_hash, emoji=emoji)  # raises if number is not None and is bad and/or if collision_hash is not None and is bad, otherwise just sets attributes
+        self.make_complete2(number, collision_hash, emoji=emoji)  # raises if number  bad and/or if collision_hash is bad, otherwise just sets attributes. None ok for args.
         return self
 
     @staticmethod
@@ -220,7 +216,7 @@ class ScriptOutput(ScriptOutputBase):
         (name: str, address: Address) as a tuple. '''
         script = cls._ensure_script(script)
         # Check prefix, length, and that the 'type' byte is one we know about
-        if not cls.protocol_match_fast(script) or len(script) < 30 or script[-21] not in _data_types_addr_kind:
+        if not cls._protocol_match_fast(script) or len(script) < 30 or script[-21] not in _data_types_addr_kind:
             raise ArgumentError('Not a valid CashAcct registration script')
         script_short = script
         try:
@@ -392,3 +388,77 @@ def number_from_block_height(block_height):
     return block_height - height_modification
 
 bh2num = number_from_block_height  # alias
+
+
+#### Lookup & Verification
+
+servers = [
+    "https://cashacct.imaginary.cash",
+    "https://api.cashaccount.info"
+]
+
+def lookup(server, number, name=None, collision_hash=None, timeout=10.0):
+    ''' Synchronous lookup, returns the json dict of the response, or None on error. '''
+    url = f'{server}/lookup/{number}'
+    if name:
+        name = name.lower()
+        url += f'/{name}'
+    if collision_hash:
+        url += f'/{collision_hash}'
+    try:
+        r = requests.get(url, allow_redirects=True, timeout=timeout) # will raise requests.exceptions.Timeout on timeout
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        util.print_error("lookup:", repr(e))
+
+class CashAcct(util.PrintError, verifier.SPVDelegate):
+    ''' Class implementing cash account subsystem such as verification, etc. '''
+
+    def __init__(self, network, wallet):
+        assert network, "CashAcct cannot be instantiated without a network"
+        self.network = network
+        self.wallet = wallet
+        self.verifier = None
+
+    def start(self):
+        if not self.verifier:
+            # our own private verifier, we give it work via the delegate methods
+            self.verifier = verifier.SPV(self.network, self)
+            self.network.add_jobs([self.verifier])
+            util.finalization_print_error(self.verifier)
+
+    def stop(self):
+        if self.verifier:
+            self.verifier.release()
+            self.verifier = None
+
+    def diagnostic_name(self):
+        return f'{self.wallet.diagnostic_name()}.{__class__.__name__}'
+
+    #######################
+    # SPVDelegate Methods #
+    #######################
+    def get_unverified_txs(self) -> dict:
+        ''' Return a dict of tx_hash (hex encoded) -> height (int)'''
+        return dict()
+
+    def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple) -> None:
+        ''' Called when a verification is successful.
+        Params:
+            #1 tx_hash - hex string
+            #2 tuple of: (tx_height: int, timestamp: int, pos : int) '''
+
+    def is_up_to_date(self) -> bool:
+        ''' No-op '''
+        return False
+
+    def save_verified_tx(self, write : bool = False):
+        ''' No-op '''
+
+    def undo_verifications(self, blkchain : object, height : int) -> set:
+        ''' Called when the blockchain has changed to tell the wallet to undo
+        verifications when a reorg has happened. Returns a set of tx_hash. '''
+        return set()
+
+    # /SPVDelegate Methods
