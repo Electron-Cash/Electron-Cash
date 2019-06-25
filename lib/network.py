@@ -1059,7 +1059,7 @@ class Network(util.DaemonThread):
         if index in self.requested_chunks:
             self.requested_chunks.remove(index)
 
-        header_hexsize = 80 * 2
+        header_hexsize = blockchain.HEADER_SIZE * 2
         hexdata = result['hex']
         actual_header_count = len(hexdata) // header_hexsize
         # We accept less headers than we asked for, to cover the case where the distance to the tip was unknown.
@@ -1672,6 +1672,20 @@ class Network(util.DaemonThread):
                 # fall back to something generic.
                 msg = _("Could not retrieve transaction for the specified hash.")
             return False, msg
+
+    def get_raw_block_header_for_height(self, height, timeout=30):
+        ''' Used by wallet code (Wallet.get_block_hash) as a fallback to
+        retrieve a block header for a given height.
+
+        Returns the raw header as a hex encoded string or None on failure.
+        '''
+        try:
+            if not self.interface or self.interface.mode != Interface.MODE_DEFAULT:
+                raise RuntimeError('Cannot get raw block header from network while interface is not connected and/or not in MODE_DEFFAULT')
+            return self.synchronous_get(('blockchain.block.header', [height]), timeout=timeout)
+        except Exception as e:
+            self.print_error(f"Exception retrieving block header at height {height}: {repr(e)}")
+
 
     @staticmethod
     def __wait_for(it, timeout=30):

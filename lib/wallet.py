@@ -58,6 +58,8 @@ from .synchronizer import Synchronizer
 from .verifier import SPV
 from . import schnorr
 from . import ecc_fast
+from .blockchain import NULL_HASH_HEX
+
 
 from . import paymentrequest
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
@@ -549,12 +551,31 @@ class Abstract_Wallet(PrintError):
         height, ign, ign2 = self.get_tx_height(tx_hash)
         return self.get_block_hash(height)
 
-    def get_block_hash(self, height):
-        ''' Convenience method equivalent to blockchain.get_hegiht(). '''
+    def get_block_hash(self, height, *, timeout=None):
+        '''Convenience method equivalent to Blockchain.get_hegiht(), but
+        with added feature to also go out to server if Blockchain.get_height()
+        failed.
+
+        Specify a timeout (float) in seconds to optionally try the
+        network if our blockchain cache lacks the header in question.
+
+        If timeout is None, network will not be tried.'''
+        ret = None
         if self.network and height is not None and height >= 0 and height <= self.get_local_height():
             bchain = self.network.blockchain()
             if bchain:
-                return bchain.get_hash(height)
+                ret = bchain.get_hash(height)
+                if ret == NULL_HASH_HEX:
+                    # if hash was NULL (all zeroes), prefer to return None
+                    ret = None
+                if ret is None and isinstance(timeout, (int, float)):
+                    ret = self.network.get_raw_block_header_for_height(height, timeout=timeout)
+                    if ret:
+                        try: ret = hash_encode(Hash(bfh(ret)))
+                        except Exception as e:
+                            ret = None
+                            self.print_error("get_block_hash:", repr(e))
+        return ret
 
 
     def get_txpos(self, tx_hash):
