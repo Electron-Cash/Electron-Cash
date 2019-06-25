@@ -574,7 +574,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 fmt.setAnchorNames([f"output {i}"])  # anchor name for this line (remember input#); used by context menu creation
             # CashAccounts support
             if isinstance(addr, ScriptOutput) and not addr.is_complete() and self.tx_hash and self.tx_height:
-                block_hash = block_hash or self.wallet.get_block_hash(self.tx_height) or None
+                # *FIXME* This may hang for up to 3.0 seconds *FIXME*
+                block_hash = block_hash or self.wallet.get_block_hash(self.tx_height, timeout=3.0) or None
                 addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
             # /CashAccounts support
             addrstr = addr.to_ui_string()
