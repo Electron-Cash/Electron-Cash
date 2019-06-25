@@ -588,7 +588,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 # to solve this problem, as we will definitely need reliable
                 # block headers then.
                 block_hash = block_hash or self.wallet.get_block_hash(self.tx_height) or None
-                addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
+                if block_hash:
+                    addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
             # /CashAccounts support
             addrstr = addr.to_ui_string()
             cursor.insertText(addrstr, text_format(addr))
