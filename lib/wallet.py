@@ -551,7 +551,7 @@ class Abstract_Wallet(PrintError):
         height, ign, ign2 = self.get_tx_height(tx_hash)
         return self.get_block_hash(height)
 
-    def get_block_hash(self, height, *, timeout=None):
+    def get_block_hash(self, height):#, *, timeout=None):
         '''Convenience method equivalent to Blockchain.get_hegiht(), but
         with added feature to also go out to server if Blockchain.get_height()
         failed.
@@ -568,13 +568,15 @@ class Abstract_Wallet(PrintError):
                 if ret == NULL_HASH_HEX:
                     # if hash was NULL (all zeroes), prefer to return None
                     ret = None
-                if ret is None and isinstance(timeout, (int, float)):
-                    ret = self.network.get_raw_block_header_for_height(height, timeout=timeout)
-                    if ret:
-                        try: ret = hash_encode(Hash(bfh(ret)))
-                        except Exception as e:
-                            ret = None
-                            self.print_error("get_block_hash:", repr(e))
+                # The below is potentially unsafe. FIXME
+                #if ret is None and isinstance(timeout, (int, float)):
+                #
+                #    ret = self.network.get_raw_block_header_for_height(height, timeout=timeout)
+                #    if ret:
+                #        try: ret = hash_encode(Hash(bfh(ret)))
+                #        except Exception as e:
+                #            ret = None
+                #            self.print_error("get_block_hash:", repr(e))
         return ret
 
 
