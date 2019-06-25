@@ -120,7 +120,7 @@ class ScriptOutput(ScriptOutputBase):
         self = super(__class__, cls).__new__(cls, script)
         self.name, self.address = self.parse_script(self.script)  # raises on error
         self.number, self.collision_hash, self.emoji = None, None, None  # ensure attributes defined
-        self.make_complete(number, collision_hash, emoji=emoji)  # raises if number is not None and is bad and/or if collision_hash is not None and is bad, otherwise just sets attributes
+        self.make_complete2(number, collision_hash, emoji=emoji)  # raises if number is not None and is bad and/or if collision_hash is not None and is bad, otherwise just sets attributes
         return self
 
     @staticmethod
@@ -158,7 +158,7 @@ class ScriptOutput(ScriptOutputBase):
         except ArgumentError:
             return False
 
-    def make_complete(self, number, collision_hash, *, emoji=None):
+    def make_complete2(self, number, collision_hash, *, emoji=None):
         '''Make this ScriptOutput instance complete by filling in the number and
         collision_hash info. Raises ArgumentError on bad/out-of-spec args (None
         args are ok though, the cashacct just won't be complete).'''
@@ -168,20 +168,25 @@ class ScriptOutput(ScriptOutputBase):
         self.emoji = emoji or self.emoji
         return ok
 
-    def make_complete2(self, block_height, block_hash, txid):
+    def make_complete(self, block_height=None, block_hash=None, txid=None):
         '''Make this ScriptOutput instance complete by specifying block height,
         block_hash (hex string or bytes), and txid (hex string or bytes)'''
-        ch = collision_hash(block_hash, txid)
-        num = bh2num(block_height)
-        em = emoji(block_hash, txid)
-        return self.make_complete(num, ch, emoji=em)
+        ch = collision_hash(block_hash, txid) if block_hash and txid else None
+        num = bh2num(block_height) if block_height is not None else None
+        em = emoji(block_hash, txid) if ch else None
+        return self.make_complete2(num, ch, emoji=em)
 
-    def __repr__(self):
+    def to_ui_string(self, ignored=True):
+        ''' Overrides super to add cashaccount data '''
+        s = super().to_ui_string(ignored)
         extra = []
         for a in __class__.attrs_extra:
             extra.append(f'{a}={getattr(self, a, None)}')
         extra = ' '.join(extra)
-        return f'<ScriptOutput (CashAcct) {self.__str__()}  {extra}>'
+        return f'{s} [CashAcct: {extra}]'
+
+    def __repr__(self):
+        return f'<ScriptOutput (CashAcct) {self.__str__()}>'
 
     def __eq__(self, other):
         res = super().__eq__(other)
@@ -319,6 +324,9 @@ class ScriptOutput(ScriptOutputBase):
             myemoji = emoji(block_hash, txid)
         return cls(script, number=number, collision_hash=collision_hash, emoji=myemoji)
 
+
+# register ourself with the ScriptOutput protocol system
+ScriptOutputBase.protocol_classes.add(ScriptOutput)
 
 # Helper Functions
 def _ensure_bytes(arg, argname='Arg'):

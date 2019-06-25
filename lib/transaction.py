@@ -292,7 +292,7 @@ def get_address_from_output_script(_bytes):
         print_error('{}: Failed to parse tx ouptut {}. Exception was: {}'.format(__name__, _bytes.hex(), repr(e)))
         pass
 
-    return TYPE_SCRIPT, ScriptOutput(bytes(_bytes))
+    return TYPE_SCRIPT, ScriptOutput.protocol_factory(bytes(_bytes))
 
 
 def parse_input(vds):

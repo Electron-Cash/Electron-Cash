@@ -59,11 +59,11 @@ class TestCashAccounts(unittest.TestCase):
             so4 = cashacct.ScriptOutput(so2, number=101, collision_hash='1234567890')
             self.assertEqual(so3, so4)
             self.assertTrue(so4.is_complete())
-            self.assertTrue(so3.make_complete(103, '0123456789'))
-            self.assertRaises(Exception, so2.make_complete, 1, '12334567890')
-            self.assertRaises(Exception, so2.make_complete, 'adasd', '12334567890')
-            self.assertRaises(Exception, so2.make_complete, -1, '0123asdb2')
-            self.assertRaises(Exception, so2.make_complete, 99, '0123456789')
+            self.assertTrue(so3.make_complete2(103, '0123456789'))
+            self.assertRaises(Exception, so2.make_complete2, 1, '12334567890')
+            self.assertRaises(Exception, so2.make_complete2, 'adasd', '12334567890')
+            self.assertRaises(Exception, so2.make_complete2, -1, '0123asdb2')
+            self.assertRaises(Exception, so2.make_complete2, 99, '0123456789')
 
         # test the alternate from_script factory method
         nilac = '6a04010101010c4e696c61635468654772696d15017ee7b62fa98a985c5553ff66120a91b8189f6581'
@@ -85,11 +85,11 @@ class TestCashAccounts(unittest.TestCase):
         self.assertRaises(ValueError, lambda: cashacct.ScriptOutput.from_script(nilac, block_hash=bhash))  # incomplete
         self.assertRaises(ValueError, lambda: cashacct.ScriptOutput.from_script(nilac, block_hash=bhash, txid=txid, collision_hash=expected_collision_hash))  # conflicting args
         self.assertRaises(ValueError, lambda: cashacct.ScriptOutput.from_script(nilac, number=expected_number, block_height=bheight))  # conflicting args
-        # test operator __eq__ and also make_complete2
+        # test operator __eq__ and also make_complete
         so2 = cashacct.ScriptOutput.from_script(nilac)
         self.assertNotEqual(so, so2)
         self.assertFalse(so2.is_complete())
-        self.assertTrue(so2.make_complete2(bheight, bhash, txid))
+        self.assertTrue(so2.make_complete(bheight, bhash, txid))
         self.assertTrue(so2.is_complete())
         self.assertEqual(so, so2)
         self.assertEqual(so.number, so2.number)

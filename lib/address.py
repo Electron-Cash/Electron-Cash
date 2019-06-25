@@ -418,6 +418,37 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
         return '<ScriptOutput {}>'.format(self.__str__())
 
 
+    ###########################################
+    # Protocol system methods and class attrs #
+    ###########################################
+
+    # subclasses of ScriptOutput that handle protocols. Currently this will
+    # contain a cashacct.ScriptOutput instance
+    protocol_classes = set()
+
+    def make_complete(self, block_height=None, block_hash=None, txid=None):
+        ''' Subclasses implement this, noop here. '''
+        pass
+
+    def is_complete(self):
+        ''' Subclasses implement this, noop here. '''
+        return True
+
+    @classmethod
+    def find_protocol_class(cls, script_bytes):
+        ''' Scans the protocol_classes set, and if the passed-in script matches
+        a known protocol, returns that class, otherwise returns our class. '''
+        for c in cls.protocol_classes:
+            if c.protocol_match_fast(script_bytes) and c.protocol_match(script_bytes):
+                return c
+        return __class__
+
+    @staticmethod
+    def protocol_factory(script):
+        ''' One shot -- find the right class and construct object based on script '''
+        return __class__.find_protocol_class(script)(script)
+
+
 # A namedtuple for easy comparison and unique hashing
 class Address(namedtuple("AddressTuple", "hash160 kind")):
 
