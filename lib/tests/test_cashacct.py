@@ -43,7 +43,7 @@ class TestCashAccounts(unittest.TestCase):
             ( 'Mark', Address.from_string('qqy9myvyt7qffgye5a2mn2vn8ry95qm6asy40ptgx2'),
               bytes.fromhex('6a0401010101044d61726b1501085d91845f8094a099a755b9a99338c85a037aec')),
             ( 'Markk', Address.from_string('pqy9myvyt7qffgye5a2mn2vn8ry95qm6asnsjwvtah'),
-              bytes.fromhex('6a0401010101054d61726b6b1502085d91845f8094a099a755b9a99338c85a037aec')),
+              '6a0401010101054d61726b6b1502085d91845f8094a099a755b9a99338c85a037aec'),  # also tests auto-un-hexlify of str arg
         ]
         for name, address, b in valid_registration_scripts:
             so = cashacct.ScriptOutput(b)
@@ -55,14 +55,48 @@ class TestCashAccounts(unittest.TestCase):
             self.assertEqual(so2.address, address)
             self.assertFalse(so.is_complete())
             so3 = cashacct.ScriptOutput(so2, number=101, collision_hash='1234567890')
-            self.assertEqual(so2, so3)
+            self.assertNotEqual(so2, so3)
             so4 = cashacct.ScriptOutput(so2, number=101, collision_hash='1234567890')
+            self.assertEqual(so3, so4)
             self.assertTrue(so4.is_complete())
             self.assertTrue(so3.make_complete(103, '0123456789'))
             self.assertRaises(Exception, so2.make_complete, 1, '12334567890')
             self.assertRaises(Exception, so2.make_complete, 'adasd', '12334567890')
             self.assertRaises(Exception, so2.make_complete, -1, '0123asdb2')
             self.assertRaises(Exception, so2.make_complete, 99, '0123456789')
+
+        # test the alternate from_script factory method
+        nilac = '6a04010101010c4e696c61635468654772696d15017ee7b62fa98a985c5553ff66120a91b8189f6581'
+        txid = '731cdf537f6f10c142d4fc3a3d787986a783123c34727f53deaa5aa67be61911'
+        bhash = '000000000000000002e5216ece231134437e29a837937a90f374807b76fdbb1b'
+        bheight = 565806
+        expected_name = 'NilacTheGrim'
+        expected_address = Address.from_string('qplw0d304x9fshz420lkvys2jxup38m9symky6k028')
+        expected_collision_hash = '1887135381'
+        expected_number = 2186
+        expected_emoji = chr(128273)
+        so = cashacct.ScriptOutput.from_script(nilac, block_hash=bhash, txid=txid, block_height=bheight)
+        self.assertEqual(so.collision_hash, expected_collision_hash)
+        self.assertEqual(so.name, expected_name)
+        self.assertEqual(so.number, expected_number)
+        self.assertEqual(so.address, expected_address)
+        self.assertEqual(so.emoji, expected_emoji)
+        # test incomplete / conflicting args
+        self.assertRaises(ValueError, lambda: cashacct.ScriptOutput.from_script(nilac, block_hash=bhash))  # incomplete
+        self.assertRaises(ValueError, lambda: cashacct.ScriptOutput.from_script(nilac, block_hash=bhash, txid=txid, collision_hash=expected_collision_hash))  # conflicting args
+        self.assertRaises(ValueError, lambda: cashacct.ScriptOutput.from_script(nilac, number=expected_number, block_height=bheight))  # conflicting args
+        # test operator __eq__ and also make_complete2
+        so2 = cashacct.ScriptOutput.from_script(nilac)
+        self.assertNotEqual(so, so2)
+        self.assertFalse(so2.is_complete())
+        self.assertTrue(so2.make_complete2(bheight, bhash, txid))
+        self.assertTrue(so2.is_complete())
+        self.assertEqual(so, so2)
+        self.assertEqual(so.number, so2.number)
+        self.assertEqual(so.collision_hash, so2.collision_hash)
+        self.assertEqual(so.emoji, so2.emoji)
+
+
         invalid_registration_scripts = [
             b'garbage',
             'wrongtype',  ['more wrong type'],
