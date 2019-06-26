@@ -31,6 +31,8 @@ carefully if also importing address.py.
 
 import re
 import requests
+import threading
+from collections import namedtuple
 from . import bitcoin
 from . import util
 from .address import Address, OpCodes, Script, ScriptError
@@ -172,6 +174,10 @@ class ScriptOutput(ScriptOutputBase):
         num = bh2num(block_height) if block_height is not None else None
         em = emoji(block_hash, txid) if ch else None
         return self.make_complete2(num, ch, emoji=em)
+
+    def clear_completion(self):
+        '''Make this ScriptOutput incomplete again.'''
+        self.number = self.collision_hash = self.emoji = None
 
     def to_ui_string(self, ignored=True):
         ''' Overrides super to add cashaccount data '''
@@ -416,16 +422,37 @@ def lookup(server, number, name=None, collision_hash=None, timeout=10.0):
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
 
-    def __init__(self, network, wallet):
-        assert network, "CashAcct cannot be instantiated without a network"
-        self.network = network
-        self.wallet = wallet
-        self.verifier = None
+    AddedTx = namedtuple("AddedTx", "txid, out_n, script")
+    VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
 
+    # TODO...
+    ExtAddedTx = namedtuple("ExtAddedTx", "txid, tx_raw, out_n, script")  # NB: tx_raw is hex encoded string
+
+    CashAcctInfo = namedtuple("CashAcctInfo", "name, address, number, collision_hash, emoji")
+
+    def __init__(self, wallet):
+        assert wallet, "CashAcct cannot be instantiated without a wallet"
+        self.wallet = wallet
+        self.network = None
+        self.verifier = None
+        self.lock = threading.Lock()
+
+        self.wallet_added_tx = dict() # dict of txid -> AddedTx
+        self.wallet_verif_tx = dict() # dict of txid -> VerifTx
+
+        self.my_cashaccts = set() # set of txids of cashaccts that are "mine" (ie the script points to an address in wallet), and are VERIFIED. txid may either be a wallet tx or an external tx user registered with us in the GUI
+        self.ext_cashaccts = set() # set of txids of cashaccts that are NOT "mine" (ie the script points to an address outside the wallet), and are VERIFIED. txid may either be a wallet tx or an external tx user registered with us in the GUI
+        # TESTING
         self.test_unverif = dict()
 
-    def start(self):
-        if not self.verifier:
+    def diagnostic_name(self):
+        return f'{self.wallet.diagnostic_name()}.{__class__.__name__}'
+
+    def start(self, network):
+        assert network, "CashAcct start requires a valid network instance"
+        if not self.network:
+            assert not self.verifier
+            self.network = network
             # our own private verifier, we give it work via the delegate methods
             self.verifier = verifier.SPV(self.network, self)
             self.network.add_jobs([self.verifier])
@@ -433,11 +460,109 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
     def stop(self):
         if self.verifier:
+            assert self.network
             self.verifier.release()
             self.verifier = None
+            self.network = None
 
-    def diagnostic_name(self):
-        return f'{self.wallet.diagnostic_name()}.{__class__.__name__}'
+    def _get_cashaccounts(self, mine, domain=None):
+        if domain and not isinstance(domain, set):
+            domain = set(domain)
+        ret = []
+        with self.lock:
+            txid_set = self.my_cashaccts if mine else self.ext_cashaccts
+            for txid in txid_set:
+                a = self.wallet_added_tx.get(txid) # TODO -> or self.ext_added_tx.get(txid)
+                if not a or txid not in self.wallet_verif_tx: # TODO -> and txid not in self.ext_verif_tx:
+                    # sanity check..
+                    continue
+                if domain is None or a.script.address in domain:
+                    ret.append(self.CashAcctInfo(name=a.script.name,
+                                                 address=a.script.address,
+                                                 number=a.script.number,
+                                                 collision_hash=a.script.collision_hash,
+                                                 emoji=a.script.emoji
+                                                 ))
+        return ret
+
+    def get_my_cashaccounts(self, domain=None):
+        ''' Returns a list of CashAcctInfo for cash accounts in domain.
+        Domain must be a list (or preferably a set) of addresses in the wallet.
+        If domain is None, the match is done against all addresses in the wallet. '''
+        return self._get_cashaccounts(True, domain)
+
+    def get_external_cashaccounts(self, domain=None):
+        ''' Like get_my_cashaccounts except domain should be a set of addresses
+        NOT in the wallet. domain=None signifies get all known external cash accounts. '''
+        return self._get_cashaccounts(False, domain)
+
+    def load(self):
+        ''' TODO: implement '''
+
+    def save(self, write=False):
+        ''' TODO: implement '''
+
+    #########################
+    # Wallet hook callbacks #
+    #########################
+    def add_verified_tx_hook(self, txid: str, height_ts_pos_tup: tuple, header: dict):
+        ''' Called by wallet when it itself got a verified tx from its own
+        verifier.  We need to know about tx's that the parent wallet verified
+        so we don't do the same work again. '''
+        with self.lock:
+            # Note: precondition here is that the tx exists in wallet_added_tx,
+            # otherwise the tx is not relevant to us (contains no cash account registrations)
+            added = self.wallet_added_tx.get(txid)
+            if not added:
+                return
+
+            block_hash = blockchain.hash_header(header)
+            self.wallet_verif_tx[txid] = v = self.VerifTx(txid=txid, block_height=height_ts_pos_tup[0], block_hash=block_hash)
+            # update/completeify
+            added.script.make_complete(block_height=v.block_height, block_hash=v.block_hash, txid=v.txid)
+
+            # NB: assumption here is that is_mine only takes very temporary locks if any .. to prevent deadlocks make sure that is the case!
+            if self.wallet.is_mine(added.script.address):
+                self.my_cashaccts.add(v.txid)
+            else:
+                self.ext_cashaccts.add(v.txid)
+
+    def undo_verifications_hook(self, txs: set):
+        ''' Called by wallet when it itself got called to undo_verifictions by
+        its verifier. We need to be tool what set of tx_hash was undone. '''
+        if not txs: return
+        with self.lock:
+            for txid in txs:
+                self.wallet_verif_tx.pop(txid, None)
+                self.my_cashaccts.discard(txid)
+                self.ext_cashaccts.discard(txid)
+
+    def add_transaction_hook(self, txid: str, tx: object, out_n: int, script: ScriptOutput):
+        ''' Called by wallet inside add_transaction (but with lock not held) to
+        notify us about transactions that were added containing a cashacct
+        scriptoutput. Note these tx's aren't yet in the verified set. '''
+        assert isinstance(script, ScriptOutput)
+        with self.lock:
+            self.wallet_added_tx[txid] = self.AddedTx(txid=txid, out_n=out_n, script=script)
+
+    def remove_transaction_hook(self, txid: str):
+        ''' Called by wallet inside remove_transaction (but with lock not held)
+        to tell us about a transaction that was removed. '''
+        with self.lock:
+            self.wallet_added_tx.pop(txid, None)
+            self.my_cashaccts.discard(txid)
+            self.ext_cashaccts.discard(txid)
+
+    def add_unverified_tx_hook(self, txid: str, block_height: int):
+        with self.lock:
+            self.wallet_verif_tx.pop(txid, None)
+            self.my_cashaccts.discard(txid)
+            self.ext_cashaccts.discard(txid)
+            added = self.wallet_added_tx.get(txid)
+            if added:
+                added.script.clear_completion()
+
+    # /Wallet hook callbacks
 
     #######################
     # SPVDelegate Methods #
@@ -454,7 +579,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             #3 the header - dict. This can be subsequently serialized using
                blockchain.serialize_header if so desiered, or it can be ignored.
         '''
-        del self.test_unverif[tx_hash]
+        self.test_unverif.pop(tx_hash, None)
         self.print_error('verified:', tx_hash, height_ts_pos_tup, blockchain.hash_header(header))
 
     def is_up_to_date(self) -> bool:
