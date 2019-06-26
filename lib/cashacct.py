@@ -37,6 +37,7 @@ from .address import Address, OpCodes, Script, ScriptError
 from .address import ScriptOutput as ScriptOutputBase
 from .transaction import BCDataStream
 from . import verifier
+from . import blockchain
 
 # Cash Accounts protocol code prefix is 0x01010101
 # See OP_RETURN prefix guideline: https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/op_return-prefix-guideline.md
@@ -421,6 +422,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.wallet = wallet
         self.verifier = None
 
+        self.test_unverif = dict()
+
     def start(self):
         if not self.verifier:
             # our own private verifier, we give it work via the delegate methods
@@ -441,13 +444,18 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     #######################
     def get_unverified_txs(self) -> dict:
         ''' Return a dict of tx_hash (hex encoded) -> height (int)'''
-        return dict()
+        return self.test_unverif.copy()
 
-    def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple) -> None:
+    def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple, header : dict) -> None:
         ''' Called when a verification is successful.
         Params:
             #1 tx_hash - hex string
-            #2 tuple of: (tx_height: int, timestamp: int, pos : int) '''
+            #2 tuple of: (tx_height: int, timestamp: int, pos : int)
+            #3 the header - dict. This can be subsequently serialized using
+               blockchain.serialize_header if so desiered, or it can be ignored.
+        '''
+        del self.test_unverif[tx_hash]
+        self.print_error('verified:', tx_hash, height_ts_pos_tup, blockchain.hash_header(header))
 
     def is_up_to_date(self) -> bool:
         ''' No-op '''
@@ -460,5 +468,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' Called when the blockchain has changed to tell the wallet to undo
         verifications when a reorg has happened. Returns a set of tx_hash. '''
         return set()
+
+    def verification_failed(self, tx_hash, reason):
+        ''' TODO '''
+        self.print_error(f"SPV failed for {tx_hash}, reason: '{reason}'")
 
     # /SPVDelegate Methods

@@ -495,13 +495,17 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if tx_hash not in self.verified_tx:
                 self.unverified_tx[tx_hash] = tx_height
 
-    def add_verified_tx(self, tx_hash, info):
+    def add_verified_tx(self, tx_hash, info, header_ignored):
         # Remove from the unverified map and add to the verified map and
         with self.lock:
             self.unverified_tx.pop(tx_hash, None)
             self.verified_tx[tx_hash] = info  # (tx_height, timestamp, pos)
             height, conf, timestamp = self.get_tx_height(tx_hash)
         self.network.trigger_callback('verified2', self, tx_hash, height, conf, timestamp)
+
+    def verification_failed(self, tx_hash, reason):
+        ''' TODO: Notify gui of this if it keeps happening, try a different
+        server, rate-limited retries, etc '''
 
     def get_unverified_txs(self):
         '''Returns a map from tx hash to transaction height'''

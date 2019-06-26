@@ -41,11 +41,14 @@ class SPVDelegate(ABC):
         ''' Return a dict of tx_hash (hex encoded) -> height (int)'''
 
     @abstractmethod
-    def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple) -> None:
+    def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple, header : dict) -> None:
         ''' Called when a verification is successful.
         Params:
             #1 tx_hash - hex string
-            #2 tuple of: (tx_height: int, timestamp: int, pos : int) '''
+            #2 tuple of: (tx_height: int, timestamp: int, pos : int)
+            #3 the header - dict. This can be subsequently serialized using
+               blockchain.serialize_header if so desiered, or it can be ignored.
+        '''
 
     @abstractmethod
     def is_up_to_date(self) -> bool:
@@ -69,6 +72,11 @@ class SPVDelegate(ABC):
         ''' Called when the blockchain has changed to tell the wallet to undo
         verifications when a reorg has happened. Returns a set of tx_hashes that
         were undone.'''
+
+    @abstractmethod
+    def verification_failed(self, tx_hash : str, reason : str):
+        ''' Called by verifier when server did return a response but the tx
+        in question could not be verified. Reason is one of SPV.failure_reasons'''
 
     @abstractmethod
     def diagnostic_name(self):
@@ -161,6 +169,10 @@ class SPV(ThreadJob):
             self.blockchain = self.network.blockchain()
             self.undo_verifications()
 
+    failure_reasons = [
+        'inner_node_tx', 'missing_header', 'merkle_mismatch',
+    ]
+
     def verify_merkle(self, response):
         if self.cleaned_up:
             return  # we have been killed, this was just an orphan callback
@@ -180,6 +192,7 @@ class SPV(ThreadJob):
         except InnerNodeOfSpvProofIsValidTx:
             self.print_error("merkle verification failed for {} (inner node looks like tx)"
                              .format(tx_hash))
+            self.wallet.verification_failed(tx_hash, self.failure_reasons[0])
             return
 
         header = self.network.blockchain().read_header(tx_height)
@@ -190,11 +203,13 @@ class SPV(ThreadJob):
             self.print_error(
                 "merkle verification failed for {} (missing header {})"
                 .format(tx_hash, tx_height))
+            self.wallet.verification_failed(tx_hash, self.failure_reasons[1])
             return
         if header.get('merkle_root') != merkle_root:
             self.print_error(
                 "merkle verification failed for {} (merkle root mismatch {} != {})"
                 .format(tx_hash, header.get('merkle_root'), merkle_root))
+            self.wallet.verification_failed(tx_hash, self.failure_reasons[2])
             return
         # we passed all the tests
         self.merkle_roots[tx_hash] = merkle_root
@@ -202,7 +217,7 @@ class SPV(ThreadJob):
         # this proof again in case of verification failure from the same server
         self.requested_merkle.discard(tx_hash)
         self.print_error("verified %s" % tx_hash)
-        self.wallet.add_verified_tx(tx_hash, (tx_height, header.get('timestamp'), pos))
+        self.wallet.add_verified_tx(tx_hash, (tx_height, header.get('timestamp'), pos), header)
         if self.is_up_to_date() and self.wallet.is_up_to_date() and not self.qbusy:
             self.wallet.save_verified_tx(write=True)
             self.network.trigger_callback('wallet_updated', self.wallet)  # This callback will happen very rarely.. mostly right as the last tx is verified. It's to ensure GUI is updated fully.
