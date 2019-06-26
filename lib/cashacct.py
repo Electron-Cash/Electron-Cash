@@ -468,16 +468,21 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = None
             self.network = None
 
-    def get_cashaccounts(self, domain=None):
+    def get_cashaccounts(self, domain=None, inv=False):
         ''' Returns a list of CashAcctInfo for verified cash accounts in domain.
-        Domain must be a list of addresses (either wallet or external).
-        If domain is None, every verified cash account we know about is returned. '''
-        if domain is None:
-            domain = self.v_by_addr
+        Domain must be an iterable of addresses (either wallet or external).
+        If domain is None, every verified cash account we know about is returned.
 
+        If inv is True, then domain specifies addresses NOT to include
+        in the results (i.e. eevery verified cash account we know about not in
+        domain be returned). '''
+        if domain is None:
+            domain = self.v_by_addr if not inv else set()
         ret = []
         seen = set()
         with self.lock:
+            if inv:
+                domain = set(self.v_by_addr) - set(domain)
             for addr in domain:
                 txids = self.v_by_addr.get(addr, set())
                 for txid in txids:
@@ -498,6 +503,11 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' Convenience method, returns all the verified cash accounts we
         know about for wallet addresses only. '''
         return self.get_cashaccounts(domain=self.wallet.get_addresses())
+
+    def get_external_cashaccounts(self):
+        ''' Convenience method, retruns all the verified cash accounts we
+        know about that are not for wallet addresses. '''
+        return self.get_cashaccounts(domain=self.wallet.get_addresses(), inv=True)
 
 
     def load(self):
