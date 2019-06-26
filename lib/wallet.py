@@ -174,6 +174,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # verifier (SPV) and synchronizer are started in start_threads
         self.synchronizer = None
         self.verifier = None
+        # CashAccounts subsystem. Its network-dependent layer is started in
+        # start_threads. Note: object instantiation should be lightweight here.
+        # self.cashacct.load() is called later in this function to load data.
+        self.cashacct = cashacct.CashAcct(self)
+        finalization_print_error(self.cashacct)  # debug object lifecycle
 
         # Cache of Address -> (c,u,x) balance. This cache is used by
         # get_addr_balance to significantly speed it up (it is called a lot).
@@ -246,10 +251,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.load_transactions()
         self.build_reverse_history()
 
+        # cashacct is started in start_threads, but it needs to have relevant
+        # data here, before check_history() is called below.
+        self.cashacct.load()
+
         self.check_history()
 
         # Print debug message on finalization
-        finalization_print_error(self, "[{}/{}] finalized".format(__class__.__name__, self.diagnostic_name()))
+        finalization_print_error(self, "[{}/{}] finalized".format(type(self).__name__, self.diagnostic_name()))
 
     @classmethod
     def to_Address_dict(cls, d):
@@ -494,14 +503,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # tx will be verified only if height > 0
             if tx_hash not in self.verified_tx:
                 self.unverified_tx[tx_hash] = tx_height
+        self.cashacct.add_unverified_tx_hook(tx_hash, tx_height)
 
-    def add_verified_tx(self, tx_hash, info, header_ignored):
+    def add_verified_tx(self, tx_hash, info, header):
         # Remove from the unverified map and add to the verified map and
         with self.lock:
             self.unverified_tx.pop(tx_hash, None)
             self.verified_tx[tx_hash] = info  # (tx_height, timestamp, pos)
             height, conf, timestamp = self.get_tx_height(tx_hash)
         self.network.trigger_callback('verified2', self, tx_hash, height, conf, timestamp)
+        self.cashacct.add_verified_tx_hook(tx_hash, info, header)
 
     def verification_failed(self, tx_hash, reason):
         ''' TODO: Notify gui of this if it keeps happening, try a different
@@ -532,6 +543,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         txs.add(tx_hash)
         if txs:
             self._addr_bal_cache = {}  # this is probably not necessary -- as the receive_history_callback will invalidate bad cache items -- but just to be paranoid we clear the whole balance cache on reorg anyway as a safety measure
+            self.cashacct.undo_verifications_hook(txs)
         return txs
 
     def get_local_height(self):
@@ -892,6 +904,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def add_transaction(self, tx_hash, tx):
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
+        cashacct_adds = []
         with self.transaction_lock:
             # add inputs
             self.txi[tx_hash] = d = {}
@@ -919,8 +932,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             for n, txo in enumerate(tx.outputs()):
                 ser = tx_hash + ':%d'%n
                 _type, addr, v = txo
-                if self.is_mine(addr):
-                    if not addr in d:
+                if isinstance(addr, cashacct.ScriptOutput):
+                    # auto-detect CashAccount registrations we see,
+                    # and notify cashacct subsystem of that fact
+                    cashacct_adds.append((tx_hash, tx, n, addr))
+                elif self.is_mine(addr):
+                    if addr not in d:
                         d[addr] = []
                     d[addr].append((n, v, is_coinbase))
                     self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
@@ -934,6 +951,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     dd[addr].append((ser, v))
             # save
             self.transactions[tx_hash] = tx
+
+        # do this with the lock NOT held
+        for args in cashacct_adds:
+            self.cashacct.add_transaction_hook(*args)
 
     def remove_transaction(self, tx_hash):
         with self.transaction_lock:
@@ -967,6 +988,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             except KeyError: self.print_error("tx was not in input history", tx_hash)
             try: self.txo.pop(tx_hash)
             except KeyError: self.print_error("tx was not in output history", tx_hash)
+
+        # do this without the lock held
+        self.cashacct.remove_transaction_hook(tx_hash)
 
 
     def receive_tx_callback(self, tx_hash, tx, tx_height):
@@ -1333,16 +1357,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.prepare_for_verifier()
             self.verifier = SPV(self.network, self)
             self.synchronizer = Synchronizer(self, network)
-            self.cashacct = cashacct.CashAcct(self.network, self)
             finalization_print_error(self.verifier)
             finalization_print_error(self.synchronizer)
-            finalization_print_error(self.cashacct)
             network.add_jobs([self.verifier, self.synchronizer])
-            self.cashacct.start()  # start cashacct subsystem, nework.add_jobs, etc
+            self.cashacct.start(self.network)  # start cashacct network-dependent subsystem, nework.add_jobs, etc
         else:
             self.verifier = None
             self.synchronizer = None
-            self.cashacct = None
 
     def stop_threads(self):
         if self.network:
@@ -1358,7 +1379,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.verifier.release()
             self.synchronizer = None
             self.verifier = None
-            self.cashacct = None
             # Now no references to the syncronizer or verifier
             # remain so they will be GC-ed
             self.storage.put('stored_height', self.get_local_height())
