@@ -562,6 +562,18 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             if added:
                 added.script.clear_completion()
 
+    def on_address_addition(self, address):
+        ''' Called by wallet when a new address is added in imported wallet.
+        TODO: Implement. '''
+
+    def on_address_deletion(self, address):
+        ''' Called by wallet when an existing address is deleted in imported wallet
+        TODO: Implement. '''
+
+    def on_clear_history(self):
+        ''' Called by wallet rebuild history mechanism to clear everything.
+        TODO: Implement. '''
+
     # /Wallet hook callbacks
 
     #######################

@@ -335,6 +335,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self._addr_bal_cache = {}
             self._history = {}
             self.tx_addr_hist = defaultdict(set)
+            self.cashacct.on_clear_history()
+            self.cashacct.save()
 
     @profiler
     def build_reverse_history(self):
@@ -364,6 +366,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     save = True
         if save:
             self.save_transactions()
+            self.cashacct.save()
 
     def basename(self):
         return os.path.basename(self.storage.path)
@@ -394,11 +397,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         with self.lock:
             self.up_to_date = up_to_date
             if up_to_date:
-                self.save_transactions(write=True)
+                self.save_transactions()
                 # if the verifier is also up to date, persist that too;
                 # otherwise it will persist its results when it finishes
                 if self.verifier and self.verifier.is_up_to_date():
-                    self.save_verified_tx(write=True)
+                    self.save_verified_tx()
+                self.cashacct.save()
+                self.storage.write()
 
     def is_up_to_date(self):
         with self.lock: return self.up_to_date
@@ -1385,6 +1390,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.save_transactions()
         self.save_verified_tx()
         self.storage.put('frozen_coins', list(self.frozen_coins))
+        self.cashacct.save()
         self.storage.write()
 
     def wait_until_synchronized(self, callback=None):
@@ -1794,6 +1800,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self._history[address] = []
         if self.synchronizer:
             self.synchronizer.add(address)
+        self.cashacct.on_address_addition(address)
 
     def has_password(self):
         return self.storage.get('use_encryption', False)
@@ -1834,6 +1841,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.save_addresses()
         self.save_transactions()
         self.save_verified_tx()
+        self.cashacct.save()
         self.storage.write()
         self.start_threads(network)
         self.network.trigger_callback('wallet_updated', self)
@@ -1998,7 +2006,14 @@ class ImportedWalletBase(Simple_Wallet):
         self.set_frozen_state([address], False)
 
         self.delete_address_derived(address)
+
+        self.cashacct.on_address_deletion(address)
+        self.cashacct.save()
+
         self.save_addresses()
+
+        self.storage.write() # no-op if above already wrote
+
 
 
 class ImportedAddressWallet(ImportedWalletBase):
@@ -2058,9 +2073,10 @@ class ImportedAddressWallet(ImportedWalletBase):
         if address in self.addresses:
             return False
         self.addresses.append(address)
-        self.save_addresses()
-        self.storage.write()
         self.add_address(address)
+        self.cashacct.save()
+        self.save_addresses()
+        self.storage.write() # no-op if already wrote in previous call
         self._sorted = None
         return True
 
@@ -2136,8 +2152,10 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
     def import_private_key(self, sec, pw):
         pubkey = self.keystore.import_privkey(sec, pw)
         self.save_keystore()
-        self.storage.write()
         self.add_address(pubkey.address)
+        self.cashacct.save()
+        self.save_addresses()
+        self.storage.write()  # no-op if above already wrote
         return pubkey.address.to_ui_string()
 
     def export_private_key(self, address, password):
