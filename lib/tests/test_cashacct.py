@@ -95,6 +95,14 @@ class TestCashAccounts(unittest.TestCase):
         self.assertEqual(so.number, so2.number)
         self.assertEqual(so.collision_hash, so2.collision_hash)
         self.assertEqual(so.emoji, so2.emoji)
+        # test copy
+        so_copy = so.copy()
+        self.assertEqual(so_copy, so)
+        # test info <-> script
+        info = cashacct.info_from_script(so_copy, txid)
+        so_copy_2, txid_2 = cashacct.script_from_info(info)
+        self.assertEqual(so_copy_2, so_copy)
+        self.assertEqual(txid_2, txid)
 
 
         invalid_registration_scripts = [
