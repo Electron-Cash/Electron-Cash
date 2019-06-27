@@ -202,6 +202,12 @@ class ScriptOutput(ScriptOutputBase):
         extra = ' '.join(extra)
         return f'{s} [CashAcct: {extra}]' if extra else f'{s} [CashAcct]'
 
+    def block_height(self) -> int:
+        ''' Convenience method to returns the block_height.
+        Requires that this class have its 'number' attribute not None, otherwise
+        returns 0. '''
+        return self.number + height_modification if self.number else 0
+
     def __repr__(self):
         return f'<ScriptOutput (CashAcct) {self.__str__()}>'
 
@@ -341,6 +347,20 @@ class ScriptOutput(ScriptOutputBase):
             myemoji = emoji(block_hash, txid)
         return cls(script, number=number, collision_hash=collision_hash, emoji=myemoji)
 
+    @classmethod
+    def from_dict(cls, d: dict) -> object:
+        ''' Create an isntance from a dict created by to_dict. '''
+        return cls(d['script'],  # hex -> bytes will get auto-converted in c'tor
+                   number=d.get('number'), collision_hash=d.get('collision_hash'),
+                   emoji=d.get('emoji'))
+
+    def to_dict(self) -> dict:
+        assert self.script
+        d = { 'script' : self.script.hex() }
+        if self.number is not None: d['number'] = self.number
+        if self.collision_hash is not None: d['collision_hash'] = self.collision_hash
+        if self.emoji is not None: d['emoji'] = self.emoji
+        return d
 
 # register ourself with the ScriptOutput protocol system
 ScriptOutputBase.protocol_classes.add(ScriptOutput)
@@ -415,7 +435,7 @@ num2bh = number_to_block_height  # alias
 
 #### Lookup & Verification
 
-CashAcctInfo = namedtuple("CashAcctInfo", "name, address, number, collision_hash, emoji, txid")
+Info = namedtuple("Info", "name, address, number, collision_hash, emoji, txid")
 
 servers = [
     "https://cashacct.imaginary.cash",
@@ -423,7 +443,7 @@ servers = [
 ]
 
 def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> list:
-    ''' Synchronous lookup, returns a list of (txid, out_n, script) tuples, or
+    ''' Synchronous lookup, returns a list of AddedTx [(txid, script) tuples], or
     None on error. (Optionally pass a list as the `exc` parameter and the
     exception encountered will be returned to caller by appending to the list,)
     '''
@@ -450,12 +470,11 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
                 raise AssertionError('Could not get header')
             block_hash = blockchain.hash_header_hex(header_hex)
             tx = Transaction(txraw)
-            for out_n, txo in enumerate(tx.outputs()):
-                _typ, script, value = txo
-                if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file
+            for _typ, script, value in tx.outputs():
+                if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file, not addess.ScriptOutput
                     txid = tx.txid()
                     script.make_complete(block_height=block, block_hash=block_hash, txid=txid)
-                    ret.append(CashAcct.AddedTx(txid, out_n, script))
+                    ret.append(CashAcct.AddedTx(txid, script))
                     break # there will be no more outputs in this tx that are relevant
         return ret
     except Exception as e:
@@ -466,7 +485,7 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
 
-    AddedTx = namedtuple("AddedTx", "txid, out_n, script")
+    AddedTx = namedtuple("AddedTx", "txid, script")
     VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
 
     def __init__(self, wallet):
@@ -511,7 +530,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.network = None
 
     def get_cashaccounts(self, domain=None, inv=False) -> list:
-        ''' Returns a list of CashAcctInfo for verified cash accounts in domain.
+        ''' Returns a list of Info objects for verified cash accounts in domain.
         Domain must be an iterable of addresses (either wallet or external).
         If domain is None, every verified cash account we know about is returned.
 
@@ -555,7 +574,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         '''
         FYI, current data model is:
 
-        AddedTx = namedtuple("AddedTx", "txid, out_n, script")
+        AddedTx = namedtuple("AddedTx", "txid, script")
         VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
 
         self.wallet_added_tx = dict() # dict of txid -> AddedTx
@@ -565,27 +584,28 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
         '''
+        return
 
         # This is just scratch code.. TODO: IMPLEMENT
         wat_d, eat_d, vtx_d = dict(), dict(), dict()
         with self.lock:
             for txid, atx in self.wallet_added_tx.items():
-                wat_d[txid] = [atx.out_n, atx.script.script.hex()]
+                wat_d[txid] = atx.script.to_dict()
             for txid, etx in self.ext_added_tx.items():
-                eat_d[txid] = [etx.out_n, etx.script.script.hex()]
+                eat_d[txid] = etx.script.script.to_dict()
             for txid, vtx in self.v_tx.items():
                 vtx_d[txid] = [vtx.block_height, vtx.block_hash]
-        '''
+
         import json
         self.print_error(f"would have saved:\n"
                          f"wat_d = {json.dumps(wat_d)}\n"
                          f"eat_d = {json.dumps(eat_d)}\n"
                          f"vtx_d = {json.dumps(vtx_d)}\n"
                          )
-        '''
+
 
     def find(self, name: str, number: int = None, collision_prefix: str = None) -> list:
-        ''' Returns a list of CashAcctInfo for verified cash accounts matching
+        ''' Returns a list of Info objects for verified cash accounts matching
         lowercased name.  Optionally you can narrow the search by specifying
         number (int) and a collision_prefix (str of digits) '''
         ret = []
@@ -614,12 +634,12 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
     @classmethod
     def _info_from_script(cls, script, txid):
-        return CashAcctInfo(name=script.name,
-                            address=script.address,
-                            number=script.number,
-                            collision_hash=script.collision_hash,
-                            emoji=script.emoji,
-                            txid=txid)
+        return Info(name=script.name,
+                    address=script.address,
+                    number=script.number,
+                    collision_hash=script.collision_hash,
+                    emoji=script.emoji,
+                    txid=txid)
 
     def _find_script(self, txid, print_if_missing=True):
         ''' lock should be held by caller '''
@@ -694,7 +714,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         scriptoutput. Note these tx's aren't yet in the verified set. '''
         assert isinstance(script, ScriptOutput)
         with self.lock:
-            self.wallet_added_tx[txid] = self.AddedTx(txid=txid, out_n=out_n, script=script)
+            self.wallet_added_tx[txid] = self.AddedTx(txid=txid, script=script)
 
     def remove_transaction_hook(self, txid: str):
         ''' Called by wallet inside remove_transaction (but with lock not held)
