@@ -120,12 +120,19 @@ class ScriptOutput(ScriptOutputBase):
 
                 name, address, number, collision_hash, emoji
         '''
+        if isinstance(script, cls) and not any((number, collision_hash, emoji)):
+            # copy constructor work-alike
+            number, collision_hash, emoji = script.number, script.collision_hash, script.emoji
         script = cls._ensure_script(script)
         self = super(__class__, cls).__new__(cls, script)
         self.name, self.address = self.parse_script(self.script)  # raises on error
         self.number, self.collision_hash, self.emoji = None, None, None  # ensure attributes defined
         self.make_complete2(number, collision_hash, emoji=emoji)  # raises if number  bad and/or if collision_hash is bad, otherwise just sets attributes. None ok for args.
         return self
+
+    def copy(self):
+        ''' Creates a copy. '''
+        return ScriptOutput(self)
 
     @staticmethod
     def _check_name_address(name, address):
