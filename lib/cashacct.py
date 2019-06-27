@@ -444,9 +444,10 @@ servers = [
 
 def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> list:
     ''' Synchronous lookup, returns a list of AddedTx [(txid, script) tuples], or
-    None on error. (Optionally pass a list as the `exc` parameter and the
-    exception encountered will be returned to caller by appending to the list,)
-    '''
+    None on error. Note the .script in each AddedTx will always have
+    .is_complete() == True (has all fields filled-in from lookup server).
+    Optionally, pass a list as the `exc` parameter and the exception encountered
+    will be returned to caller by appending to the list.'''
     url = f'{server}/lookup/{number}'
     if name:
         name = name.lower()
@@ -481,6 +482,24 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
         util.print_error("lookup:", repr(e))
         if isinstance(exc, list):
             exc.append(e)
+
+def info_from_script(script, txid):
+    ''' Converts a script to an Info object. Note that ideally the passed-in
+    script.is_complete() should be True otherwise most of the fields of the
+    returned Info object will be None.'''
+    return Info(name=script.name,
+                address=script.address,
+                number=script.number,
+                collision_hash=script.collision_hash,
+                emoji=script.emoji,
+                txid=txid)
+
+def script_from_info(info):
+    ''' Inverse of info_from_script, returns a script, txid tuple. '''
+    script = ScriptOutput.create_registration(name=info.name, address=info.address)
+    script.make_complete2(number=info.number, collision_hash=info.collision_hash,
+                          emoji=info.emoji)
+    return script, info.txid
 
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
@@ -550,7 +569,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     script = self._find_script(txid)
                     if script and txid not in seen:
                         seen.add(txid)
-                        ret.append(self._info_from_script(script, txid))
+                        ret.append(info_from_script(script, txid))
 
         return ret
 
@@ -625,21 +644,12 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         continue
                     if collision_prefix is not None and not script.collision_hash.startswith(collision_prefix):
                         continue
-                    ret.append(self._info_from_script(script, txid))
+                    ret.append(info_from_script(script, txid))
         return ret
 
     ###################
     # Private Methods #
     ###################
-
-    @classmethod
-    def _info_from_script(cls, script, txid):
-        return Info(name=script.name,
-                    address=script.address,
-                    number=script.number,
-                    collision_hash=script.collision_hash,
-                    emoji=script.emoji,
-                    txid=txid)
 
     def _find_script(self, txid, print_if_missing=True):
         ''' lock should be held by caller '''
