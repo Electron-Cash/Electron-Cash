@@ -545,6 +545,7 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
 
     Callbacks are called in another thread context so GUI-facing code should
     be aware of that fact (see nodes for lookup_asynch above).  '''
+    assert servers, "No servers hard-coded in cashacct.py. FIXME!"
     my_servers = servers.copy()
     random.shuffle(my_servers)
     N = len(my_servers)
