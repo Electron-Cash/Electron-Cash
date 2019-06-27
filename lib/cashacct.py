@@ -70,11 +70,16 @@ class ScriptOutput(ScriptOutputBase):
 
     Note: This class is named ScriptOutput like its base. This is intentional
     and client code should import this file such that referring to this class
-    is module-qualified, eg cashacct.ScriptOutput. '''
+    is module-qualified, eg cashacct.ScriptOutput.
+
+    Note2: that the Transaction class automatically deserializes TYPE_SCRIPT
+    outputs to instances of this class if the script contents match the
+    CashAccounts protocol (based on boolean result of protocol_match() below).
+    See the address.ScriptOutput 'protocol' mechanism (in address.py).'''
 
     _protocol_prefix = _i2b(OpCodes.OP_RETURN) + _i2b(4) + int.to_bytes(protocol_code, 4, byteorder='big')
 
-    # Additional attributes outside of the tuple's 1 attribute
+    # Additional attributes outside of the base class tuple's 1 attribute
     attrs_extra = ( 'name', 'address', 'number', 'collision_hash', 'emoji' )
 
     @classmethod
