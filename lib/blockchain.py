@@ -101,14 +101,15 @@ def deserialize_header(s, height):
     h['block_height'] = height
     return h
 
+def hash_header_hex(header_hex):
+    return hash_encode(Hash(bfh(header_hex)))
 
 def hash_header(header):
     if header is None:
         return NULL_HASH_HEX
     if header.get('prev_block_hash') is None:
         header['prev_block_hash'] = '00'*32
-    return hash_encode(Hash(bfh(serialize_header(header))))
-
+    return hash_header_hex(serialize_header(header))
 
 blockchains = {}
 

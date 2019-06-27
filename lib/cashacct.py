@@ -37,7 +37,7 @@ from . import bitcoin
 from . import util
 from .address import Address, OpCodes, Script, ScriptError
 from .address import ScriptOutput as ScriptOutputBase
-from .transaction import BCDataStream
+from .transaction import BCDataStream, Transaction
 from . import verifier
 from . import blockchain
 
@@ -394,38 +394,68 @@ def number_from_block_height(block_height):
     This is simply the block height minus 563620. '''
     return block_height - height_modification
 
-bh2num = number_from_block_height  # alias
+def number_to_block_height(number):
+    ''' Reciprocal of number_to_block_height '''
+    return number + height_modification
 
+bh2num = number_from_block_height  # alias
+num2bh = number_to_block_height  # alias
 
 #### Lookup & Verification
+
+CashAcctInfo = namedtuple("CashAcctInfo", "name, address, number, collision_hash, emoji, txid")
 
 servers = [
     "https://cashacct.imaginary.cash",
     "https://api.cashaccount.info"
 ]
 
-def lookup(server, number, name=None, collision_hash=None, timeout=10.0):
-    ''' Synchronous lookup, returns the json dict of the response, or None on error. '''
+def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> list:
+    ''' Synchronous lookup, returns a list of (txid, out_n, script) tuples, or
+    None on error. (Optionally pass a list as the `exc` parameter and the
+    exception encountered will be returned to caller by appending to the list,)
+    '''
     url = f'{server}/lookup/{number}'
     if name:
         name = name.lower()
         url += f'/{name}'
-    if collision_hash:
-        url += f'/{collision_hash}'
+    if collision_prefix:
+        url += f'/{collision_prefix}'
     try:
+        ret = []
         r = requests.get(url, allow_redirects=True, timeout=timeout) # will raise requests.exceptions.Timeout on timeout
         r.raise_for_status()
-        return r.json()
+        d = r.json()
+        if not isinstance(d, dict) or not d.get('results') or not isinstance(d.get('block'), int):
+            raise RuntimeError('Unexpected response', r.text)
+        res, block = d['results'], d['block']
+        if not isinstance(res, list) or bh2num(block) < 100:
+            raise RuntimeError('Bad response')
+        for d in res:
+            txraw = d['transaction']
+            header_hex = d['inclusion_proof'][:blockchain.HEADER_SIZE*2]
+            if len(header_hex)//2 != blockchain.HEADER_SIZE:
+                raise AssertionError('Could not get header')
+            block_hash = blockchain.hash_header_hex(header_hex)
+            tx = Transaction(txraw)
+            for out_n, txo in enumerate(tx.outputs()):
+                _typ, script, value = txo
+                if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file
+                    txid = tx.txid()
+                    script.make_complete(block_height=block, block_hash=block_hash, txid=txid)
+                    ret.append(CashAcct.AddedTx(txid, out_n, script))
+                    break # there will be no more outputs in this tx that are relevant
+        return ret
     except Exception as e:
         util.print_error("lookup:", repr(e))
+        if isinstance(exc, list):
+            exc.append(e)
 
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
 
     AddedTx = namedtuple("AddedTx", "txid, out_n, script")
     VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
-
-    CashAcctInfo = namedtuple("CashAcctInfo", "name, address, number, collision_hash, emoji, txid")
 
     def __init__(self, wallet):
         assert wallet, "CashAcct cannot be instantiated without a wallet"
@@ -468,7 +498,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = None
             self.network = None
 
-    def get_cashaccounts(self, domain=None, inv=False):
+    def get_cashaccounts(self, domain=None, inv=False) -> list:
         ''' Returns a list of CashAcctInfo for verified cash accounts in domain.
         Domain must be an iterable of addresses (either wallet or external).
         If domain is None, every verified cash account we know about is returned.
@@ -489,22 +519,16 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     script = self._find_script(txid)
                     if script and txid not in seen:
                         seen.add(txid)
-                        ret.append(self.CashAcctInfo(name=script.name,
-                                                     address=script.address,
-                                                     number=script.number,
-                                                     collision_hash=script.collision_hash,
-                                                     emoji=script.emoji,
-                                                     txid=txid
-                                                     ))
+                        ret.append(self._info_from_script(script, txid))
 
         return ret
 
-    def get_wallet_cashaccounts(self):
+    def get_wallet_cashaccounts(self) -> list:
         ''' Convenience method, returns all the verified cash accounts we
         know about for wallet addresses only. '''
         return self.get_cashaccounts(domain=self.wallet.get_addresses())
 
-    def get_external_cashaccounts(self):
+    def get_external_cashaccounts(self) -> list:
         ''' Convenience method, retruns all the verified cash accounts we
         know about that are not for wallet addresses. '''
         return self.get_cashaccounts(domain=self.wallet.get_addresses(), inv=True)
@@ -548,9 +572,42 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                          )
         '''
 
+    def find(self, name: str, number: int = None, collision_prefix: str = None) -> list:
+        ''' Returns a list of CashAcctInfo for verified cash accounts matching
+        lowercased name.  Optionally you can narrow the search by specifying
+        number (int) and a collision_prefix (str of digits) '''
+        ret = []
+        with self.lock:
+            name = name.lower()
+            s = self.v_by_name.get(name, set())
+            for txid in s:
+                script = self._find_script(txid, False)
+                if script:
+                    if script.name.lower() != name:
+                        self.print_error(f"find: FIXME -- v_by_name has inconsistent data for {txid}, name {name} != {script.name}")
+                        continue
+                    if not script.is_complete():
+                        self.print_error(f"find: FIXME -- v_by_name has a script that is not 'complete' for {txid} name='{name}'")
+                        continue
+                    if number is not None and script.number != number:
+                        continue
+                    if collision_prefix is not None and not script.collision_hash.startswith(collision_prefix):
+                        continue
+                    ret.append(self._info_from_script(script, txid))
+        return ret
+
     ###################
     # Private Methods #
     ###################
+
+    @classmethod
+    def _info_from_script(cls, script, txid):
+        return CashAcctInfo(name=script.name,
+                            address=script.address,
+                            number=script.number,
+                            collision_hash=script.collision_hash,
+                            emoji=script.emoji,
+                            txid=txid)
 
     def _find_script(self, txid, print_if_missing=True):
         ''' lock should be held by caller '''
