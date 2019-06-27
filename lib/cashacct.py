@@ -443,16 +443,31 @@ servers = [
 ]
 
 def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> list:
-    ''' Synchronous lookup, returns a list of AddedTx [(txid, script) tuples], or
-    None on error. Note the .script in each AddedTx will always have
-    .is_complete() == True (has all fields filled-in from lookup server).
+    ''' Synchronous lookup, returns a list of RegTx [(txid, script) tuples], or
+    None on error. Note the .script in each returned RegTx will always have
+    .is_complete() == True (has all fields filled-in from the lookup server).
+
     Optionally, pass a list as the `exc` parameter and the exception encountered
-    will be returned to caller by appending to the list.'''
+    will be returned to caller by appending to the list.
+
+    Use `collision_prefix` and `name` to narrow the search, otherwise all
+    results (if any) for a particular block (number) are returned.
+
+    Name matching is case-insensitive.  Additionally, as of the time of this
+    writing, collision_prefix without a specified name will always return no
+    results from the lookup server. Also, name should be a complete name and not
+    a substring.
+
+    Note:
+    Results are not verified by this function and further verification is
+    necessary before presenting any results to the user for the purposes of
+    sending funds.'''
     url = f'{server}/lookup/{number}'
     if name:
-        name = name.lower()
+        name = name.strip().lower()
         url += f'/{name}'
     if collision_prefix:
+        collision_prefix = collision_prefix.strip()
         url += f'/{collision_prefix}'
     try:
         ret = []
@@ -475,13 +490,49 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
                 if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file, not addess.ScriptOutput
                     txid = tx.txid()
                     script.make_complete(block_height=block, block_hash=block_hash, txid=txid)
-                    ret.append(CashAcct.AddedTx(txid, script))
+                    ret.append(CashAcct.RegTx(txid, script))
                     break # there will be no more outputs in this tx that are relevant
         return ret
     except Exception as e:
         util.print_error("lookup:", repr(e))
         if isinstance(exc, list):
             exc.append(e)
+
+def lookup_asynch(server, number, success_cb, error_cb=None,
+                  name=None, collision_prefix=None, timeout=10.0):
+    ''' Like lookup() above, but spawns a thread and does its lookup
+    asynchronously.
+
+    success_cb - will be called on successful completion with a single arg:
+                 the results list.
+    error_cb   - will be called on failure with a single arg: the exception
+                 (guaranteed to be an Exception subclass).
+
+    In either case one of the two callbacks will be called. It's ok for
+    success_cb and error_cb to be the same function (in which case it should
+    inspect the arg passed to it). Note that the callbacks are called in the
+    context of the spawned thread, (So e.g. Qt GUI code using this function
+    should not modify the GUI directly from the callbacks but instead should
+    emit a Qt signal from within the callbacks to be delivered to the main
+    thread as usual.) '''
+
+    def thread_func():
+        exc = []
+        res = lookup(server=server, number=number, name=name, collision_prefix=collision_prefix, timeout=timeout, exc=exc)
+        called = False
+        if res is None:
+            if callable(error_cb) and exc:
+                error_cb(exc[-1])
+                called = True
+        else:
+            success_cb(res)
+            called = True
+        if not called:
+            # this should never happen
+            uti.print_error("WARNING: no callback called for ", threading.current_thread().name)
+    t = threading.Thread(name=f"CashAcct lookup_asynch: {server} {number} ({name},{collision_prefix},{timeout})",
+                         target=thread_func, daemon=True)
+    t.start()
 
 def info_from_script(script, txid):
     ''' Converts a script to an Info object. Note that ideally the passed-in
@@ -504,7 +555,10 @@ def script_from_info(info):
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
 
-    AddedTx = namedtuple("AddedTx", "txid, script")
+    # info for a registration tx. may or may not be currently verified
+    RegTx = namedtuple("RegTx", "txid, script")
+    # info for a verified RegTx.  Invariant should be all VerifTx's have a
+    # corrseponding RegTx but not necessarily vice-versa.
     VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
 
     def __init__(self, wallet):
@@ -517,8 +571,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self._init_data()
 
     def _init_data(self):
-        self.wallet_added_tx = dict() # dict of txid -> AddedTx
-        self.ext_added_tx = dict() # dict of txid -> AddedTx
+        self.wallet_added_tx = dict() # dict of txid -> RegTx
+        self.ext_added_tx = dict() # dict of txid -> RegTx
 
         self.v_tx = dict() # dict of txid -> VerifTx
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
@@ -593,11 +647,11 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         '''
         FYI, current data model is:
 
-        AddedTx = namedtuple("AddedTx", "txid, script")
+        RegTx = namedtuple("RegTx", "txid, script")
         VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
 
-        self.wallet_added_tx = dict() # dict of txid -> AddedTx
-        self.ext_added_tx = dict() # dict of txid -> AddedTx
+        self.wallet_added_tx = dict() # dict of txid -> RegTx
+        self.ext_added_tx = dict() # dict of txid -> RegTx
 
         self.v_tx = dict() # dict of txid -> VerifTx
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
@@ -724,7 +778,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         scriptoutput. Note these tx's aren't yet in the verified set. '''
         assert isinstance(script, ScriptOutput)
         with self.lock:
-            self.wallet_added_tx[txid] = self.AddedTx(txid=txid, script=script)
+            self.wallet_added_tx[txid] = self.RegTx(txid=txid, script=script)
 
     def remove_transaction_hook(self, txid: str):
         ''' Called by wallet inside remove_transaction (but with lock not held)
