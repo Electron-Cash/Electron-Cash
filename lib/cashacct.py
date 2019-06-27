@@ -32,6 +32,7 @@ carefully if also importing address.py.
 import re
 import requests
 import threading
+import random
 from collections import defaultdict, namedtuple
 from . import bitcoin
 from . import util
@@ -534,6 +535,48 @@ def lookup_asynch(server, number, success_cb, error_cb=None,
                          target=thread_func, daemon=True)
     t.start()
 
+def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
+                      collision_prefix=None, timeout=10.0):
+    ''' Like lookup_asynch above except it tries *all* the hard-coded servers
+    from `servers` and if all fail, then calls the error_cb exactly once.
+    If any succeed, calls success_cb exactly once.
+
+    One of the two callbacks are guaranteed to be called in either case.
+
+    Callbacks are called in another thread context so GUI-facing code should
+    be aware of that fact (see nodes for lookup_asynch above).  '''
+    my_servers = servers.copy()
+    random.shuffle(my_servers)
+    N = len(my_servers)
+    lock = threading.Lock()
+    n_ok, n_err = 0, 0
+    def on_succ(res):
+        nonlocal n_ok
+        with lock:
+            #util.print_error("success", n_ok+n_err)
+            if n_ok:
+                return
+            n_ok += 1
+        success_cb(res)
+    def on_err(exc):
+        nonlocal n_err
+        with lock:
+            #util.print_error("error", n_ok+n_err)
+            if n_ok:
+                return
+            n_err += 1
+            if n_err < N:
+                return
+        if error_cb:
+            #util.print_error("calling err")
+            error_cb(exc)
+    for server in my_servers:
+        #util.print_error("server:", server)
+        lookup_asynch(server, number = number,
+                      success_cb = on_succ, error_cb = on_err,
+                      name = name, collision_prefix = collision_prefix, timeout = timeout)
+
+
 def info_from_script(script, txid):
     ''' Converts a script to an Info object. Note that ideally the passed-in
     script.is_complete() should be True otherwise most of the fields of the
@@ -551,6 +594,7 @@ def script_from_info(info):
     script.make_complete2(number=info.number, collision_hash=info.collision_hash,
                           emoji=info.emoji)
     return script, info.txid
+
 
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
