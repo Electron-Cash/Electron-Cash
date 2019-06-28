@@ -42,7 +42,7 @@ from functools import partial
 from .i18n import _, ngettext
 from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
 
-from .address import Address, Script, ScriptOutput, PublicKey
+from .address import Address, Script, ScriptOutput, PublicKey, OpCodes
 from .bitcoin import *
 from .version import *
 from .keystore import load_keystore, Hardware_KeyStore, Imported_KeyStore, BIP32_KeyStore, xpubkey_to_address
@@ -932,14 +932,23 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
             # add outputs
             self.txo[tx_hash] = d = {}
+            op_return_ct = 0
+            deferred_cashacct_add = None
             for n, txo in enumerate(tx.outputs()):
                 ser = tx_hash + ':%d'%n
                 _type, addr, v = txo
-                if isinstance(addr, cashacct.ScriptOutput):
-                    # auto-detect CashAccount registrations we see,
-                    # and notify cashacct subsystem of that fact. Important
-                    # this be done with the lock held.
-                    self.cashacct.add_transaction_hook(tx_hash, tx, n, addr)
+                if isinstance(addr, ScriptOutput):
+                    if addr.script and addr.script[0] == OpCodes.OP_RETURN:
+                        op_return_ct += 1
+                    if isinstance(addr, cashacct.ScriptOutput):
+                        # auto-detect CashAccount registrations we see,
+                        # and notify cashacct subsystem of that fact. But we
+                        # can only do it after making sure it's the *only*
+                        # OP_RETURN in the tx.
+                        deferred_cashacct_add = (
+                            lambda _tx_hash=tx_hash, _tx=tx, _n=n, _addr=addr:
+                                self.cashacct.add_transaction_hook(_tx_hash, _tx, _n, _addr)
+                        )
                 elif self.is_mine(addr):
                     if addr not in d:
                         d[addr] = []
@@ -955,6 +964,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     dd[addr].append((ser, v))
             # save
             self.transactions[tx_hash] = tx
+
+            # Invoke the cashacct add hook (if defined) here at the end, with
+            # the lock held. We accept the cashacct.ScriptOutput only iff
+            # op_return_ct == 1 as per the Cash Accounts spec.
+            # See: https://gitlab.com/cash-accounts/lookup-server/blob/master/routes/parser.js#L253
+            if op_return_ct == 1 and deferred_cashacct_add:
+                deferred_cashacct_add()
 
     def remove_transaction(self, tx_hash):
         with self.lock:
