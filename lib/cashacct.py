@@ -489,12 +489,21 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
                 raise AssertionError('Could not get header')
             block_hash = blockchain.hash_header_hex(header_hex)
             tx = Transaction(txraw)
+            txid = Transaction._txid(txraw)
+            op_return_count = 0
+            tx_regs = []  # there should be exactly 1 of these per tx, as per cash acount spec.. we reject tx's with more than 1 op_return
             for _typ, script, value in tx.outputs():
-                if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file, not addess.ScriptOutput
-                    txid = tx.txid()
-                    script.make_complete(block_height=block, block_hash=block_hash, txid=txid)
-                    ret.append(CashAcct.RegTx(txid, script))
-                    break # there will be no more outputs in this tx that are relevant
+                if isinstance(script, ScriptOutputBase):
+                    if script.script and script.script[0] == OpCodes.OP_RETURN:
+                        op_return_count += 1
+                    if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file, not addess.ScriptOutput
+                        script.make_complete(block_height=block, block_hash=block_hash, txid=txid)
+                        tx_regs.append(CashAcct.RegTx(txid, script))
+            if len(tx_regs) == 1 and op_return_count == 1:
+                # we only accept tx's with exactly 1 OP_RETURN, as per the spec
+                ret.extend(tx_regs)
+            else:
+                util.print_error(f"lookup: {txid} had no valid registrations in it using server {server} (len(tx_regs)={len(tx_regs)} op_return_count={op_return_count})")
         return ret
     except Exception as e:
         util.print_error("lookup:", repr(e))
@@ -625,12 +634,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
 
-        # STILL TESTING
         self.ext_unverif = dict()
 
         # minimal collision hash encodings cache. keyed off (name.lower(), number, collision_hash) -> '03' string or '' string
         self.minimal_ch_cache = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct minimal collision_hashe cache")
-
 
     def diagnostic_name(self):
         return f'{self.wallet.diagnostic_name()}.{__class__.__name__}'
@@ -920,7 +927,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if not txs: return
         with self.lock:
             for txid in txs:
-                self._rm_vtx(txid)  # this safe as a no-op if txid was not relevant
+                self._rm_vtx(txid)  # this is safe as a no-op if txid was not relevant
 
     def add_transaction_hook(self, txid: str, tx: object, out_n: int, script: ScriptOutput):
         ''' Called by wallet inside add_transaction (with wallet.lock held) to
