@@ -611,7 +611,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.wallet = wallet
         self.network = None
         self.verifier = None
-        self.lock = threading.Lock()
+        self.lock = threading.Lock()  # note, this lock is subordinate to wallet.lock and should always be taken AFTER wallet.lock and never before
 
         self._init_data()
 
@@ -686,7 +686,38 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     def load(self):
         ''' Note: loading should happen before threads are started, so no lock
         is needed.'''
-        # TODO...
+        self._init_data()
+        dd = self.wallet.storage.get('cash_accounts_tx_data', {})
+        #self.print_error("LOADED:", dd)
+        wat_d = dd.get('wallet_added_tx', {})
+        eat_d = dd.get('ext_added_tx', {})
+        vtx_d = dd.get('verified_tx', {})
+
+        seen_scripts = {}
+
+        for txid, script_dict in wat_d.items():
+            txid = txid.lower()
+            seen_scripts[txid] = script = ScriptOutput.from_dict(script_dict)
+            self.wallet_added_tx[txid] = self.RegTx(txid, script)
+        for txid, script_dict in eat_d.items():
+            seen_scripts[txid] = script = ScriptOutput.from_dict(script_dict)
+            self.ext_added_tx[txid] = self.RegTx(txid, script)
+        for txid, info in vtx_d.items():
+            block_height, block_hash = info
+            script = seen_scripts.get(txid)
+            if script:
+                self._add_vtx(self.VerifTx(txid, block_height, block_hash), script)
+
+        # re-enqueue previously unverified for verification
+        for txid, item in self.ext_added_tx.items():
+            if txid not in self.v_tx and item.script.number is not None:
+                self.ext_unverif[txid] = num2bh(item.script.number)
+
+        # Note that 'wallet.load_transactions' will be called after this point
+        # in the wallet c'tor and it will take care of removing wallet_added_tx
+        # and v_tx entries from self if it detects unreferences transactions in
+        # history (via the remove_transaction_hook callback).
+
 
     def save(self, write=False):
         '''
@@ -702,7 +733,6 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
         '''
-        return
 
         # This is just scratch code.. TODO: IMPLEMENT
         wat_d, eat_d, vtx_d = dict(), dict(), dict()
@@ -710,17 +740,22 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             for txid, atx in self.wallet_added_tx.items():
                 wat_d[txid] = atx.script.to_dict()
             for txid, etx in self.ext_added_tx.items():
-                eat_d[txid] = etx.script.script.to_dict()
+                eat_d[txid] = etx.script.to_dict()
             for txid, vtx in self.v_tx.items():
                 vtx_d[txid] = [vtx.block_height, vtx.block_hash]
 
-        import json
-        self.print_error(f"would have saved:\n"
-                         f"wat_d = {json.dumps(wat_d)}\n"
-                         f"eat_d = {json.dumps(eat_d)}\n"
-                         f"vtx_d = {json.dumps(vtx_d)}\n"
-                         )
+            data =  {
+                        'wallet_added_tx' : wat_d,
+                        'ext_added_tx'    : eat_d,
+                        'verified_tx'     : vtx_d,
+                    }
 
+            self.wallet.storage.put('cash_accounts_tx_data', data)
+
+        #self.print_error("SAVED:", data)
+
+        if write:
+            self.wallet.storage.write()
 
     def find(self, name: str, number: int = None, collision_prefix: str = None) -> list:
         ''' Returns a list of Info objects for verified cash accounts matching
@@ -811,14 +846,14 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
     def undo_verifications_hook(self, txs: set):
         ''' Called by wallet when it itself got called to undo_verifictions by
-        its verifier. We need to be tool what set of tx_hash was undone. '''
+        its verifier. We need to be told what set of tx_hash was undone. '''
         if not txs: return
         with self.lock:
             for txid in txs:
                 self._rm_vtx(txid)  # this safe as a no-op if txid was not relevant
 
     def add_transaction_hook(self, txid: str, tx: object, out_n: int, script: ScriptOutput):
-        ''' Called by wallet inside add_transaction (but with lock not held) to
+        ''' Called by wallet inside add_transaction (with wallet.lock held) to
         notify us about transactions that were added containing a cashacct
         scriptoutput. Note these tx's aren't yet in the verified set. '''
         assert isinstance(script, ScriptOutput)
@@ -826,18 +861,18 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.wallet_added_tx[txid] = self.RegTx(txid=txid, script=script)
 
     def remove_transaction_hook(self, txid: str):
-        ''' Called by wallet inside remove_transaction (but with lock not held)
+        ''' Called by wallet inside remove_transaction (with wallet.lock held)
         to tell us about a transaction that was removed. '''
         with self.lock:
             self._rm_vtx(txid)
             self.wallet_added_tx.pop(txid, None)
 
     def add_unverified_tx_hook(self, txid: str, block_height: int):
+        ''' This is called by wallet when we expect a future subsequent
+        verification to happen. So let's pop the vtx from our data structure
+        in anticipation of a possible future verification coming in. '''
         with self.lock:
             self._rm_vtx(txid)
-            script = self._find_script(txid, False)
-            if script:
-                script.clear_completion()
 
     def on_address_addition(self, address):
         ''' Called by wallet when a new address is added in imported wallet.
@@ -851,6 +886,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' Called by wallet rebuild history mechanism to clear everything. '''
         with self.lock:
             self._init_data()
+
+    def save_verified_tx_hook(self, write=False):
+        self.save(write)
 
     # /Wallet hook callbacks
 
@@ -894,7 +932,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
     def verification_failed(self, tx_hash, reason):
         ''' TODO.. figure out what to do here. Or with wallet verification in
-        general here. '''
+        general in this error case. '''
         self.print_error(f"SPV failed for {tx_hash}, reason: '{reason}'")
 
     # /SPVDelegate Methods

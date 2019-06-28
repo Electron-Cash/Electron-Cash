@@ -220,7 +220,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         # locks: if you need to take multiple ones, acquire them in the order they are defined here!
         self.lock = threading.RLock()
-        self.transaction_lock = threading.RLock()
 
         # load requests
         requests = self.storage.get('payment_requests', {})
@@ -245,15 +244,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.invoices = InvoiceStore(self.storage)
         self.contacts = Contacts(self.storage)
 
+        # cashacct is started in start_threads, but it needs to have relevant
+        # data here, before the below calls happen
+        self.cashacct.load()
+
         # Now, finally, after object is constructed -- we can do this
         self.load_keystore()
         self.load_addresses()
         self.load_transactions()
         self.build_reverse_history()
 
-        # cashacct is started in start_threads, but it needs to have relevant
-        # data here, before check_history() is called below.
-        self.cashacct.load()
 
         self.check_history()
 
@@ -298,10 +298,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if self.txi.get(tx_hash) is None and self.txo.get(tx_hash) is None and (tx_hash not in self.pruned_txo.values()):
                 self.print_error("removing unreferenced tx", tx_hash)
                 self.transactions.pop(tx_hash)
+                self.cashacct.remove_transaction_hook(tx_hash)
 
     @profiler
     def save_transactions(self, write=False):
-        with self.transaction_lock:
+        with self.lock:
             tx = {}
             for k,v in self.transactions.items():
                 tx[k] = str(v)
@@ -322,11 +323,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def save_verified_tx(self, write=False):
         with self.lock:
             self.storage.put('verified_tx3', self.verified_tx)
+            self.cashacct.save()
             if write:
                 self.storage.write()
 
     def clear_history(self):
-        with self.lock, self.transaction_lock:
+        with self.lock:
             self.txi = {}
             self.txo = {}
             self.tx_fees = {}
@@ -336,7 +338,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self._history = {}
             self.tx_addr_hist = defaultdict(set)
             self.cashacct.on_clear_history()
-            self.cashacct.save()
 
     @profiler
     def build_reverse_history(self):
@@ -402,7 +403,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 # otherwise it will persist its results when it finishes
                 if self.verifier and self.verifier.is_up_to_date():
                     self.save_verified_tx()
-                self.cashacct.save()
                 self.storage.write()
 
     def is_up_to_date(self):
@@ -508,7 +508,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # tx will be verified only if height > 0
             if tx_hash not in self.verified_tx:
                 self.unverified_tx[tx_hash] = tx_height
-        self.cashacct.add_unverified_tx_hook(tx_hash, tx_height)
+                self.cashacct.add_unverified_tx_hook(tx_hash, tx_height)
 
     def add_verified_tx(self, tx_hash, info, header):
         # Remove from the unverified map and add to the verified map and
@@ -516,8 +516,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.unverified_tx.pop(tx_hash, None)
             self.verified_tx[tx_hash] = info  # (tx_height, timestamp, pos)
             height, conf, timestamp = self.get_tx_height(tx_hash)
+            self.cashacct.add_verified_tx_hook(tx_hash, info, header)
         self.network.trigger_callback('verified2', self, tx_hash, height, conf, timestamp)
-        self.cashacct.add_verified_tx_hook(tx_hash, info, header)
 
     def verification_failed(self, tx_hash, reason):
         ''' TODO: Notify gui of this if it keeps happening, try a different
@@ -546,9 +546,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     if not header or header.get('timestamp') != timestamp:
                         self.verified_tx.pop(tx_hash, None)
                         txs.add(tx_hash)
+            if txs: self.cashacct.undo_verifications_hook(txs)
         if txs:
             self._addr_bal_cache = {}  # this is probably not necessary -- as the receive_history_callback will invalidate bad cache items -- but just to be paranoid we clear the whole balance cache on reorg anyway as a safety measure
-            self.cashacct.undo_verifications_hook(txs)
         return txs
 
     def get_local_height(self):
@@ -852,24 +852,23 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def get_utxos(self, domain = None, exclude_frozen = False, mature = False, confirmed_only = False):
         ''' Note that exclude_frozen = True checks for BOTH address-level and coin-level frozen status. '''
         with self.lock:
-            with self.transaction_lock:
-                coins = []
-                if domain is None:
-                    domain = self.get_addresses()
-                if exclude_frozen:
-                    domain = set(domain) - self.frozen_addresses
-                for addr in domain:
-                    utxos = self.get_addr_utxo(addr)
-                    for x in utxos.values():
-                        if exclude_frozen and x['is_frozen_coin']:
-                            continue
-                        if confirmed_only and x['height'] <= 0:
-                            continue
-                        if mature and x['coinbase'] and x['height'] + COINBASE_MATURITY > self.get_local_height():
-                            continue
-                        coins.append(x)
+            coins = []
+            if domain is None:
+                domain = self.get_addresses()
+            if exclude_frozen:
+                domain = set(domain) - self.frozen_addresses
+            for addr in domain:
+                utxos = self.get_addr_utxo(addr)
+                for x in utxos.values():
+                    if exclude_frozen and x['is_frozen_coin']:
                         continue
-                return coins
+                    if confirmed_only and x['height'] <= 0:
+                        continue
+                    if mature and x['coinbase'] and x['height'] + COINBASE_MATURITY > self.get_local_height():
+                        continue
+                    coins.append(x)
+                    continue
+            return coins
 
     def dummy_address(self):
         return self.get_receiving_addresses()[0]
@@ -909,8 +908,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def add_transaction(self, tx_hash, tx):
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
-        cashacct_adds = []
-        with self.transaction_lock:
+        with self.lock:
             # add inputs
             self.txi[tx_hash] = d = {}
             for txi in tx.inputs():
@@ -939,8 +937,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 _type, addr, v = txo
                 if isinstance(addr, cashacct.ScriptOutput):
                     # auto-detect CashAccount registrations we see,
-                    # and notify cashacct subsystem of that fact
-                    cashacct_adds.append((tx_hash, tx, n, addr))
+                    # and notify cashacct subsystem of that fact. Important
+                    # this be done with the lock held.
+                    self.cashacct.add_transaction_hook(tx_hash, tx, n, addr)
                 elif self.is_mine(addr):
                     if addr not in d:
                         d[addr] = []
@@ -957,12 +956,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # save
             self.transactions[tx_hash] = tx
 
-        # do this with the lock NOT held
-        for args in cashacct_adds:
-            self.cashacct.add_transaction_hook(*args)
-
     def remove_transaction(self, tx_hash):
-        with self.transaction_lock:
+        with self.lock:
             self.print_error("removing tx from history", tx_hash)
             #tx = self.transactions.pop(tx_hash, None)
             for ser, hh in list(self.pruned_txo.items()):
@@ -994,8 +989,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             try: self.txo.pop(tx_hash)
             except KeyError: self.print_error("tx was not in output history", tx_hash)
 
-        # do this without the lock held
-        self.cashacct.remove_transaction_hook(tx_hash)
+            # do this with the lock held
+            self.cashacct.remove_transaction_hook(tx_hash)
 
 
     def receive_tx_callback(self, tx_hash, tx, tx_height):
@@ -1003,7 +998,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.add_unverified_tx(tx_hash, tx_height)
 
     def receive_history_callback(self, addr, hist, tx_fees):
-        with self.lock, self.transaction_lock:
+        with self.lock:
             old_hist = self.get_address_history(addr)
             for tx_hash, height in old_hist:
                 if (tx_hash, height) not in hist:
@@ -1388,9 +1383,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # remain so they will be GC-ed
             self.storage.put('stored_height', self.get_local_height())
         self.save_transactions()
-        self.save_verified_tx()
+        self.save_verified_tx()  # implicit cashacct.save
         self.storage.put('frozen_coins', list(self.frozen_coins))
-        self.cashacct.save()
         self.storage.write()
 
     def wait_until_synchronized(self, callback=None):
@@ -1551,7 +1545,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def get_unused_addresses(self, *, for_change=False, frozen_ok=True):
         # fixme: use slots from expired requests
-        with self.lock, self.transaction_lock:
+        with self.lock:
             domain = self.get_receiving_addresses() if not for_change else (self.get_change_addresses() or self.get_receiving_addresses())
             return [addr for addr in domain
                     if not self.get_address_history(addr)
@@ -1829,7 +1823,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         network = self.network
         self.stop_threads()
         do_addr_save = False
-        with self.lock, self.transaction_lock:
+        with self.lock:
             self.transactions.clear(); self.unverified_tx.clear(); self.verified_tx.clear()
             self.clear_history()
             if isinstance(self, Standard_Wallet):
@@ -1840,8 +1834,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if do_addr_save:
             self.save_addresses()
         self.save_transactions()
-        self.save_verified_tx()
-        self.cashacct.save()
+        self.save_verified_tx()  # implicit cashacct.save
         self.storage.write()
         self.start_threads(network)
         self.network.trigger_callback('wallet_updated', self)
