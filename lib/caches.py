@@ -61,9 +61,9 @@ class ExpiringCache:
         return get_object_size(
             self.d.copy()  # prevent iterating over a mutating dict.
         )
-    def copy(self):
+    def copy_dict(self):
         ''' Returns a copy of the cache contents. Useful for seriliazing
-        or otherwise examining the cache. The format is:
+        or otherwise examining the cache. The returned dict format is:
         d[item_key] -> [tick, item_value]'''
         return self.d.copy()
     def __len__(self):

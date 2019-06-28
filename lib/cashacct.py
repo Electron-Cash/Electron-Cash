@@ -809,7 +809,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 eat_d[txid] = rtx.script.to_dict()
             for txid, vtx in self.v_tx.items():
                 vtx_d[txid] = [vtx.block_height, vtx.block_hash]
-            for key, tup in self.minimal_ch_cache.copy().items():
+            for key, tup in self.minimal_ch_cache.copy_dict().items():
                 value = tup[-1]
                 min_enc_l.append([*key, value])
 
