@@ -573,15 +573,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         height, ign, ign2 = self.get_tx_height(tx_hash)
         return self.get_block_hash(height)
 
-    def get_block_hash(self, height):#, *, timeout=None):
-        '''Convenience method equivalent to Blockchain.get_hegiht(), but
-        with added feature to also go out to server if Blockchain.get_height()
-        failed.
-
-        Specify a timeout (float) in seconds to optionally try the
-        network if our blockchain cache lacks the header in question.
-
-        If timeout is None, network will not be tried.'''
+    def get_block_hash(self, height):
+        '''Convenience method equivalent to Blockchain.get_height() '''
         ret = None
         if self.network and height is not None and height >= 0 and height <= self.get_local_height():
             bchain = self.network.blockchain()
@@ -590,15 +583,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 if ret == NULL_HASH_HEX:
                     # if hash was NULL (all zeroes), prefer to return None
                     ret = None
-                # The below is potentially unsafe. FIXME
-                #if ret is None and isinstance(timeout, (int, float)):
-                #
-                #    ret = self.network.get_raw_block_header_for_height(height, timeout=timeout)
-                #    if ret:
-                #        try: ret = hash_encode(Hash(bfh(ret)))
-                #        except Exception as e:
-                #            ret = None
-                #            self.print_error("get_block_hash:", repr(e))
         return ret
 
 

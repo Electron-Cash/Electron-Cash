@@ -574,19 +574,13 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 fmt.setAnchorNames([f"output {i}"])  # anchor name for this line (remember input#); used by context menu creation
             # CashAccounts support
             if isinstance(addr, ScriptOutput) and not addr.is_complete() and self.tx_hash and self.tx_height:
-                # FIXME: The below will fail and return None if the height is
-                # < networks.net.VERIFICATION_BLOCK_HEIGHT - 146
-                # We could use the timeout= parameter to the get_block_hash()
-                # call, but I am not yet sure how safe that is to do or whether
-                # it runs the risk of confusing the rest of the network code if
-                # a spurious header is requested. So, for now, we tolerate this
-                # situation by simply not updating the ScriptOutput in the UI
-                # for tx's before the VERIFICATION_BLOCK_HEIGHT.
+                # The below will fail and return None if the height is less than
+                # networks.net.VERIFICATION_BLOCK_HEIGHT - 146 and if we lack
+                # this header.
                 # This is not catastrophic -- it just means the ScriptOutput
                 # won't be as pretty with the emoji and collision_hash.
-                # TODO: Implement CashAccount verification and figure out how
-                # to solve this problem, as we will definitely need reliable
-                # block headers then.
+                # In many cases however we will have the header if the
+                # CashAccounts tx being views was verified by us.
                 block_hash = block_hash or self.wallet.get_block_hash(self.tx_height) or None
                 if block_hash:
                     addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
