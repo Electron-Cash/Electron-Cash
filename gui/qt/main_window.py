@@ -1591,7 +1591,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if len(op_return_script) > 223:
             raise OPReturnTooLarge(_("OP_RETURN script too large, needs to be no longer than 223 bytes"))
         amount = 0
-        return (TYPE_SCRIPT, ScriptOutput(op_return_script), amount)
+        return (TYPE_SCRIPT, ScriptOutput.protocol_factory(op_return_script), amount)
 
     def do_update_fee(self):
         '''Recalculate the fee.  If the fee was manually input, retain it, but

@@ -369,7 +369,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
             else:
                 import binascii
                 script.extend(Script.push_data(binascii.unhexlify(word)))
-        return ScriptOutput(bytes(script))
+        return ScriptOutput.protocol_factory(bytes(script))
 
     def to_ui_string(self,ignored=None):
         '''Convert to user-readable OP-codes (plus pushdata as text if possible)
