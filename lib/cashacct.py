@@ -680,7 +680,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         N = len(collision_hash)
                         for rtx in res:
                             ch = rtx.script.collision_hash
-                            if ch == collision_hash:
+                            if ch == collision_hash and rtx.script.name.lower() == name.lower() and number == rtx.script.number:
                                 found = rtx
                                 continue
                             while i < N and ch.startswith(collision_hash[:i]):

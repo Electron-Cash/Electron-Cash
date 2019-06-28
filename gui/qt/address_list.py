@@ -156,7 +156,7 @@ class AddressList(MyTreeWidget):
                     # Add Cash Account emoji -- the emoji used is the most
                     # recent cash account registration for said address
                     ca_list = ca_by_addr[address]
-                    ca_list.sort(key=lambda x: x.number or 0)
+                    ca_list.sort(key=lambda x: ((x.number or 0), str(x.collision_hash)))
                     ca_info = ca_list[-1]
                     address_text = ca_info.emoji + " " + address_text
                 label = self.wallet.labels.get(address.to_storage_string(), '')
