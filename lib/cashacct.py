@@ -33,6 +33,7 @@ import re
 import requests
 import threading
 import random
+import time
 from collections import defaultdict, namedtuple
 from . import bitcoin
 from . import util
@@ -41,6 +42,7 @@ from .address import ScriptOutput as ScriptOutputBase
 from .transaction import BCDataStream, Transaction
 from . import verifier
 from . import blockchain
+from . import caches
 
 # Cash Accounts protocol code prefix is 0x01010101
 # See OP_RETURN prefix guideline: https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/op_return-prefix-guideline.md
@@ -477,7 +479,7 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
         d = r.json()
         if not isinstance(d, dict) or not d.get('results') or not isinstance(d.get('block'), int):
             raise RuntimeError('Unexpected response', r.text)
-        res, block = d['results'], d['block']
+        res, block = d['results'], int(d['block'])
         if not isinstance(res, list) or bh2num(block) < 100:
             raise RuntimeError('Bad response')
         for d in res:
@@ -616,8 +618,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self._init_data()
 
     def _init_data(self):
-        self.wallet_added_tx = dict() # dict of txid -> RegTx
-        self.ext_added_tx = dict() # dict of txid -> RegTx
+        self.wallet_reg_tx = dict() # dict of txid -> RegTx
+        self.ext_reg_tx = dict() # dict of txid -> RegTx
 
         self.v_tx = dict() # dict of txid -> VerifTx
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
@@ -625,6 +627,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         # STILL TESTING
         self.ext_unverif = dict()
+
+        # minimal collision hash encodings cache. keyed off (name.lower(), number, collision_hash) -> '03' string or '' string
+        self.minimal_ch_cache = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct minimal collision_hashe cache")
 
 
     def diagnostic_name(self):
@@ -639,13 +644,61 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = verifier.SPV(self.network, self)
             self.network.add_jobs([self.verifier])
             util.finalization_print_error(self.verifier)
+            self.network.register_callback(self._fw_wallet_updated, ['wallet_updated'])
 
     def stop(self):
         if self.verifier:
             assert self.network
+            self.network.unregister_callback(self._fw_wallet_updated)
             self.verifier.release()
             self.verifier = None
             self.network = None
+
+    def get_minimal_collision_hash(self, name, number, collision_hash) -> str:
+        ''' Returns a string of the minimal collision hash for a given
+        name, number, collision_hash combination. This initially will just
+        return collision_hash, but will go out to the network and
+        subsequent calls will return the cached results from the asynch. network
+        lookup should it complete successfully. Note that cached results get
+        saved to wallet storage, so over the course of the life of a wallet
+        at least the GUI for the wallet's own addresses should contain correct
+        results here. '''
+        key = (name.lower(), number, collision_hash)
+        with self.lock:
+            found = self.minimal_ch_cache.get(key)
+        if found is not None:
+            return found
+        else:
+            def do_lookup():
+                t0 = time.time()
+                def on_success(res):
+                    i = 0
+                    found = None
+                    num_res = int(bool(res) and len(res))
+                    if num_res > 1:
+                        i = 1
+                        N = len(collision_hash)
+                        for rtx in res:
+                            ch = rtx.script.collision_hash
+                            if ch == collision_hash:
+                                found = rtx
+                                continue
+                            while i < N and ch.startswith(collision_hash[:i]):
+                                i += 1
+                    elif num_res and res[0].script.collision_hash == collision_hash:
+                        found = res[0]
+                    if not found:
+                        # hmm. empty results.. or bad lookup. in either case,
+                        # don't cache anything.
+                        self.print_error("get_minimal_collision_hash: no results found for", *key)
+                        return
+                    with self.lock:
+                        self.minimal_ch_cache.put(key, collision_hash[:i])
+                    self.print_error(f"get_minimal_collision_hash: network lookup completed in {time.time()-t0:1.2f} seconds")
+                lookup_asynch_all(name=name, number=number, success_cb=on_success)
+            if self.network:  # only do this if not 'offline'
+                do_lookup()  # start the asynch lookup
+            return collision_hash  # immediately return the ch
 
     def get_cashaccounts(self, domain=None, inv=False) -> list:
         ''' Returns a list of Info objects for verified cash accounts in domain.
@@ -687,35 +740,40 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' Note: loading should happen before threads are started, so no lock
         is needed.'''
         self._init_data()
-        dd = self.wallet.storage.get('cash_accounts_tx_data', {})
+        dd = self.wallet.storage.get('cash_accounts_data', {})
         #self.print_error("LOADED:", dd)
-        wat_d = dd.get('wallet_added_tx', {})
-        eat_d = dd.get('ext_added_tx', {})
+        wat_d = dd.get('wallet_reg_tx', {})
+        eat_d = dd.get('ext_reg_tx', {})
         vtx_d = dd.get('verified_tx', {})
+        min_enc_l = dd.get('minimal_ch_cache', [])
 
         seen_scripts = {}
 
         for txid, script_dict in wat_d.items():
             txid = txid.lower()
             seen_scripts[txid] = script = ScriptOutput.from_dict(script_dict)
-            self.wallet_added_tx[txid] = self.RegTx(txid, script)
+            self.wallet_reg_tx[txid] = self.RegTx(txid, script)
         for txid, script_dict in eat_d.items():
             seen_scripts[txid] = script = ScriptOutput.from_dict(script_dict)
-            self.ext_added_tx[txid] = self.RegTx(txid, script)
+            self.ext_reg_tx[txid] = self.RegTx(txid, script)
         for txid, info in vtx_d.items():
             block_height, block_hash = info
             script = seen_scripts.get(txid)
             if script:
                 self._add_vtx(self.VerifTx(txid, block_height, block_hash), script)
+        for item in min_enc_l:
+            value = item[-1]
+            key = item[:-1]
+            self.minimal_ch_cache.put(tuple(key), value)  # re-populate the cache
 
         # re-enqueue previously unverified for verification
-        for txid, item in self.ext_added_tx.items():
+        for txid, item in self.ext_reg_tx.items():
             if txid not in self.v_tx and item.script.number is not None:
                 self.ext_unverif[txid] = num2bh(item.script.number)
 
         # Note that 'wallet.load_transactions' will be called after this point
-        # in the wallet c'tor and it will take care of removing wallet_added_tx
-        # and v_tx entries from self if it detects unreferences transactions in
+        # in the wallet c'tor and it will take care of removing wallet_reg_tx
+        # and v_tx entries from self if it detects unreferenced transactions in
         # history (via the remove_transaction_hook callback).
 
 
@@ -726,8 +784,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         RegTx = namedtuple("RegTx", "txid, script")
         VerifTx = namedtuple("VerifTx", "txid, block_height, block_hash")
 
-        self.wallet_added_tx = dict() # dict of txid -> RegTx
-        self.ext_added_tx = dict() # dict of txid -> RegTx
+        self.wallet_reg_tx = dict() # dict of txid -> RegTx
+        self.ext_reg_tx = dict() # dict of txid -> RegTx
 
         self.v_tx = dict() # dict of txid -> VerifTx
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
@@ -736,21 +794,26 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         # This is just scratch code.. TODO: IMPLEMENT
         wat_d, eat_d, vtx_d = dict(), dict(), dict()
+        min_enc_l = list()
         with self.lock:
-            for txid, atx in self.wallet_added_tx.items():
-                wat_d[txid] = atx.script.to_dict()
-            for txid, etx in self.ext_added_tx.items():
-                eat_d[txid] = etx.script.to_dict()
+            for txid, rtx in self.wallet_reg_tx.items():
+                wat_d[txid] = rtx.script.to_dict()
+            for txid, rtx in self.ext_reg_tx.items():
+                eat_d[txid] = rtx.script.to_dict()
             for txid, vtx in self.v_tx.items():
                 vtx_d[txid] = [vtx.block_height, vtx.block_hash]
+            for key, tup in self.minimal_ch_cache.copy().items():
+                value = tup[-1]
+                min_enc_l.append([*key, value])
 
-            data =  {
-                        'wallet_added_tx' : wat_d,
-                        'ext_added_tx'    : eat_d,
-                        'verified_tx'     : vtx_d,
-                    }
+        data =  {
+                    'wallet_reg_tx' : wat_d,
+                    'ext_reg_tx'    : eat_d,
+                    'verified_tx'   : vtx_d,
+                    'minimal_ch_cache' : min_enc_l,
+                }
 
-            self.wallet.storage.put('cash_accounts_tx_data', data)
+        self.wallet.storage.put('cash_accounts_data', data)
 
         #self.print_error("SAVED:", data)
 
@@ -785,9 +848,16 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     # Private Methods #
     ###################
 
+    def _fw_wallet_updated(self, evt, *args):
+        ''' Our private verifier is done. Propagate updated signal to parent
+        wallet so that the GUI will refresh. '''
+        if evt == 'wallet_updated' and args and args[0] is self:
+            self.print_error("forwarding wallet_updated to parent wallet")
+            self.network.trigger_callback('wallet_updated', self.wallet)
+
     def _find_script(self, txid, print_if_missing=True):
         ''' lock should be held by caller '''
-        item = self.wallet_added_tx.get(txid) or self.ext_added_tx.get(txid)
+        item = self.wallet_reg_tx.get(txid) or self.ext_reg_tx.get(txid)
         if item:
             return item.script
         if print_if_missing:
@@ -835,9 +905,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         verifier.  We need to know about tx's that the parent wallet verified
         so we don't do the same work again. '''
         with self.lock:
-            # Note: precondition here is that the tx exists in wallet_added_tx,
+            # Note: precondition here is that the tx exists in wallet_reg_tx,
             # otherwise the tx is not relevant to us (contains no cash account registrations)
-            added = self.wallet_added_tx.get(txid)
+            added = self.wallet_reg_tx.get(txid)
             if not added:
                 return
 
@@ -858,14 +928,14 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         scriptoutput. Note these tx's aren't yet in the verified set. '''
         assert isinstance(script, ScriptOutput)
         with self.lock:
-            self.wallet_added_tx[txid] = self.RegTx(txid=txid, script=script)
+            self.wallet_reg_tx[txid] = self.RegTx(txid=txid, script=script)
 
     def remove_transaction_hook(self, txid: str):
         ''' Called by wallet inside remove_transaction (with wallet.lock held)
         to tell us about a transaction that was removed. '''
         with self.lock:
             self._rm_vtx(txid)
-            self.wallet_added_tx.pop(txid, None)
+            self.wallet_reg_tx.pop(txid, None)
 
     def add_unverified_tx_hook(self, txid: str, block_height: int):
         ''' This is called by wallet when we expect a future subsequent
@@ -914,13 +984,13 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self._add_verified_tx_common(self._find_script(tx_hash), tx_hash, height_ts_pos_tup[0], header)
 
     def is_up_to_date(self) -> bool:
-        ''' No-op - always return false to prevent network wallet_updated
-        callback and save_verified_tx callback. '''
-        return False
+        '''Return True to kick off network wallet_updated callback and
+        save_verified_tx callback to us, only when nothing left to verify. '''
+        return not self.ext_unverif
 
     def save_verified_tx(self, write : bool = False):
-        ''' No-op -- this is currently never called because we return False in
-        is_up_to_date. '''
+        ''' Save state. Called by ext verified when it's done. '''
+        self.save(write)
 
     def undo_verifications(self, blkchain : object, height : int) -> set:
         ''' Called when the blockchain has changed to tell the wallet to undo
