@@ -24,6 +24,7 @@
 # SOFTWARE.
 
 from functools import partial
+from collections import defaultdict
 
 from .util import MyTreeWidget, MONOSPACE_FONT, SortableTreeWidgetItem, rate_limited, webopen
 from PyQt5.QtCore import Qt
@@ -98,6 +99,12 @@ class AddressList(MyTreeWidget):
                     if old != new:
                         it.setExpanded(new)
         self.wallet = self.parent.wallet
+        # Cash Account support
+        ca_list = self.wallet.cashacct.get_wallet_cashaccounts()
+        ca_by_addr = defaultdict(list)
+        for info in ca_list:
+            ca_by_addr[info.address].append(info)
+        # / cash account
         had_item_count = self.topLevelItemCount()
         sels = self.selectedItems()
         addresses_to_re_select = {item.data(0, Qt.UserRole) for item in sels}
@@ -144,6 +151,14 @@ class AddressList(MyTreeWidget):
                 is_used = self.wallet.is_used(address)
                 balance = sum(self.wallet.get_addr_balance(address))
                 address_text = address.to_ui_string()
+                ca_info, ca_list = None, None
+                if address in ca_by_addr:
+                    # Add Cash Account emoji -- the emoji used is the most
+                    # recent cash account registration for said address
+                    ca_list = ca_by_addr[address]
+                    ca_list.sort(key=lambda x: x.number or 0)
+                    ca_info = ca_list[-1]
+                    address_text = ca_info.emoji + " " + address_text
                 label = self.wallet.labels.get(address.to_storage_string(), '')
                 balance_text = self.parent.format_amount(balance, whitespaces=True)
                 columns = [address_text, str(n), label, balance_text, str(num)]
@@ -152,15 +167,26 @@ class AddressList(MyTreeWidget):
                     fiat_balance = fx.value_str(balance, rate)
                     columns.insert(4, fiat_balance)
                 address_item = SortableTreeWidgetItem(columns)
+                if ca_info:
+                    minimal_ch = self.wallet.cashacct.get_minimal_collision_hash(ca_info.name, ca_info.number, ca_info.collision_hash)
+                    if minimal_ch: minimal_ch = '.' + minimal_ch
+                    address_item.setToolTip(0, "<i>" + _("Cash Account:") + "</i><p>&nbsp;&nbsp;<b>"
+                                            + f"{ca_info.name}#{ca_info.number}{minimal_ch};</b>")
                 address_item.setTextAlignment(3, Qt.AlignRight)
                 address_item.setFont(3, QFont(MONOSPACE_FONT))
                 if fx:
                     address_item.setTextAlignment(4, Qt.AlignRight)
                     address_item.setFont(4, QFont(MONOSPACE_FONT))
 
+                # Set col0 address font to monospace
                 address_item.setFont(0, QFont(MONOSPACE_FONT))
+
+                # Set UserRole data items:
                 address_item.setData(0, Qt.UserRole, address)
                 address_item.setData(0, Qt.UserRole+1, True) # label can be edited
+                if ca_list:
+                    address_item.setData(0, Qt.UserRole+2, ca_list)  # the list of cashacct infos
+
                 if self.wallet.is_frozen(address):
                     address_item.setBackground(0, QColor('lightblue'))
                 if self.wallet.is_beyond_limit(address, is_change):
@@ -277,3 +303,11 @@ class AddressList(MyTreeWidget):
                 if item.childCount():
                     update_recurse(item)
         update_recurse(self.invisibleRootItem())
+
+    def on_doubleclick(self, item, column):
+        if self.permit_edit(item, column):
+            super(AddressList, self).on_doubleclick(item, column)
+        else:
+            addr = item.data(0, Qt.UserRole)
+            if isinstance(addr, Address):
+                self.parent.show_address(addr)
