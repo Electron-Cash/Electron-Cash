@@ -44,7 +44,7 @@ from . import blockchain
 
 # Cash Accounts protocol code prefix is 0x01010101
 # See OP_RETURN prefix guideline: https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/op_return-prefix-guideline.md
-protocol_code = 0x01010101
+protocol_code = bytes.fromhex("01010101")
 
 activation_height = 563720  # all cash acct registrations are invalid if they appear before this block height
 height_modification = activation_height - 100  # compute the cashacct.number by subtracting this value from tx block height
@@ -78,7 +78,7 @@ class ScriptOutput(ScriptOutputBase):
     CashAccounts protocol (based on boolean result of protocol_match() below).
     See the address.ScriptOutput 'protocol' mechanism (in address.py).'''
 
-    _protocol_prefix = _i2b(OpCodes.OP_RETURN) + _i2b(4) + int.to_bytes(protocol_code, 4, byteorder='big')
+    _protocol_prefix = _i2b(OpCodes.OP_RETURN) + _i2b(4) + protocol_code
 
     # Additional attributes outside of the base class tuple's 1 attribute
     attrs_extra = ( 'name', 'address', 'number', 'collision_hash', 'emoji' )
@@ -623,8 +623,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
 
-        # TESTING
-        self.test_unverif = dict()
+        # STILL TESTING
+        self.ext_unverif = dict()
 
 
     def diagnostic_name(self):
@@ -859,7 +859,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     #######################
     def get_unverified_txs(self) -> dict:
         ''' Return a dict of tx_hash (hex encoded) -> height (int)'''
-        return self.test_unverif.copy()
+        return self.ext_unverif.copy()
 
     def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple, header : dict) -> None:
         ''' Called when a verification is successful.
@@ -871,24 +871,30 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         '''
         self.print_error('verified external:', tx_hash, height_ts_pos_tup, blockchain.hash_header(header))
         with self.lock:
-            self.test_unverif.pop(tx_hash, None)
+            self.ext_unverif.pop(tx_hash, None)
             # call back into the same codepath that registers tx's as verified...
             self._add_verified_tx_common(self._find_script(tx_hash), tx_hash, height_ts_pos_tup[0], header)
 
     def is_up_to_date(self) -> bool:
-        ''' No-op - always return false to prevent network wallet_updated callback '''
+        ''' No-op - always return false to prevent network wallet_updated
+        callback and save_verified_tx callback. '''
         return False
 
     def save_verified_tx(self, write : bool = False):
-        ''' No-op '''
+        ''' No-op -- this is currently never called because we return False in
+        is_up_to_date. '''
 
     def undo_verifications(self, blkchain : object, height : int) -> set:
         ''' Called when the blockchain has changed to tell the wallet to undo
         verifications when a reorg has happened. Returns a set of tx_hash. '''
+        # For now we return nothing. TODO: see if it's worth it to undo
+        # verifications on our external tx's.  It would be ideal -- but
+        # needs more dev work right now.
         return set()
 
     def verification_failed(self, tx_hash, reason):
-        ''' TODO '''
+        ''' TODO.. figure out what to do here. Or with wallet verification in
+        general here. '''
         self.print_error(f"SPV failed for {tx_hash}, reason: '{reason}'")
 
     # /SPVDelegate Methods
