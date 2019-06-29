@@ -365,7 +365,7 @@ class ScriptOutput(ScriptOutputBase):
         if self.emoji is not None: d['emoji'] = self.emoji
         return d
 
-# register ourself with the ScriptOutput protocol system
+# register the above class with the ScriptOutput protocol system
 ScriptOutputBase.protocol_classes.add(ScriptOutput)
 
 # Helper Functions
@@ -661,7 +661,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = None
             self.network = None
 
-    def get_minimal_collision_hash(self, name, number, collision_hash) -> str:
+    def get_minimal_chash(self, name, number, collision_hash) -> str:
         ''' Returns a string of the minimal collision hash for a given
         name, number, collision_hash combination. This initially will just
         return collision_hash, but will go out to the network and
@@ -697,15 +697,22 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     if not found:
                         # hmm. empty results.. or bad lookup. in either case,
                         # don't cache anything.
-                        self.print_error("get_minimal_collision_hash: no results found for", *key)
+                        self.print_error("get_minimal_chash: no results found for", *key)
                         return
+                    minimal_chash = collision_hash[:i]
                     with self.lock:
-                        self.minimal_ch_cache.put(key, collision_hash[:i])
-                    self.print_error(f"get_minimal_collision_hash: network lookup completed in {time.time()-t0:1.2f} seconds")
+                        self.minimal_ch_cache.put(key, minimal_chash)
+                    self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
+                    if self.wallet.network and found and minimal_chash != collision_hash:
+                        self.wallet.network.trigger_callback('ca_updated_minimal_chash', self, found.script.address, name, number, collision_hash, minimal_chash)
                 lookup_asynch_all(name=name, number=number, success_cb=on_success)
             if self.network:  # only do this if not 'offline'
                 do_lookup()  # start the asynch lookup
-            return collision_hash  # immediately return the ch
+            # Immediately return the long-form chash so we give the caller a
+            # result immediately, even if it is not the final result.
+            # The caller should subscribe to the ca_updated_minimal_chash
+            # network signal to get final minimal_chash when it is ready.
+            return collision_hash
 
     def get_cashaccounts(self, domain=None, inv=False) -> list:
         ''' Returns a list of Info objects for verified cash accounts in domain.
