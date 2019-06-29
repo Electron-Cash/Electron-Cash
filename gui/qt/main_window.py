@@ -113,6 +113,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.gui_object = gui_object
         self.wallet = wallet
         self.config = config = gui_object.config
+        assert self.wallet and self.config and self.gui_object
 
         self.network = gui_object.daemon.network
         self.fx = gui_object.daemon.fx
@@ -4132,6 +4133,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def clean_up(self):
         self.wallet.thread.stop()
         self.wallet.thread.wait() # Join the thread to make sure it's really dead.
+
+        for w in [self.address_list, self.history_list, self.utxo_list]:
+            w.clean_up()  # tell relevant widget to clean itself up, unregister callbacks, etc
 
         # We catch these errors with the understanding that there is no recovery at
         # this point, given user has likely performed an action we cannot recover

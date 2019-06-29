@@ -27,7 +27,7 @@ from functools import partial
 from collections import defaultdict
 
 from .util import MyTreeWidget, MONOSPACE_FONT, SortableTreeWidgetItem, rate_limited, webopen
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QColor, QKeySequence
 from PyQt5.QtWidgets import QTreeWidgetItem, QAbstractItemView, QMenu
 from electroncash.i18n import _
@@ -41,13 +41,26 @@ from electroncash import networks
 class AddressList(MyTreeWidget):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
 
+    _ca_minimal_chash_updated_signal = pyqtSignal(object, str, int, str, str)
+
     def __init__(self, parent=None):
         super().__init__(parent, self.create_menu, [], 2, deferred_updates=True)
         self.refresh_headers()
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
-        # force attributes to always be defined, even if None, at construction.
         self.wallet = self.parent.wallet
+        assert self.wallet
+        self.cleaned_up = False
+
+        # Cash Accounts support
+        self._ca_cb_registered = False
+        self._ca_minimal_chash_updated_signal.connect(self._ca_update_chash)
+
+    def clean_up(self):
+        self.cleaned_up = True
+        if self.wallet.network:
+            self.wallet.network.unregister_callback(self._ca_updated_minimal_chash_callback)
+            self._ca_cb_registered = False
 
     def filter(self, p):
         ''' Reimplementation from superclass filter.  Chops off the
@@ -68,7 +81,7 @@ class AddressList(MyTreeWidget):
 
     @rate_limited(1.0, ts_after=True) # We rate limit the address list refresh no more than once every second
     def update(self):
-        if self.wallet and (not self.wallet.thread or not self.wallet.thread.isRunning()):
+        if self.cleaned_up:
             # short-cut return if window was closed and wallet is stopped
             return
         super().update()
@@ -98,7 +111,9 @@ class AddressList(MyTreeWidget):
                     new = bool(item_path(it) in expanded_item_names)
                     if old != new:
                         it.setExpanded(new)
-        self.wallet = self.parent.wallet
+        if not self._ca_cb_registered and self.wallet.network:
+            self.wallet.network.register_callback(self._ca_updated_minimal_chash_callback, ['ca_updated_minimal_chash'])
+            self._ca_cb_registered = True
         # Cash Account support
         ca_list = self.wallet.cashacct.get_wallet_cashaccounts()
         ca_by_addr = defaultdict(list)
@@ -168,10 +183,8 @@ class AddressList(MyTreeWidget):
                     columns.insert(4, fiat_balance)
                 address_item = SortableTreeWidgetItem(columns)
                 if ca_info:
-                    minimal_ch = self.wallet.cashacct.get_minimal_collision_hash(ca_info.name, ca_info.number, ca_info.collision_hash)
-                    if minimal_ch: minimal_ch = '.' + minimal_ch
-                    address_item.setToolTip(0, "<i>" + _("Cash Account:") + "</i><p>&nbsp;&nbsp;<b>"
-                                            + f"{ca_info.name}#{ca_info.number}{minimal_ch};</b>")
+                    # Set Cash Accounts: tool tip
+                    self._ca_set_item_tooltip(address_item, ca_info.name, ca_info.number, ca_info.collision_hash)
                 address_item.setTextAlignment(3, Qt.AlignRight)
                 address_item.setFont(3, QFont(MONOSPACE_FONT))
                 if fx:
@@ -311,3 +324,41 @@ class AddressList(MyTreeWidget):
             addr = item.data(0, Qt.UserRole)
             if isinstance(addr, Address):
                 self.parent.show_address(addr)
+
+    #########################
+    # Cash Accounts related #
+    #########################
+    def _ca_set_item_tooltip(self, item, name, number, chash, minimal_chash=None):
+        if minimal_chash is None:
+            minimal_chash = self.wallet.cashacct.get_minimal_chash(name, number, chash)
+        if minimal_chash: minimal_chash = '.' + minimal_chash
+        item.setToolTip(0, "<i>" + _("Cash Account:") + "</i><p>&nbsp;&nbsp;<b>"
+                           + f"{name}#{number}{minimal_chash};</b>")
+
+    def _ca_update_chash(self, address, name, number, chash, minimal_chash):
+        ''' Called in GUI thread as a result of the cash account subsystem
+        figuring out that a collision_hash can be represented shorter.
+        Kicked off by a get_minimal_chash() call. '''
+        if self.cleaned_up:
+            return
+        item = None
+        if isinstance(address, Address):
+            items = self.findItems(address.to_ui_string(), Qt.MatchContains|Qt.MatchWrap|Qt.MatchRecursive, 0)
+            if items: item = items[0]
+        if item:
+            ca_list = item.data(0, Qt.UserRole+2)
+            if ca_list:
+                ca_info = ca_list[-1]
+                # sanity check
+                if ca_info.name.lower() == name.lower() and ca_info.number == number and ca_info.collision_hash == chash:
+                    self._ca_set_item_tooltip(item, name, number, chash, minimal_chash)
+
+    def _ca_updated_minimal_chash_callback(self, event, *args):
+        ''' Called from the cash accounts minimal_chash thread after a network
+        round-trip determined that the minimal collision hash can be shorter.'''
+        if (event == 'ca_updated_minimal_chash'
+                and not self.cleaned_up
+                and len(args) >= 6
+                and args[0] is self.wallet.cashacct):
+            address, name, number, chash, minimal_chash = args[1:]
+            self._ca_minimal_chash_updated_signal.emit(address, name, number, chash, minimal_chash)
