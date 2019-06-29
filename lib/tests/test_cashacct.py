@@ -99,8 +99,8 @@ class TestCashAccounts(unittest.TestCase):
         so_copy = so.copy()
         self.assertEqual(so_copy, so)
         # test info <-> script
-        info = cashacct.info_from_script(so_copy, txid)
-        so_copy_2, txid_2 = cashacct.script_from_info(info)
+        info = cashacct.Info.from_script(so_copy, txid)
+        so_copy_2, txid_2 = info.to_script()
         self.assertEqual(so_copy_2, so_copy)
         self.assertEqual(txid_2, txid)
 

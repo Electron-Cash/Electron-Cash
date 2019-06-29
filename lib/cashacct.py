@@ -438,7 +438,30 @@ num2bh = number_to_block_height  # alias
 
 #### Lookup & Verification
 
-Info = namedtuple("Info", "name, address, number, collision_hash, emoji, txid")
+class Info(namedtuple("Info", "name, address, number, collision_hash, emoji, txid")):
+    @classmethod
+    def from_script(cls, script, txid):
+        ''' Converts a script to an Info object. Note that ideally the passed-in
+        script.is_complete() should be True otherwise most of the fields of the
+        returned Info object will be None.'''
+        return cls(name=script.name,
+                   address=script.address,
+                   number=script.number,
+                   collision_hash=script.collision_hash,
+                   emoji=script.emoji,
+                   txid=txid)
+
+    def to_script(self):
+        ''' Inverse of from_script, returns a (script, txid) tuple. '''
+        script = ScriptOutput.create_registration(name=self.name, address=self.address)
+        script.make_complete2(number=self.number, collision_hash=self.collision_hash,
+                              emoji=self.emoji)
+        return script, self.txid
+
+    @classmethod
+    def from_regtx(cls, regtx):
+        return cls.from_script(regtx.script, regtx.txid)
+
 
 servers = [
     "https://cashacct.imaginary.cash",
@@ -589,25 +612,6 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
                       name = name, collision_prefix = collision_prefix, timeout = timeout)
 
 
-def info_from_script(script, txid):
-    ''' Converts a script to an Info object. Note that ideally the passed-in
-    script.is_complete() should be True otherwise most of the fields of the
-    returned Info object will be None.'''
-    return Info(name=script.name,
-                address=script.address,
-                number=script.number,
-                collision_hash=script.collision_hash,
-                emoji=script.emoji,
-                txid=txid)
-
-def script_from_info(info):
-    ''' Inverse of info_from_script, returns a script, txid tuple. '''
-    script = ScriptOutput.create_registration(name=info.name, address=info.address)
-    script.make_complete2(number=info.number, collision_hash=info.collision_hash,
-                          emoji=info.emoji)
-    return script, info.txid
-
-
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
 
@@ -661,6 +665,25 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = None
             self.network = None
 
+    def fmt_info(self, info : Info, minimal_chash=None) -> str:
+        ''' Given an Info object, returns a string of the form:
+
+        name#123.1234;
+        name2#100;
+        name3#101.1234567890;
+
+        (Note that the returned string will always end in a semicolon.)
+
+        Will implicitly go out to network to cache the minimal_chash value
+        if minimal_chash==None.. such that subsequent calls may return
+        a shortened version once the minimal_chash is computed.'''
+        name, number, chash = info.name, info.number, info.collision_hash
+        if minimal_chash is None:
+            minimal_chash = self.get_minimal_chash(name, number, chash)
+        if minimal_chash: minimal_chash = '.' + minimal_chash
+        return f"{name}#{number}{minimal_chash};"
+
+
     def get_minimal_chash(self, name, number, collision_hash) -> str:
         ''' Returns a string of the minimal collision hash for a given
         name, number, collision_hash combination. This initially will just
@@ -704,7 +727,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         self.minimal_ch_cache.put(key, minimal_chash)
                     self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
                     if self.wallet.network and found and minimal_chash != collision_hash:
-                        self.wallet.network.trigger_callback('ca_updated_minimal_chash', self, found.script.address, name, number, collision_hash, minimal_chash)
+                        self.wallet.network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(found), minimal_chash)
                 lookup_asynch_all(name=name, number=number, success_cb=on_success)
             if self.network:  # only do this if not 'offline'
                 do_lookup()  # start the asynch lookup
@@ -735,7 +758,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     script = self._find_script(txid)
                     if script and txid not in seen:
                         seen.add(txid)
-                        ret.append(info_from_script(script, txid))
+                        ret.append(Info.from_script(script, txid))
 
         return ret
 
@@ -855,7 +878,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         continue
                     if collision_prefix is not None and not script.collision_hash.startswith(collision_prefix):
                         continue
-                    ret.append(info_from_script(script, txid))
+                    ret.append(Info.from_script(script, txid))
         return ret
 
     ###################

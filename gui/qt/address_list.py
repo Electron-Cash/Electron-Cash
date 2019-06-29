@@ -36,12 +36,17 @@ from electroncash.plugins import run_hook
 import electroncash.web as web
 from electroncash.util import profiler
 from electroncash import networks
-
+from enum import IntEnum
 
 class AddressList(MyTreeWidget):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
 
-    _ca_minimal_chash_updated_signal = pyqtSignal(object, str, int, str, str)
+    _ca_minimal_chash_updated_signal = pyqtSignal(object, str)
+
+    class DataRoles(IntEnum):
+        address        = Qt.UserRole + 0
+        can_edit_label = Qt.UserRole + 1
+        cash_accounts  = Qt.UserRole + 2
 
     def __init__(self, parent=None):
         super().__init__(parent, self.create_menu, [], 2, deferred_updates=True)
@@ -122,7 +127,7 @@ class AddressList(MyTreeWidget):
         # / cash account
         had_item_count = self.topLevelItemCount()
         sels = self.selectedItems()
-        addresses_to_re_select = {item.data(0, Qt.UserRole) for item in sels}
+        addresses_to_re_select = {item.data(0, self.DataRoles.address) for item in sels}
         expanded_item_names = remember_expanded_items(self.invisibleRootItem())
         del sels  # avoid keeping reference to about-to-be delete C++ objects
         self.clear()
@@ -184,7 +189,7 @@ class AddressList(MyTreeWidget):
                 address_item = SortableTreeWidgetItem(columns)
                 if ca_info:
                     # Set Cash Accounts: tool tip
-                    self._ca_set_item_tooltip(address_item, ca_info.name, ca_info.number, ca_info.collision_hash)
+                    self._ca_set_item_tooltip(address_item, ca_info)
                 address_item.setTextAlignment(3, Qt.AlignRight)
                 address_item.setFont(3, QFont(MONOSPACE_FONT))
                 if fx:
@@ -195,10 +200,10 @@ class AddressList(MyTreeWidget):
                 address_item.setFont(0, QFont(MONOSPACE_FONT))
 
                 # Set UserRole data items:
-                address_item.setData(0, Qt.UserRole, address)
-                address_item.setData(0, Qt.UserRole+1, True) # label can be edited
+                address_item.setData(0, self.DataRoles.address, address)
+                address_item.setData(0, self.DataRoles.can_edit_label, True) # label can be edited
                 if ca_list:
-                    address_item.setData(0, Qt.UserRole+2, ca_list)  # the list of cashacct infos
+                    address_item.setData(0, self.DataRoles.cash_accounts, ca_list)  # the list of cashacct infos
 
                 if self.wallet.is_frozen(address):
                     address_item.setBackground(0, QColor('lightblue'))
@@ -229,7 +234,7 @@ class AddressList(MyTreeWidget):
         can_delete = self.wallet.can_delete_address()
         selected = self.selectedItems()
         multi_select = len(selected) > 1
-        addrs = [item.data(0, Qt.UserRole) for item in selected]
+        addrs = [item.data(0, self.DataRoles.address) for item in selected]
         if not addrs:
             return
         addrs = [addr for addr in addrs if isinstance(addr, Address)]
@@ -295,7 +300,7 @@ class AddressList(MyTreeWidget):
 
     def keyPressEvent(self, event):
         if event.matches(QKeySequence.Copy) and self.currentColumn() == 0:
-            addrs = [i.data(0, Qt.UserRole) for i in self.selectedItems()]
+            addrs = [i.data(0, self.DataRoles.address) for i in self.selectedItems()]
             if addrs and isinstance(addrs[0], Address):
                 text = addrs[0].to_full_ui_string()
                 self.parent.app.clipboard().setText(text)
@@ -309,7 +314,7 @@ class AddressList(MyTreeWidget):
             child_count = root.childCount()
             for i in range(child_count):
                 item = root.child(i)
-                addr = item.data(0, Qt.UserRole)
+                addr = item.data(0, self.DataRoles.address)
                 if isinstance(addr, Address):
                     label = self.wallet.labels.get(addr.to_storage_string(), '')
                     item.setText(2, label)
@@ -321,44 +326,40 @@ class AddressList(MyTreeWidget):
         if self.permit_edit(item, column):
             super(AddressList, self).on_doubleclick(item, column)
         else:
-            addr = item.data(0, Qt.UserRole)
+            addr = item.data(0, self.DataRoles.address)
             if isinstance(addr, Address):
                 self.parent.show_address(addr)
 
     #########################
     # Cash Accounts related #
     #########################
-    def _ca_set_item_tooltip(self, item, name, number, chash, minimal_chash=None):
-        if minimal_chash is None:
-            minimal_chash = self.wallet.cashacct.get_minimal_chash(name, number, chash)
-        if minimal_chash: minimal_chash = '.' + minimal_chash
+    def _ca_set_item_tooltip(self, item, ca_info, minimal_chash=None):
+        info_str = self.wallet.cashacct.fmt_info(ca_info, minimal_chash)
         item.setToolTip(0, "<i>" + _("Cash Account:") + "</i><p>&nbsp;&nbsp;<b>"
-                           + f"{name}#{number}{minimal_chash};</b>")
+                           + f"{info_str}</b>")
 
-    def _ca_update_chash(self, address, name, number, chash, minimal_chash):
+    def _ca_update_chash(self, ca_info, minimal_chash):
         ''' Called in GUI thread as a result of the cash account subsystem
         figuring out that a collision_hash can be represented shorter.
         Kicked off by a get_minimal_chash() call. '''
         if self.cleaned_up:
             return
-        item = None
-        if isinstance(address, Address):
-            items = self.findItems(address.to_ui_string(), Qt.MatchContains|Qt.MatchWrap|Qt.MatchRecursive, 0)
-            if items: item = items[0]
-        if item:
-            ca_list = item.data(0, Qt.UserRole+2)
-            if ca_list:
-                ca_info = ca_list[-1]
-                # sanity check
-                if ca_info.name.lower() == name.lower() and ca_info.number == number and ca_info.collision_hash == chash:
-                    self._ca_set_item_tooltip(item, name, number, chash, minimal_chash)
+        items = self.findItems(ca_info.address.to_ui_string(), Qt.MatchContains|Qt.MatchWrap|Qt.MatchRecursive, 0) or []
+        for item in items:  # really items should contain just 1 element...
+            ca_list = item.data(0, self.DataRoles.cash_accounts) or []
+            ca_info_saved = ca_list[-1] if ca_list else None
+            # TODO: future support for changing the default item associated
+            # with an address in UI. Right now it's always the last item.
+            if ( ca_info_saved
+                    and ((ca_info_saved.name.lower(), ca_info_saved.number, ca_info_saved.collision_hash)
+                         == (ca_info.name.lower(), ca_info.number, ca_info.collision_hash) ) ):
+                self._ca_set_item_tooltip(item, ca_info, minimal_chash)
 
     def _ca_updated_minimal_chash_callback(self, event, *args):
         ''' Called from the cash accounts minimal_chash thread after a network
         round-trip determined that the minimal collision hash can be shorter.'''
         if (event == 'ca_updated_minimal_chash'
                 and not self.cleaned_up
-                and len(args) >= 6
+                and len(args) >= 3
                 and args[0] is self.wallet.cashacct):
-            address, name, number, chash, minimal_chash = args[1:]
-            self._ca_minimal_chash_updated_signal.emit(address, name, number, chash, minimal_chash)
+            self._ca_minimal_chash_updated_signal.emit(args[1], args[2])
