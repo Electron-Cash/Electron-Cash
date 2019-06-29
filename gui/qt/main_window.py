@@ -49,7 +49,7 @@ from electroncash.util import (format_time, format_satoshis, PrintError,
                                print_error)
 import electroncash.web as web
 from electroncash import Transaction
-from electroncash import util, bitcoin, commands
+from electroncash import util, bitcoin, commands, cashacct
 from electroncash import paymentrequest
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
 try:
@@ -975,6 +975,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_address = None
         self.receive_address_e = ButtonsLineEdit()
         self.receive_address_e.addCopyButton()
+        self.receive_address_e.addButton(":icons/cashacct-logo.png", self.register_new_cash_account, _("Register a Cash Account alias for this address"))
         self.receive_address_e.setReadOnly(True)
         msg = _('Bitcoin Cash address where the payment should be received. Note that each payment request uses a different Bitcoin Cash address.')
         label = HelpLabel(_('&Receiving address'), msg)
@@ -1349,7 +1350,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         msg = _('Recipient of the funds.') + '\n\n'\
               + _('You may enter a Bitcoin Cash address, a label from your list of contacts (a list of completions will be proposed), or an alias (email-like address that forwards to a Bitcoin Cash address)') + ".\n\n" \
               + _('You may also enter cointext:(NUMBER) to send a CoinText.')
-        payto_label = HelpLabel(_('Pay &to'), msg)
+        self.payto_label = payto_label = HelpLabel(_('Pay &to'), msg)
         payto_label.setBuddy(self.payto_e)
         grid.addWidget(payto_label, 1, 0)
         grid.addWidget(self.payto_e, 1, 1, 1, -1)
@@ -2206,8 +2207,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         for e in [self.payto_e, self.message_e, self.amount_e, self.fiat_send_e, self.fee_e, self.message_opreturn_e]:
             e.setText('')
             e.setFrozen(False)
+        self.payto_e.setHidden(False)
+        self.payto_label.setHidden(False)
         self.max_button.setDisabled(False)
         self.opreturn_rawhex_cb.setChecked(False)
+        self.opreturn_rawhex_cb.setDisabled(False)
         self.set_pay_from([])
         self.tx_external_keypairs = {}
         self.message_opreturn_e.setVisible(self.config.get('enable_opreturn', False))
@@ -4475,6 +4479,94 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         qApp.clipboard().setText(text)
         QToolTip.showText(QCursor.pos(), tooltip, widget)
 
+    def register_new_cash_account(self, addr = None):
+        ''' Initiates the "Register a new cash account" dialog.
+        If addr is none, will use self.receive_address. '''
+        addr = addr or self.receive_address
+        if not addr:
+            self.print_error("register_new_cash_account: no receive address specified")
+            return
+        def on_link(ignored):
+            webopen('https://www.cashaccount.info/')
+        name = 'Satoshi_Nakamoto'
+        while True:
+            lh = self.wallet.get_local_height()
+            name = line_dialog(self, _("Register A New Cash Account"),
+                               (_("You are registering a new <a href='ca'>Cash Account</a> for address <b>{address}</b>.").format(address=addr.to_ui_string())
+                                + "<br><br>" + _("How it works: <a href='ca'>Cash Accounts</a> registrations work by issuing an <b>OP_RETURN</b> transaction to yourself, costing fractions of a penny. "
+                                                 "In order to proceed, you must specify the <b>name</b> you wish to associate with the above <b>address</b>. "
+                                                 "You will be offered the opportunity to review the generated transaction before broadcasting it to the blockchain.")
+                                + "<br><br>" + _("The current block height is <b><i>{block_height}</i></b>, so the new cash account will likely look like: <b><u><i>AccountName<i>#{number}</u></b>.")
+                                .format(block_height=lh or '???', number=max(cashacct.bh2num(lh or 0)+1, 0) or '???')
+                                + "<br><br>" + _("Specify the account name below (limit to 99 characters):") ),
+                               _("Proceed to Send Tab"), default=name, linkActivated=on_link)
+            if name is None:
+                # user cancel
+                return
+            name = name.strip()
+            if not cashacct.name_accept_re.match(name):
+                self.show_error(_("The specified name cannot be used for a Cash Accounts registration. You must specify 1-99 alphanumeric (ASCII) characters, without spaces (underscores are permitted as well)."))
+                continue
+            self._reg_new_cash_account(name, addr)
+            return
+
+    def _reg_new_cash_account(self, name, addr):
+        self.show_send_tab()
+        self.do_clear()
+
+        # Enabled OP_RETURN stuff even if disabled in prefs. Next do_clear call will reset to prefs presets.
+        self.message_opreturn_e.setVisible(True)
+        self.opreturn_rawhex_cb.setVisible(True)
+        self.opreturn_label.setVisible(True)
+
+        # Prevent user from modifying required fields, and hide what we
+        # can as well.
+        self.message_opreturn_e.setText(cashacct.ScriptOutput.create_registration(name, addr).script[1:].hex())
+        self.message_opreturn_e.setFrozen(True)
+        self.opreturn_rawhex_cb.setChecked(True)
+        self.opreturn_rawhex_cb.setDisabled(True)
+        self.amount_e.setAmount(0)
+        self.amount_e.setFrozen(True)
+        self.max_button.setDisabled(True)
+        self.payto_e.setHidden(True)
+        self.payto_label.setHidden(True)
+
+        # Set a default description -- this we allow them to edit
+        self.message_e.setText(
+            _("Cash Accounts Registration: '{name}' -> {address}").format(
+                name=name, address=addr.to_ui_string()
+            )
+        )
+
+        # set up "Helpful Window" informing user registration will
+        # not be accepted until at least 1 confirmation.
+        cashaccounts_never_show_send_tab_hint = self.config.get('cashaccounts_never_show_send_tab_hint', False)
+
+        if not cashaccounts_never_show_send_tab_hint:
+            msg1 = (
+                _("The Send Tab has been filled-in with your <b>Cash Accounts</b> registration data.")
+                + "<br><br>" + _("Please review the transaction, save it, and/or broadcast it at your leisure.")
+            )
+            msg2 = ( _("After at least <i>1 confirmation</i>, you will be able to use your new <b>Cash Account</b>, and it will be visible in Electron Cash in the <b>Addresses</b> tab.")
+            )
+            msg3 = _("If you wish to control which specific coins are used to "
+                     "fund this registration transaction, feel free to use the "
+                     "Coins and/or Addresses tabs' Spend-from facility.\n\n"
+                     "('Spend from' is a right-click menu option in either tab.)")
+
+            res = self.msg_box(
+                # TODO: get SVG icon..
+                parent = self, icon=QIcon(":icons/cashacct-logo.png").pixmap(75, 75),
+                title=_('Register A New Cash Account'), rich_text=True,
+                text = msg1, informative_text = msg2, detail_text = msg3,
+                checkbox_text=_("Never show this again"), checkbox_ischecked=False
+            )
+            if res[1]:
+                # never ask checked
+                self.config.set_key('cashaccounts_never_show_send_tab_hint', True)
+
+
+
 
 class TxUpdateMgr(QObject, PrintError):
     ''' Manages new transaction notifications and transaction verified
@@ -4573,22 +4665,51 @@ class TxUpdateMgr(QObject, PrintError):
         if not parent or parent.cleaned_up:
             return
         if parent.network:
-            n_ok = 0
             txns = self.notifs_get_and_clear()
-            if txns and parent.wallet.storage.get('gui_notify_tx', True):
+            if txns:
                 # Combine the transactions
-                total_amount = 0
+                n_ok, n_cashacct, total_amount = 0, 0, 0
+                last_seen_ca_name = ''
                 for tx in txns:
                     if tx:
                         is_relevant, is_mine, v, fee = parent.wallet.get_wallet_delta(tx)
+                        for _typ, addr, val in tx.outputs():
+                            # Find Cash Account registrations that are for addresses *in* this wallet
+                            if isinstance(addr, cashacct.ScriptOutput) and parent.wallet.is_mine(addr.address):
+                                n_cashacct += 1
+                                last_seen_ca_name = addr.name
                         if not is_relevant:
                             continue
                         total_amount += v
                         n_ok += 1
-                if total_amount > 0:
-                    self.print_error("Notifying GUI %d tx"%(n_ok))
-                    if n_ok > 1:
-                        parent.notify(_("{} new transactions: {}")
-                                      .format(n_ok, parent.format_amount_and_units(total_amount, is_diff=True)))
-                    else:
-                        parent.notify(_("New transaction: {}").format(parent.format_amount_and_units(total_amount, is_diff=True)))
+                if n_cashacct:
+                    # Unhide the Addresses tab if cash account reg tx seen
+                    # and user never explicitly hid it.
+                    if parent.config.get("show_addresses_tab") is None:
+                        # We unhide it because presumably they want to SEE
+                        # their cash accounts now that they have them --
+                        # and part of the UI is *IN* the Addresses tab.
+                        parent.toggle_tab(parent.addresses_tab)
+                if parent.wallet.storage.get('gui_notify_tx', True):
+                    ca_text = ''
+                    if n_cashacct > 1:
+                        # plural
+                        ca_text = " + " + _("{number_of_cashaccounts} Cash Accounts registrations").format(number_of_cashaccounts = n_cashacct)
+                    elif n_cashacct == 1:
+                        # singular
+                        ca_text = " + " + _("1 Cash Accounts registration ({cash_accounts_name})").format(cash_accounts_name = last_seen_ca_name)
+                    if total_amount > 0:
+                        self.print_error("Notifying GUI %d tx"%(max(n_ok, n_cashacct)))
+                        if max(n_ok, n_cashacct) > 1:
+                            parent.notify(_("{} new transactions: {}")
+                                          .format(n_ok, parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text)
+                        else:
+                            parent.notify(_("New transaction: {}").format(parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text)
+                    elif n_cashacct:
+                        # No total amount (was just a cashacct reg tx)
+                        ca_text = ca_text[3:]  # pop off the " + "
+                        if n_cashacct > 1:
+                            parent.notify(_("{} new transactions: {}")
+                                          .format(n_cashacct, ca_text))
+                        else:
+                            parent.notify(_("New transaction: {}").format(ca_text))

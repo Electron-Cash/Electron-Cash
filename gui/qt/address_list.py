@@ -28,8 +28,8 @@ from collections import defaultdict
 
 from .util import MyTreeWidget, MONOSPACE_FONT, SortableTreeWidgetItem, rate_limited, webopen
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor, QKeySequence
-from PyQt5.QtWidgets import QTreeWidgetItem, QAbstractItemView, QMenu
+from PyQt5.QtGui import QFont, QColor, QKeySequence, QCursor, QIcon
+from PyQt5.QtWidgets import QTreeWidgetItem, QAbstractItemView, QMenu, QToolTip
 from electroncash.i18n import _
 from electroncash.address import Address
 from electroncash.plugins import run_hook
@@ -42,6 +42,7 @@ class AddressList(MyTreeWidget):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
 
     _ca_minimal_chash_updated_signal = pyqtSignal(object, str)
+    _cashacct_icon = None
 
     class DataRoles(IntEnum):
         address        = Qt.UserRole + 0
@@ -60,6 +61,10 @@ class AddressList(MyTreeWidget):
         # Cash Accounts support
         self._ca_cb_registered = False
         self._ca_minimal_chash_updated_signal.connect(self._ca_update_chash)
+
+        if not __class__._cashacct_icon:
+            # lazy init the icon
+            __class__._cashacct_icon = QIcon(":icons/cashacct-logo.png")  # TODO: make this an SVG
 
     def clean_up(self):
         self.cleaned_up = True
@@ -177,8 +182,12 @@ class AddressList(MyTreeWidget):
                     # recent cash account registration for said address
                     ca_list = ca_by_addr[address]
                     ca_list.sort(key=lambda x: ((x.number or 0), str(x.collision_hash)))
-                    ca_info = ca_list[-1]
-                    address_text = ca_info.emoji + " " + address_text
+                    for ca in ca_list:
+                        # grab minimal_chash and stash in an attribute. this may kick off the network
+                        ca.minimal_chash = self.wallet.cashacct.get_minimal_chash(ca.name, ca.number, ca.collision_hash)
+                    ca_info = self._ca_get_default(ca_list)
+                    if ca_info:
+                        address_text = ca_info.emoji + " " + address_text
                 label = self.wallet.labels.get(address.to_storage_string(), '')
                 balance_text = self.parent.format_amount(balance, whitespaces=True)
                 columns = [address_text, str(n), label, balance_text, str(num)]
@@ -188,7 +197,7 @@ class AddressList(MyTreeWidget):
                     columns.insert(4, fiat_balance)
                 address_item = SortableTreeWidgetItem(columns)
                 if ca_info:
-                    # Set Cash Accounts: tool tip
+                    # Set Cash Accounts: tool tip.. this will read the minimal_chash attribute we added to this object above
                     self._ca_set_item_tooltip(address_item, ca_info)
                 address_item.setTextAlignment(3, Qt.AlignRight)
                 address_item.setFont(3, QFont(MONOSPACE_FONT))
@@ -227,6 +236,7 @@ class AddressList(MyTreeWidget):
 
         # Now, at the very end, enforce previous UI state with respect to what was expanded or not. See #1042
         restore_expanded_items(self.invisibleRootItem(), expanded_item_names)
+
 
     def create_menu(self, position):
         from electroncash.wallet import Multisig_Wallet
@@ -268,7 +278,7 @@ class AddressList(MyTreeWidget):
             if alt_copy_text and alt_column_title:
                 # Add 'Copy Legacy Address' and 'Copy Cash Address' alternates if right-click is on column 0
                 menu.addAction(_("Copy {}").format(alt_column_title), lambda: doCopy(alt_copy_text))
-            menu.addAction(_('Details'), lambda: self.parent.show_address(addr))
+            menu.addAction(_('Details') + "...", lambda: self.parent.show_address(addr))
             if col in self.editable_columns:
                 menu.addAction(_("Edit {}").format(column_title), lambda: self.editItem(self.itemAt(position), # NB: C++ item may go away if this widget is refreshed while menu is up -- so need to re-grab and not store in lamba. See #953
                                                                                         col))
@@ -294,6 +304,38 @@ class AddressList(MyTreeWidget):
         if coins:
             menu.addAction(_("Spend from"),
                            partial(self.parent.spend_coins, coins))
+
+        # Add Cash Accounts section at the end, if relevant
+        if not multi_select:
+            ca_list = item.data(0, self.DataRoles.cash_accounts)
+            menu.addSeparator()
+            a1 = menu.addAction(_("Cash Accounts"), lambda: None)
+            a1.setDisabled(True)
+            if ca_list:
+                ca_default = self._ca_get_default(ca_list)
+                for ca_info in ca_list:
+                    ca_text = self.wallet.cashacct.fmt_info(ca_info, ca_info.minimal_chash)
+                    m = menu.addMenu(ca_info.emoji + " " + ca_text)
+                    #a = menu.addAction(ca_info.emoji + " " + self.wallet.cashacct.fmt_info(ca_info, ca_info.minimal_chash), lambda: None)
+                    a = m.addAction(_("Copy text"), lambda x=None, text=ca_text: doCopy(text))
+                    a = m.addAction(_("Details") + "...", lambda: self.parent.show_address(addr))
+                    a = m.addAction(_("View registration tx") + "...", lambda x=None, ca=ca_info: self.parent.do_process_from_txid(txid=ca.txid))
+                    a = a_def = m.addAction(_("Make default for address"), lambda x=None, ca=ca_info: self._ca_set_default(ca, True))
+                    if ca_info == ca_default:
+                        m.setTitle(m.title() + "    " + "★")
+                        a_def.setDisabled(True)
+                        a_def.setCheckable(True)
+                        a_def.setChecked(True)
+                        a_def.setText(_("Is default for address"))
+            else:
+                a1.setText(_("No Cash Accounts"))
+            a_new = menu.addAction(_("Register new..."), lambda x=None, addr=addr: self.parent.register_new_cash_account(addr))
+            if not ca_list and __class__._cashacct_icon:
+                # we only add an icon if there are no cashaccounts
+                # for this address. This is because the icon alongside the emojis
+                # made the ui look too "busy"...
+                a_new.setIcon(__class__._cashacct_icon)
+
 
         run_hook('receive_menu', menu, addrs, self.wallet)
         menu.exec_(self.viewport().mapToGlobal(position))
@@ -333,7 +375,8 @@ class AddressList(MyTreeWidget):
     #########################
     # Cash Accounts related #
     #########################
-    def _ca_set_item_tooltip(self, item, ca_info, minimal_chash=None):
+    def _ca_set_item_tooltip(self, item, ca_info):
+        minimal_chash = getattr(ca_info, 'minimal_chash', None)
         info_str = self.wallet.cashacct.fmt_info(ca_info, minimal_chash)
         item.setToolTip(0, "<i>" + _("Cash Account:") + "</i><p>&nbsp;&nbsp;<b>"
                            + f"{info_str}</b>")
@@ -347,13 +390,14 @@ class AddressList(MyTreeWidget):
         items = self.findItems(ca_info.address.to_ui_string(), Qt.MatchContains|Qt.MatchWrap|Qt.MatchRecursive, 0) or []
         for item in items:  # really items should contain just 1 element...
             ca_list = item.data(0, self.DataRoles.cash_accounts) or []
-            ca_info_saved = ca_list[-1] if ca_list else None
-            # TODO: future support for changing the default item associated
-            # with an address in UI. Right now it's always the last item.
-            if ( ca_info_saved
-                    and ((ca_info_saved.name.lower(), ca_info_saved.number, ca_info_saved.collision_hash)
-                         == (ca_info.name.lower(), ca_info.number, ca_info.collision_hash) ) ):
-                self._ca_set_item_tooltip(item, ca_info, minimal_chash)
+            ca_info_default = self._ca_get_default(ca_list)
+            for ca_info_saved in ca_list:
+                if ( (ca_info_saved.name.lower(), ca_info_saved.number, ca_info_saved.collision_hash)
+                        == (ca_info.name.lower(), ca_info.number, ca_info.collision_hash) ):
+                    ca_info_saved.minimal_chash = minimal_chash  # save minimal_chash as a property
+                    if ca_info_saved == ca_info_default:
+                        # this was the default one, also set the tooltip
+                        self._ca_set_item_tooltip(item, ca_info)
 
     def _ca_updated_minimal_chash_callback(self, event, *args):
         ''' Called from the cash accounts minimal_chash thread after a network
@@ -363,3 +407,29 @@ class AddressList(MyTreeWidget):
                 and len(args) >= 3
                 and args[0] is self.wallet.cashacct):
             self._ca_minimal_chash_updated_signal.emit(args[1], args[2])
+
+    def _ca_get_default(self, ca_list):
+        ''' No-op for now just returns the last info item. Intended to be used
+        to read prefs for default cashaccount for a particular address.'''
+        if ca_list:
+            last = ca_list[-1]
+            d = self.wallet.storage.get('cash_accounts_address_defaults')
+            if isinstance(d, dict):
+                tup = d.get(last.address.to_storage_string())
+                if isinstance(tup, (tuple, list)) and len(tup) == 3:
+                    name, number, chash = tup
+                    if isinstance(name, str) and isinstance(number, (int, float)) and isinstance(chash, str):
+                        # find the matching one in the list
+                        for ca in ca_list:
+                            if (name.lower(), number, chash) == (ca.name.lower(), ca.number, ca.collision_hash):
+                                return ca
+            # just return the latest one if no default specified
+            return last
+
+    def _ca_set_default(self, ca_info, show_tip = False):
+        d = self.wallet.storage.get('cash_accounts_address_defaults', {})
+        d[ca_info.address.to_storage_string()] = [ca_info.name, ca_info.number, ca_info.collision_hash]
+        self.wallet.storage.put('cash_accounts_address_defaults', d)
+        if show_tip:
+            QToolTip.showText(QCursor.pos(), _("Cash Account has been made the default for this address"), self)
+        self.update()
