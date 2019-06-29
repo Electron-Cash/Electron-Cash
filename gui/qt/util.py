@@ -256,7 +256,7 @@ class MessageBoxMixin:
         if informative_text and isinstance(informative_text, str):
             d.setInformativeText(informative_text)
         if rich_text:
-            d.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.LinksAccessibleByMouse)
+            d.setTextInteractionFlags(d.textInteractionFlags()|Qt.TextSelectableByMouse|Qt.LinksAccessibleByMouse)
             d.setTextFormat(Qt.RichText)
         else:
             d.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -328,12 +328,16 @@ class WaitingDialog(WindowModalDialog):
             self.setParent(None) # this causes GC to happen sooner rather than later. Before this call was added the WaitingDialogs would stick around in memory until the ElectrumWindow was closed and would never get GC'd before then. (as of PyQt5 5.11.3)
 
 
-def line_dialog(parent, title, label, ok_label, default=None):
+def line_dialog(parent, title, label, ok_label, default=None, *, linkActivated=None):
     dialog = WindowModalDialog(parent, title)
     dialog.setMinimumWidth(500)
     l = QVBoxLayout()
     dialog.setLayout(l)
-    l.addWidget(QLabel(label))
+    lbl = WWLabel(label)
+    l.addWidget(lbl)
+    if linkActivated:
+        lbl.linkActivated.connect(linkActivated)
+        lbl.setTextInteractionFlags(lbl.textInteractionFlags()|Qt.LinksAccessibleByMouse)
     txt = QLineEdit()
     if default:
         txt.setText(default)

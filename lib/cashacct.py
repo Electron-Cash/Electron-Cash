@@ -665,7 +665,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = None
             self.network = None
 
-    def fmt_info(self, info : Info, minimal_chash=None) -> str:
+    def fmt_info(self, info : Info, minimal_chash: str = None) -> str:
         ''' Given an Info object, returns a string of the form:
 
         name#123.1234;
