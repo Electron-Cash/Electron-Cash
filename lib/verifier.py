@@ -27,6 +27,7 @@ from . import networks
 from .transaction import Transaction
 
 class InnerNodeOfSpvProofIsValidTx(Exception): pass
+class BadResponse(Exception): pass
 
 class SPVDelegate(ABC):
     ''' Abstract base class for an object that is SPV-able, such as a wallet.
@@ -169,30 +170,45 @@ class SPV(ThreadJob):
             self.blockchain = self.network.blockchain()
             self.undo_verifications()
 
-    failure_reasons = [
-        'inner_node_tx', 'missing_header', 'merkle_mismatch',
-    ]
+    failure_reasons = (
+        'inner_node_tx', 'missing_header', 'merkle_mismatch', 'error_response',
+        'misc_failure'
+    )
 
     def verify_merkle(self, response):
         if self.cleaned_up:
-            return  # we have been killed, this was just an orphan callback
-        if response.get('error'):
-            # FIXME: tx will never verify now until server reconnect.
-            self.print_error('received an error:', response)
-            return
-        params = response['params']
-        merkle = response['result']
-        # Verify the hash of the server-provided merkle branch to a
-        # transaction matches the merkle root of its block
-        tx_hash = params[0]
-        tx_height = merkle.get('block_height')
-        pos = merkle.get('pos')
+            return  # we have been killed, this was just a delayed callback
         try:
+            params = response.get('params')
+            tx_hash = params and params[0]
+            if response.get('error'):
+                raise BadResponse('received an error response: ' + str(response))
+            merkle = response.get('result')
+            if (not isinstance(merkle, dict) or not tx_hash
+                    or any(k not in merkle for k in ('block_height', 'merkle', 'pos'))):
+                raise BadResponse(f"missing data in response {response}")
+        except BadResponse as e:
+             # FIXME: tx will never verify now until switching blockchains or
+             # app restart
+            if tx_hash:
+                self.wallet.verification_failed(tx_hash, self.failure_reasons[3])
+            self.print_error("verify_merkle:", str(e))
+            return
+
+        try:
+            # Verify the hash of the server-provided merkle branch to a
+            # transaction matches the merkle root of its block
+            tx_height = merkle['block_height']
+            pos = merkle['pos']
             merkle_root = self.hash_merkle_root(merkle['merkle'], tx_hash, pos)
         except InnerNodeOfSpvProofIsValidTx:
             self.print_error("merkle verification failed for {} (inner node looks like tx)"
                              .format(tx_hash))
             self.wallet.verification_failed(tx_hash, self.failure_reasons[0])
+            return
+        except Exception as e:
+            self.print_error(f"exception while verifying tx {tx_hash}: {repr(e)}")
+            self.wallet.verification_failed(tx_hash, self.failure_reasons[4])
             return
 
         header = self.network.blockchain().read_header(tx_height)
