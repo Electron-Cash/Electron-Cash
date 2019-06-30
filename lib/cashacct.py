@@ -861,11 +861,18 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             key = item[:-1]
             self.minimal_ch_cache.put(tuple(key), value)  # re-populate the cache
 
-        # re-enqueue previously unverified for verification
-        # FIXME: This means that failed verifications will forever retry
+        # re-enqueue previously unverified for verification.
+        # they may come from either wallet or external source, but we
+        # enqueue them with the private verifier here.
+        # FIXME: This means that failed/bad verifications will forever retry
         # on wallet restart. TODO: handle this situation.
-        for txid, item in self.ext_reg_tx.items():
-            if txid not in self.v_tx and item.script.number is not None:
+        # FIXME2: Figure out how to deal with actual chain reorgs and detecting
+        # when a cash account no longer belongs to the best chain.  The situation
+        # now is we will forever try and verify them each wallet startup...
+        d = self.ext_reg_tx.copy()
+        d.update(self.wallet_reg_tx)
+        for txid, item in d.items():
+            if txid not in self.v_tx and item.script.number is not None and item.script.number >= 100:
                 self.ext_unverif[txid] = num2bh(item.script.number)
 
         # Note that 'wallet.load_transactions' will be called after this point
@@ -1036,6 +1043,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.wallet_reg_tx.pop(txid, None)
         self.ext_reg_tx.pop(txid, None)
         self.ext_incomplete_tx.pop(txid, None)
+        self.ext_unverif.pop(txid, None)
 
     def _add_verified_tx_common(self, script, txid, height, header):
         ''' caller must hold locks '''
@@ -1177,13 +1185,22 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' Save state. Called by ext verified when it's done. '''
         self.save(write)
 
-    def undo_verifications(self, blkchain : object, height : int) -> set:
+    def undo_verifications(self, bchain : object, height : int) -> set:
         ''' Called when the blockchain has changed to tell the wallet to undo
         verifications when a reorg has happened. Returns a set of tx_hash. '''
-        # For now we return nothing. TODO: see if it's worth it to undo
-        # verifications on our external tx's.  It would be ideal -- but
-        # needs more dev work right now.
-        return set()
+        txs = set()
+        with self.lock:
+            for txid, vtx in self.v_tx.copy().items():
+                if txid in self.wallet_reg_tx:
+                    # wallet verifier will take care of this one
+                    continue
+                if vtx.block_height >= height:
+                    header = bchain.read_header(vtx.block_height)
+                    if not header or vtx.block_hash != blockchain.hash_header(header):
+                        self._rm_vtx(txid)
+                        self.ext_unverif[txid] = vtx.block_height  # re-enqueue for verification with private verifier...? TODO: how to detect tx's dropped out of new chain?
+                        txs.add(txid)
+        return txs
 
     def verification_failed(self, tx_hash, reason):
         ''' TODO.. figure out what to do here. Or with wallet verification in
@@ -1195,7 +1212,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 if self.verifier.failure_reasons.index(reason) < 3 or not script or not script.is_complete():
                     # actual verification failure.. remove this tx
                     self.print_error("removing tx from ext_reg_tx cache")
-                    self.ext_unverif.pop(tx_hsh, None)
+                    self.ext_unverif.pop(tx_hash, None)
                     self.ext_reg_tx.pop(tx_hash, None)
                 else:
                     # Note that the above ^ branch can also be reached due to a
