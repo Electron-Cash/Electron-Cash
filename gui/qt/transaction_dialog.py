@@ -37,6 +37,7 @@ from electroncash.bitcoin import base_encode
 from electroncash.i18n import _, ngettext
 from electroncash.plugins import run_hook
 from electroncash import web
+from electroncash import cashacct
 
 from electroncash.util import bfh, Weak, PrintError
 from .util import *
@@ -83,6 +84,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self._closed = False
         self.tx_hash = self.tx._txid(self.tx.raw) if self.tx.raw else None
         self.tx_height = self.wallet.get_tx_height(self.tx_hash)[0] or None
+        self.block_hash = None
 
         self.setMinimumWidth(750)
         self.setWindowTitle(_("Transaction"))
@@ -220,7 +222,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
 
 
     def got_verified_tx(self, event, args):
-        if event == 'verified' and args[0] == self.tx.txid():
+        if ( (event == 'verified2' and args[1] == self.tx_hash)
+                or (event == 'ca_verified_tx' and args[1].txid == self.tx_hash) ):
             self.update()
 
     def update_tx_if_in_wallet(self):
@@ -499,7 +502,6 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
     def update_io(self):
         i_text = self.i_text
         o_text = self.o_text
-        block_hash = None
         ext = QTextCharFormat()
         ext.setToolTip(_("Right-click for context menu"))
         lnk = QTextCharFormat()
@@ -568,26 +570,28 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
 
         o_text.clear()
         cursor = o_text.textCursor()
+        ca_script = None
+        opret_ct = 0
         for i, tup in enumerate(self.tx.outputs()):
             typ, addr, v = tup
             for fmt in (ext, rec, chg, lnk):
                 fmt.setAnchorNames([f"output {i}"])  # anchor name for this line (remember input#); used by context menu creation
             # CashAccounts support
-            if isinstance(addr, ScriptOutput) and not addr.is_complete() and self.tx_hash and self.tx_height:
-                # The below will fail and return None if the height is less than
-                # networks.net.VERIFICATION_BLOCK_HEIGHT - 146 and if we lack
-                # this header.
-                # This is not catastrophic -- it just means the ScriptOutput
-                # won't be as pretty with the emoji and collision_hash.
-                # In many cases however we will have the header if the
-                # CashAccounts tx being views was verified by us.
-                block_hash = block_hash or self.wallet.get_block_hash(self.tx_height) or None
-                if block_hash:
-                    addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
-                    if self.wallet.is_mine(addr.address):
-                        # add tx to cashaccts ext tx's and verify, since it
-                        # happened to be "is_mine"
-                        self.wallet.cashacct.add_ext_tx(self.tx_hash, addr)
+            if isinstance(addr, ScriptOutput) and addr.is_opreturn():
+                opret_ct += 1
+                if isinstance(addr, cashacct.ScriptOutput) and not addr.is_complete() and self.tx_hash and self.tx_height and self.tx_height >= cashacct.activation_height:
+                    ca_script = addr
+                    # The below will fail and return None if the height is less than
+                    # networks.net.VERIFICATION_BLOCK_HEIGHT - 146 and if we lack
+                    # this header.
+                    # This is not catastrophic -- it just means the ScriptOutput
+                    # won't be as pretty with the emoji and collision_hash.
+                    # In many cases however we will have the header if the
+                    # CashAccounts tx being viewed was verified by us.
+                    self.block_hash = self.block_hash or self.wallet.get_block_hash(self.tx_height) or None
+                    if self.block_hash:
+                        # make it complete right away if we have the block_hash for pretty UI printing a few lines below...
+                        ca_script.make_complete(block_height=self.tx_height, block_hash=self.block_hash, txid=self.tx_hash)
             # /CashAccounts support
             addrstr = addr.to_ui_string()
             cursor.insertText(addrstr, text_format(addr))
@@ -600,6 +604,25 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 cursor.insertText(' '*(43 - len(addrstr)), ext)
                 cursor.insertText(format_amount(v), ext)
             cursor.insertBlock()
+
+        # Cash Accounts support
+        if ca_script:
+            # This branch is taken if script.is_complete() was False initially above...
+            if opret_ct == 1:  # <-- make sure only 1 OP_RETURN appears in the tx as per Cash Accounts spec
+                if ca_script.is_complete():
+                    # add tx to cashaccts ext tx's and verify, since user initiated
+                    # a UI action to open the TX, so maybe they are interested
+                    # in this particular cashacct registration
+                    self.print_error("adding ext tx to Cash Accounts")
+                    self.wallet.cashacct.add_ext_tx(self.tx_hash, ca_script)
+                else:
+                    # Not complete -- kick off ext verifier anyway
+                    # We will get an update() signal should it verify ok.
+                    self.print_error("adding incomplete tx to Cash Accounts")
+                    self.wallet.cashacct.add_ext_incomplete_tx(self.tx_hash, self.tx_height, ca_script)
+            else:
+                self.print_error(f"Encountered more than 1 OP_RETURN script in TX {self.tx_hash} with Cash Accounts registrations in it, ignoring registration script")
+        # /Cash Accounts support
 
         # make the change & receive legends appear only if we used that color
         self.recv_legend.setVisible(bool(rec_ct))

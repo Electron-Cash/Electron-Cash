@@ -116,8 +116,8 @@ class AddressDialog(WindowModalDialog):
         except TypeError: pass
 
     def got_verified_tx(self, event, args):
-        if event == 'verified':
-            self.hw.update_item(*args)
+        if event == 'verified2' and args[0] is self.wallet:
+            self.hw.update_item(*args[1:])
 
     def update_addr(self):
         self.addr_e.setText(self.address.to_full_ui_string())
