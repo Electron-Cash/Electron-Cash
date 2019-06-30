@@ -401,7 +401,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         run_hook('transaction_dialog_update', self)
 
     def is_fetch_input_data(self):
-        return bool(self.wallet.network and self.main_window.config.get('fetch_input_data', False))
+        # default on if network.auto_connect is True, otherwise use config value.
+        return bool(self.wallet.network and self.main_window.config.get('fetch_input_data', self.wallet.network.auto_connect))
 
     def set_fetch_input_data(self, b):
         self.main_window.config.set_key('fetch_input_data', bool(b))
