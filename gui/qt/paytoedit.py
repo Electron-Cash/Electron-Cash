@@ -38,7 +38,7 @@ from electroncash.util import print_error
 
 from . import util
 
-RE_ALIAS = '^(.*?)\s*\<([0-9A-Za-z:]{26,})\>$'
+RE_ALIAS = r'^(.*?)\s*<\s*([0-9A-Za-z:]{26,})\s*>$'
 RE_COINTEXT = r'^\s*cointext:([-+() 0-9]+)\s*$'
 
 RX_ALIAS = re.compile(RE_ALIAS)
