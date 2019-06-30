@@ -25,6 +25,7 @@
 
 from electroncash.i18n import _
 from electroncash.address import Address
+from electroncash.util import PrintError
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -35,7 +36,7 @@ from .history_list import HistoryList
 from .qrtextedit import ShowQRTextEdit
 
 
-class AddressDialog(WindowModalDialog):
+class AddressDialog(PrintError, WindowModalDialog):
 
     def __init__(self, parent, address, *, windowParent=None):
         assert isinstance(address, Address)
@@ -118,9 +119,14 @@ class AddressDialog(WindowModalDialog):
     def got_verified_tx(self, event, args):
         if event == 'verified2' and args[0] is self.wallet:
             self.hw.update_item(*args[1:])
+        elif event == 'ca_verified_tx' and args[1].address == self.address:
+            self.update_cash_accounts()
 
     def update_addr(self):
         self.addr_e.setText(self.address.to_full_ui_string())
+
+    def update_cash_accounts(self):
+        ''' TODO: Implement '''
 
     def get_domain(self):
         return [self.address]
