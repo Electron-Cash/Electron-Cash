@@ -984,7 +984,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_address = None
         self.receive_address_e = ButtonsLineEdit()
         self.receive_address_e.addCopyButton()
-        self.receive_address_e.addButton(":icons/cashacct-logo.png", self.register_new_cash_account, _("Register a new Cash Account for this address"))
         self.receive_address_e.setReadOnly(True)
         msg = _('Bitcoin Cash address where the payment should be received. Note that each payment request uses a different Bitcoin Cash address.')
         label = HelpLabel(_('&Receiving address'), msg)
@@ -994,11 +993,77 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(label, 0, 0)
         grid.addWidget(self.receive_address_e, 0, 1, 1, -1)
 
+        # Cash Account for this address (if any)
+        msg = _("The Cash Account (if any) associated with this address. It doesn't get saved with the request, but it is shown here for your convenience.\n\nYou may use the Cash Accounts button to register a new Cash Account for this address.")
+        label = HelpLabel(_('Cash Accoun&t'), msg)
+        class CashAcctE(ButtonsLineEdit):
+            my_network_signal = pyqtSignal(str, object)
+            ''' Inner class encapsulating the Cash Account Edit.s
+            Note:
+                 - `slf` in this class is this instance.
+                 - `self` is wrapping class instance. '''
+            def __init__(slf, *args):
+                super().__init__(*args)
+                slf.font_default_size = slf.font().pointSize()
+                slf.ca_copy_b = slf.addCopyButton()
+                icon = ":icons/cashacct-button-darkmode.png" if ColorScheme.dark_scheme else ":icons/cashacct-logo.png"
+                slf.ca_but = slf.addButton(icon, self.register_new_cash_account, _("Register a new Cash Account for this address"))
+                slf.setReadOnly(True)
+                slf.info = None
+                slf.cleaned_up = False
+                self.network_signal.connect(slf.on_network_qt)
+                slf.my_network_signal.connect(slf.on_network_qt)
+                if self.wallet.network:
+                    self.wallet.network.register_callback(slf.on_network, ['ca_updated_minimal_chash'])
+            def clean_up(slf):
+                slf.cleaned_up = True
+                self.wallet.network.unregister_callback(slf.on_network)
+            def set_cash_acct(slf, info: cashacct.Info = None, minimal_chash = None):
+                if not info and self.receive_address:
+                    minimal_chash = None
+                    ca_list = self.wallet.cashacct.get_cashaccounts(domain=[self.receive_address])
+                    ca_list.sort(key=lambda x: ((x.number or 0), str(x.collision_hash)))
+                    info = self.wallet.cashacct.get_address_default(ca_list)
+                if info:
+                    slf.ca_copy_b.setDisabled(False)
+                    f = slf.font(); f.setItalic(False); f.setPointSize(slf.font_default_size); slf.setFont(f)
+                    slf.setText(info.emoji + "  " + self.wallet.cashacct.fmt_info(info, minimal_chash=minimal_chash))
+                else:
+                    slf.setText(_("This address does not have a Cash Account"))
+                    f = slf.font(); f.setItalic(True); f.setPointSize(slf.font_default_size-1); slf.setFont(f)
+                    slf.ca_copy_b.setDisabled(True)
+                slf.info = info
+            def on_copy(slf):
+                ''' overrides super class '''
+                QApplication.instance().clipboard().setText(slf.text()[3:]) # cut off the leading emoji
+                QToolTip.showText(QCursor.pos(), _("Cash Account copied to clipboard"), slf)
+            def on_network_qt(slf, event, args=None):
+                ''' pick up cash account changes and update receive tab. Called
+                from GUI thread. '''
+                if not args or self.cleaned_up or slf.cleaned_up or args[0] != self.wallet.cashacct:
+                    return
+                if event == 'ca_verified_tx' and self.receive_address and self.receive_address == args[1].address:
+                    slf.set_cash_acct()
+                elif event == 'ca_updated_minimal_chash' and slf.info and slf.info.address == args[1].address:
+                    slf.set_cash_acct()
+            def on_network(slf, event, *args):
+                if event == 'ca_updated_minimal_chash' and args[0] == self.wallet.cashacct:
+                    slf.my_network_signal.emit(event, args)
+            def showEvent(slf, e):
+                super().showEvent(e)
+                if e.isAccepted():
+                    slf.set_cash_acct()
+        self.cash_account_e = CashAcctE()
+        label.setBuddy(self.cash_account_e)
+        grid.addWidget(label, 1, 0)
+        grid.addWidget(self.cash_account_e, 1, 1, 1, -1)
+
+
         self.receive_message_e = QLineEdit()
         label = QLabel(_('&Description'))
         label.setBuddy(self.receive_message_e)
-        grid.addWidget(label, 1, 0)
-        grid.addWidget(self.receive_message_e, 1, 1, 1, -1)
+        grid.addWidget(label, 2, 0)
+        grid.addWidget(self.receive_message_e, 2, 1, 1, -1)
         self.receive_message_e.textChanged.connect(self.update_receive_qr)
 
         # OP_RETURN requests
@@ -1008,9 +1073,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         label.setBuddy(self.receive_opreturn_e)
         self.receive_opreturn_rawhex_cb = QCheckBox(_('Raw &hex script'))
         self.receive_opreturn_rawhex_cb.setToolTip(_('If unchecked, the textbox contents are UTF8-encoded into a single-push script: <tt>OP_RETURN PUSH &lt;text&gt;</tt>. If checked, the text contents will be interpreted as a raw hexadecimal script to be appended after the OP_RETURN opcode: <tt>OP_RETURN &lt;script&gt;</tt>.'))
-        grid.addWidget(label, 2, 0)
-        grid.addWidget(self.receive_opreturn_e, 2, 1, 1, 3)
-        grid.addWidget(self.receive_opreturn_rawhex_cb, 2, 4, Qt.AlignLeft)
+        grid.addWidget(label, 3, 0)
+        grid.addWidget(self.receive_opreturn_e, 3, 1, 1, 3)
+        grid.addWidget(self.receive_opreturn_rawhex_cb, 3, 4, Qt.AlignLeft)
         self.receive_opreturn_e.textChanged.connect(self.update_receive_qr)
         self.receive_opreturn_rawhex_cb.clicked.connect(self.update_receive_qr)
         self.receive_tab_opreturn_widgets = [
@@ -1022,14 +1087,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_amount_e = BTCAmountEdit(self.get_decimal_point)
         label = QLabel(_('Requested &amount'))
         label.setBuddy(self.receive_amount_e)
-        grid.addWidget(label, 3, 0)
-        grid.addWidget(self.receive_amount_e, 3, 1)
+        grid.addWidget(label, 4, 0)
+        grid.addWidget(self.receive_amount_e, 4, 1)
         self.receive_amount_e.textChanged.connect(self.update_receive_qr)
 
         self.fiat_receive_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
             self.fiat_receive_e.setVisible(False)
-        grid.addWidget(self.fiat_receive_e, 3, 2, Qt.AlignLeft)
+        grid.addWidget(self.fiat_receive_e, 4, 2, Qt.AlignLeft)
         self.connect_fields(self, self.receive_amount_e, self.fiat_receive_e, None)
 
         self.expires_combo = QComboBox()
@@ -1044,12 +1109,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         ])
         label = HelpLabel(_('Request &expires'), msg)
         label.setBuddy(self.expires_combo)
-        grid.addWidget(label, 4, 0)
-        grid.addWidget(self.expires_combo, 4, 1)
+        grid.addWidget(label, 5, 0)
+        grid.addWidget(self.expires_combo, 5, 1)
         self.expires_label = QLineEdit('')
         self.expires_label.setReadOnly(1)
         self.expires_label.hide()
-        grid.addWidget(self.expires_label, 4, 1)
+        grid.addWidget(self.expires_label, 5, 1)
 
         self.save_request_button = QPushButton(_('&Save'))
         self.save_request_button.clicked.connect(self.save_payment_request)
@@ -1060,7 +1125,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         weakSelf = Weak.ref(self)
 
         class MyQRCodeWidget(QRCodeWidget):
-            def mouseReleaseEvent(self, e):
+            def mouseReleaseEvent(slf, e):
                 ''' to make the QRWidget clickable '''
                 weakSelf() and weakSelf().show_qr_window()
 
@@ -1071,7 +1136,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.save_request_button)
         buttons.addWidget(self.new_request_button)
         buttons.addStretch(1)
-        grid.addLayout(buttons, 5, 2, 1, -1)
+        grid.addLayout(buttons, 6, 2, 1, -1)
 
         self.receive_requests_label = QLabel(_('Re&quests'))
 
@@ -1107,12 +1172,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         hbox.addLayout(vbox2)
 
         class ReceiveTab(QWidget):
-            def showEvent(self, e):
+            def showEvent(slf, e):
                 super().showEvent(e)
                 if e.isAccepted():
-                    slf = weakSelf()
-                    if slf:
-                        slf.check_and_reset_receive_address_if_needed()
+                    wslf = weakSelf()
+                    if wslf:
+                        wslf.check_and_reset_receive_address_if_needed()
 
         w = ReceiveTab()
         w.searchable_list = self.request_list
@@ -1256,6 +1321,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.receive_address:
             text = self.receive_address.to_full_ui_string()
         self.receive_address_e.setText(text)
+        self.cash_account_e.set_cash_acct()
 
     @rate_limited(0.250, ts_after=True)  # this function potentially re-computes the QR widget, so it's rate limited to once every 250ms
     def check_and_reset_receive_address_if_needed(self):
@@ -4147,8 +4213,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.wallet.thread.stop()
         self.wallet.thread.wait() # Join the thread to make sure it's really dead.
 
-        for w in [self.address_list, self.history_list, self.utxo_list]:
-            w.clean_up()  # tell relevant widget to clean itself up, unregister callbacks, etc
+        for w in [self.address_list, self.history_list, self.utxo_list, self.cash_account_e]:
+            if w: w.clean_up()  # tell relevant widget to clean itself up, unregister callbacks, etc
 
         # We catch these errors with the understanding that there is no recovery at
         # this point, given user has likely performed an action we cannot recover
