@@ -411,6 +411,11 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
     def to_script(self):
         return self.script
 
+    def is_opreturn(self):
+        ''' Returns True iff this script is an OP_RETURN script (starts with
+        the OP_RETURN byte)'''
+        return bool(self.script and self.script[0] == OpCodes.OP_RETURN)
+
     def __str__(self):
         return self.to_ui_string(True)
 

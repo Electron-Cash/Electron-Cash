@@ -468,6 +468,8 @@ servers = [
     "https://api.cashaccount.info"
 ]
 
+debug = False
+
 def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> list:
     ''' Synchronous lookup, returns a list of RegTx [(txid, script) tuples], or
     None on error. Note the .script in each returned RegTx will always have
@@ -503,7 +505,8 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
         if not isinstance(d, dict) or not d.get('results') or not isinstance(d.get('block'), int):
             raise RuntimeError('Unexpected response', r.text)
         res, block = d['results'], int(d['block'])
-        if not isinstance(res, list) or bh2num(block) < 100:
+        number = bh2num(block)
+        if not isinstance(res, list) or number < 100:
             raise RuntimeError('Bad response')
         for d in res:
             txraw = d['transaction']
@@ -517,7 +520,7 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
             tx_regs = []  # there should be exactly 1 of these per tx, as per cash acount spec.. we reject tx's with more than 1 op_return
             for _typ, script, value in tx.outputs():
                 if isinstance(script, ScriptOutputBase):
-                    if script.script and script.script[0] == OpCodes.OP_RETURN:
+                    if script.is_opreturn():
                         op_return_count += 1
                     if isinstance(script, ScriptOutput):  # note ScriptOutput here is our subclass defined at the top of this file, not addess.ScriptOutput
                         script.make_complete(block_height=block, block_hash=block_hash, txid=txid)
@@ -526,10 +529,14 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
                 # we only accept tx's with exactly 1 OP_RETURN, as per the spec
                 ret.extend(tx_regs)
             else:
-                util.print_error(f"lookup: {txid} had no valid registrations in it using server {server} (len(tx_regs)={len(tx_regs)} op_return_count={op_return_count})")
+                if debug:
+                    util.print_error(f"lookup: {txid} had no valid registrations in it using server {server} (len(tx_regs)={len(tx_regs)} op_return_count={op_return_count})")
+        if debug:
+            util.print_error(f"lookup: found {len(ret)} reg txs at block height {block} (number={number})")
         return ret
     except Exception as e:
-        util.print_error("lookup:", repr(e))
+        if debug:
+            util.print_error("lookup:", repr(e))
         if isinstance(exc, list):
             exc.append(e)
 
@@ -638,7 +645,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
 
-        self.ext_unverif = dict()
+        self.ext_unverif = dict()  # ephemeral (not saved) dict of txid -> block_height. This is however re-computed in load() (TODO: see if this should not be the case)
+
+        self.ext_incomplete_tx = dict() # ephemeral (not saved) dict of txid -> RegTx (all regtx's are incomplete here)
 
         # minimal collision hash encodings cache. keyed off (name.lower(), number, collision_hash) -> '03' string or '' string
         self.minimal_ch_cache = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct minimal collision_hashe cache")
@@ -682,6 +691,49 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             minimal_chash = self.get_minimal_chash(name, number, chash)
         if minimal_chash: minimal_chash = '.' + minimal_chash
         return f"{name}#{number}{minimal_chash};"
+
+    @classmethod
+    def parse_string(cls, s : str) -> tuple:
+        ''' Returns a (name, number, collision_prefix) tuple on parse success
+        of a string of the form: "name#100" or "name#100.12" or "name#100.123;"
+        (trailing ; is ignored).
+
+        Returns None on parse failure.
+
+        Note:
+            - number must always be >= 100 otherwise None is returned. e.g.
+              mark#99 is bad but mark#100 is good.
+            - collision_prefix must be empty or length <= 10 otherwise None is
+              returned.  e.g. mark#100.01234567899 is too long but mark#100.0123456789 is ok
+
+        Does not raise, merely returns None on all errors.'''
+        s = s.strip()
+        while s.endswith(';'):
+            s = s[:-1]  # strip trailing ;
+        parts = s.split('#')
+        if len(parts) != 2:
+            return None
+        name, therest = parts
+        if not name_accept_re.match(name):
+            return None
+        parts = therest.split('.')
+        if len(parts) == 1:
+            number = parts[0]
+            collision_prefix = ''
+        elif len(parts) == 2:
+            number, collision_prefix = parts
+        else:
+            return None
+        try:
+            number = int(number)
+            collision_prefix = collision_prefix and str(int(collision_prefix))  # make sure it is all numbers
+        except:
+            return None
+        if number < 100:
+            return None
+        if len(collision_prefix) > 10:
+            return None
+        return name, number, collision_prefix
 
 
     def get_minimal_chash(self, name, number, collision_hash) -> str:
@@ -865,7 +917,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if write:
             self.wallet.storage.write()
 
-    def find(self, name: str, number: int = None, collision_prefix: str = None) -> list:
+    def find_verified(self, name: str, number: int = None, collision_prefix: str = None) -> list:
         ''' Returns a list of Info objects for verified cash accounts matching
         lowercased name.  Optionally you can narrow the search by specifying
         number (int) and a collision_prefix (str of digits) '''
@@ -908,6 +960,18 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         with self.lock:
             return txid in self.v_tx
 
+    def add_ext_incomplete_tx(self, txid : str, block_height : int, script : ScriptOutput):
+        if not isinstance(script, ScriptOutput) or not isinstance(block_height, (int, float)) or not txid or not isinstance(txid, str):
+            raise ArgumentError("bad args to add_ext_incomplete_tx")
+        script.number = bh2num(block_height)
+        if script.number < 100:
+            raise ArgumentError("bad block height")
+        with self.lock:
+            self.ext_incomplete_tx[txid] = self.RegTx(txid, script)
+            self.ext_unverif[txid] = block_height
+
+
+
     ###################
     # Private Methods #
     ###################
@@ -916,12 +980,14 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' Our private verifier is done. Propagate updated signal to parent
         wallet so that the GUI will refresh. '''
         if evt == 'wallet_updated' and args and args[0] is self:
-            self.print_error("forwarding wallet_updated to parent wallet")
+            self.print_error("forwarding 'wallet_updated' as parent wallet")
             self.network.trigger_callback('wallet_updated', self.wallet)
 
-    def _find_script(self, txid, print_if_missing=True):
+    def _find_script(self, txid, print_if_missing=True, *, incomplete=False):
         ''' lock should be held by caller '''
         item = self.wallet_reg_tx.get(txid) or self.ext_reg_tx.get(txid)
+        if not item and incomplete:
+            item = self.ext_incomplete_tx.get(txid)
         if item:
             return item.script
         if print_if_missing:
@@ -933,24 +999,47 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr[script.address].add(vtx.txid)
         self.v_by_name[script.name.lower()].add(vtx.txid)
 
-    def _rm_vtx(self, txid):
+    def _rm_vtx(self, txid, *, force=False):
         ''' lock should be held by caller '''
         vtx = self.v_tx.pop(txid, None)
         if not vtx:
             # was not relevant, abort early
             return
         assert txid == vtx.txid
-        script = self._find_script(txid)  # will print_error if script not found
+        script = self._find_script(txid, print_if_missing=not force)  # will print_error if script not found
         if script:
             addr, name = script.address, script.name.lower()
             self.v_by_addr[addr].discard(txid)
             if not self.v_by_addr[addr]: self.v_by_addr.pop(addr, None)
             self.v_by_name[name].discard(txid)
             if not self.v_by_name[name]: self.v_by_name.pop(name, None)
+        elif force:
+            self.print_error("force remove v_tx", txid)
+            empty = set()
+            for a, s in self.v_by_addr.items():
+                s.discard(txid)
+                if not s:
+                    empty.add(a)
+            for a in empty:
+                self.v_by_addr.pop(a, None)
+            empty.clear()
+            for n, s in self.v_by_name.items():
+                s.discard(txid)
+                if not s:
+                    empty.add(n)
+            for n in empty:
+                self.v_by_name.pop(n, None)
+
+    def _wipe_tx(self, txid):
+        ''' called to completely forget a tx from all caches '''
+        self._rm_vtx(txid, force=True)
+        self.wallet_reg_tx.pop(txid, None)
+        self.ext_reg_tx.pop(txid, None)
+        self.ext_incomplete_tx.pop(txid, None)
 
     def _add_verified_tx_common(self, script, txid, height, header):
         ''' caller must hold locks '''
-        if not script:
+        if not script or height < activation_height:
             # no-op or not relevant callback
             return
 
@@ -958,6 +1047,15 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         v = self.VerifTx(txid=txid, block_height=height, block_hash=block_hash)
         # update/completeify
         script.make_complete(block_height=v.block_height, block_hash=v.block_hash, txid=v.txid)
+        rtx = self.ext_incomplete_tx.pop(txid, None)
+        if rtx:
+            # in case client code somewhere has a copy of this script ..
+            # update it to 'complete' so GUI can reflect change.
+            # (relevant to TxDialog class)
+            rtx.script.make_complete(block_height=v.block_height, block_hash=v.block_hash, txid=v.txid)
+            if txid not in self.ext_reg_tx and txid not in self.wallet_reg_tx:
+                # save this is_complete RegTx to ext_reg_tx dict which gets saved to disk
+                self.ext_reg_tx[txid] = rtx
         # register this tx as verified
         self._add_vtx(v, script)
 
@@ -975,7 +1073,13 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             if not added:
                 return
 
-            self._add_verified_tx_common(added.script, txid, height_ts_pos_tup[0], header)
+            height = height_ts_pos_tup[0]
+            if not height or height < activation_height:
+                self.print_error(f"Warning: Got a tx {txid} with height {height} < activation height {activation_height}!")
+                self._wipe_tx(txid)
+                return
+
+            self._add_verified_tx_common(added.script, txid, height, header)
 
         # this needs to be done without the lock held
         if self.network and added.script.is_complete():  # paranoia checks
@@ -1048,10 +1152,17 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.print_error('verified external:', tx_hash, height_ts_pos_tup, blockchain.hash_header(header))
 
         with self.lock:
-            self.ext_unverif.pop(tx_hash, None)
-            script = self._find_script(tx_hash)
+            self.ext_unverif.pop(tx_hash, None)  # pop it off unconditionally
+
+            height = height_ts_pos_tup[0]
+            if not height or height < activation_height:
+                self.print_error(f"Warning: Got a tx {tx_hash} with height {height} < activation height {activation_height}!")
+                self._wipe_tx(tx_hash)
+                return
+
+            script = self._find_script(tx_hash, incomplete=True)
             # call back into the same codepath that registers tx's as verified...
-            self._add_verified_tx_common(script, tx_hash, height_ts_pos_tup[0], header)
+            self._add_verified_tx_common(script, tx_hash, height, header)
 
         # this needs to be done without the lock held
         if self.network and script and script.is_complete():  # paranoia checks
@@ -1100,9 +1211,21 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     # Experimental Methods (stuff we may not use) #
     ###############################################
 
-    def scan_servers_for_registrations(self, start=100, stop=None, progress_cb=None, error_cb=None, timeout=10.0):
+    def scan_servers_for_registrations(self, start=100, stop=None, progress_cb=None, error_cb=None, timeout=10.0,
+                                       add_only_mine=True):
         ''' This is slow and not particularly useful.  Will maybe delete this
-        code soon. '''
+        code soon.
+
+        progress_cb is called with (progress : float, num_added : int, number : int) as args!
+        error_cb is called with no arguments to indicate failure.
+
+        Upon completion, either progress_cb(1.0 ..) will be called to indicate
+        successful completion of the task.  Or, error_cb() will be called to
+        indicate error abort (usually due to timeout).
+
+        Returned object can be used to stop the process.  obj.stop() is the
+        method.
+        '''
         if not self.network:
             return
         import queue
@@ -1113,7 +1236,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return stop or self.wallet.get_local_height()+1
         def progress(h, added):
             if progress_cb:
-                progress_cb(max((h-start)/(stop_height() - start), 0.0), added)
+                progress_cb(max((h-start)/(stop_height() - start), 0.0), added, bh2num(h))
         def thread_func():
             q = queue.Queue()
             h = start
@@ -1128,10 +1251,11 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     thing = q.get(timeout=timeout)
                     if isinstance(thing, Exception):
                         e = thing
-                        self.print_error(f"Height {h} got exception in lookup: {repr(e)}")
+                        if debug:
+                            self.print_error(f"Height {h} got exception in lookup: {repr(e)}")
                     elif isinstance(thing, list):
                         for rtx in thing:
-                            if rtx.txid not in self.wallet_reg_tx and rtx.txid not in self.ext_reg_tx and self.wallet.is_mine(rtx.script.address):
+                            if rtx.txid not in self.wallet_reg_tx and rtx.txid not in self.ext_reg_tx and (not add_only_mine or self.wallet.is_mine(rtx.script.address)):
                                 self.add_ext_tx(rtx.txid, rtx.script)
                                 added += 1
                     progress(h, added)
@@ -1144,14 +1268,11 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             progress(h, added)
         t = threading.Thread(daemon=True, target=thread_func)
         t.start()
-        class Stopper:
-            def __init__(self, t, e):
-                self.thread = t
-                self.event = e
-            def is_alive(self): return self.thread.is_alive()
+        class ScanStopper(namedtuple("ScanStopper", "thread, event")):
+            def is_alive(self):
+                return self.thread.is_alive()
             def stop(self):
                 if self.is_alive():
                     self.event.set()
                     self.thread.join()
-        return Stopper(t, cancel_evt)
-
+        return ScanStopper(t, cancel_evt)

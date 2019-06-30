@@ -922,7 +922,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 ser = tx_hash + ':%d'%n
                 _type, addr, v = txo
                 if isinstance(addr, ScriptOutput):
-                    if addr.script and addr.script[0] == OpCodes.OP_RETURN:
+                    if addr.is_opreturn():
                         op_return_ct += 1
                     if isinstance(addr, cashacct.ScriptOutput):
                         # auto-detect CashAccount registrations we see,

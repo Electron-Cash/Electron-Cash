@@ -210,7 +210,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.network_signal.connect(self.on_network_qt)
             interests = ['blockchain_updated', 'wallet_updated',
                          'new_transaction', 'status', 'banner', 'verified2',
-                         'fee']
+                         'fee', 'ca_verified_tx']
             # To avoid leaking references to "self" that prevent the
             # window from being GC-ed when closed, callbacks should be
             # methods of this class only, and specifically not be
@@ -351,9 +351,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.network_signal.emit(event, args)
         elif event == 'verified2':
             self.tx_update_mgr.verif_add(args)  # added only if this wallet's tx
+            if args[0] is self.wallet:
+                self.network_signal.emit(event, args)
         elif event in ['status', 'banner', 'fee']:
             # Handle in GUI thread
             self.network_signal.emit(event, args)
+        elif event == 'ca_verified_tx':
+            if args[0] is self.wallet.cashacct:
+                self.network_signal.emit(event, args)
         else:
             self.print_error("unexpected network message:", event, args)
 
@@ -368,6 +373,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             pass
         elif event == 'new_transaction':
             self.check_and_reset_receive_address_if_needed()
+        elif event == 'ca_verified_tx':
+            pass
+        elif event == 'verified2':
+            pass
         else:
             self.print_error("unexpected network_qt signal:", event, args)
 
