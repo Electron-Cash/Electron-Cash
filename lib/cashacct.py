@@ -427,11 +427,11 @@ _emoji = emoji  # alias for internal use if names clash
 def number_from_block_height(block_height):
     ''' Given a block height, returns the cash account 'number' (as int).
     This is simply the block height minus 563620. '''
-    return block_height - height_modification
+    return int(block_height - height_modification)
 
 def number_to_block_height(number):
     ''' Reciprocal of number_to_block_height '''
-    return number + height_modification
+    return int(number + height_modification)
 
 bh2num = number_from_block_height  # alias
 num2bh = number_to_block_height  # alias
