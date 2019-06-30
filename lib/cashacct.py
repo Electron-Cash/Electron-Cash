@@ -847,7 +847,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 self.wallet_reg_tx[txid] = self.RegTx(txid, script)
         for txid, script_dict in eat_d.items():
             script = ScriptOutput.from_dict(script_dict)
-            if script.is_complete():
+            if script.is_complete() and txid not in seen_scripts:
                 # sanity check
                 seen_scripts[txid] = script
                 self.ext_reg_tx[txid] = self.RegTx(txid, script)
@@ -960,6 +960,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 self.ext_unverif[txid] = num2bh(script.number)
 
     def has_tx(self, txid: str) -> bool:
+        ''' Returns true if we know about a complete tx, whether verified or not. '''
         with self.lock:
             return bool(self._find_script(txid, False))
 
@@ -990,12 +991,25 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.print_error("forwarding 'wallet_updated' as parent wallet")
             self.network.trigger_callback('wallet_updated', self.wallet)
 
-    def _find_script(self, txid, print_if_missing=True, *, incomplete=False):
+    def _find_script(self, txid, print_if_missing=True, *, incomplete=False, giveto=None):
         ''' lock should be held by caller '''
         item = self.wallet_reg_tx.get(txid) or self.ext_reg_tx.get(txid)
         if not item and incomplete:
             item = self.ext_incomplete_tx.get(txid)
         if item:
+            # Note the giveto with incomplete=True is fragile and requires
+            # a call to _add_verified_tx_common right after this
+            # _find_script call. We want to maintain the invariant that
+            # wallet_reg_tx and ext_reg_tx both contain *complete* scripts.
+            # Also note: we intentionally don't pop the ext_incomplete_tx
+            # dict here as perhaps client code is maintaining a reference
+            # and we want to update that reference later in add_verified_common.
+            if giveto == 'e':
+                self.wallet_reg_tx.pop(txid, None)
+                self.ext_reg_tx[txid] = item
+            elif giveto == 'w':
+                self.ext_reg_tx.pop(txid, None)
+                self.wallet_reg_tx[txid] = item
             return item.script
         if print_if_missing:
             self.print_error("_find_script: could not find script for txid", txid)
@@ -1067,6 +1081,15 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         # register this tx as verified
         self._add_vtx(v, script)
 
+    def _add_vtx_chk_height(self, txid, height_ts_pos_tup):
+        ''' caller must hold locks '''
+        height = height_ts_pos_tup[0]
+        if not isinstance(height, (int, float)) or height < activation_height:
+            self.print_error(f"Warning: Got a tx {txid} with height {height} < activation height {activation_height}!")
+            self._wipe_tx(txid)
+            return 0
+        return int(height)
+
     #########################
     # Wallet hook callbacks #
     #########################
@@ -1075,23 +1098,25 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         verifier.  We need to know about tx's that the parent wallet verified
         so we don't do the same work again. '''
         with self.lock:
-            # Note: precondition here is that the tx exists in wallet_reg_tx,
-            # otherwise the tx is not relevant to us (contains no cash account registrations)
-            added = self.wallet_reg_tx.get(txid)
-            if not added:
+            # Note: precondition here is that the tx exists in one of our RegTx
+            # dicts, otherwise the tx is not relevant to us (contains no cash
+            # account registrations). We need this check because we are called
+            # a lot for every tx the wallet verifies.
+            script = self._find_script(txid, False, giveto='w', incomplete=True)
+            if not script:
                 return
 
-            height = height_ts_pos_tup[0]
-            if not height or height < activation_height:
-                self.print_error(f"Warning: Got a tx {txid} with height {height} < activation height {activation_height}!")
-                self._wipe_tx(txid)
+            self.print_error("verified internal:", txid, height_ts_pos_tup)
+
+            height = self._add_vtx_chk_height(txid, height_ts_pos_tup)  # prints to print_error and wipes tx on error
+            if not height:
                 return
 
-            self._add_verified_tx_common(added.script, txid, height, header)
+            self._add_verified_tx_common(script, txid, height, header)
 
         # this needs to be done without the lock held
-        if self.network and added.script.is_complete():  # paranoia checks
-            self.network.trigger_callback('ca_verified_tx', self, Info.from_regtx(added))
+        if self.network and script.is_complete():  # paranoia checks
+            self.network.trigger_callback('ca_verified_tx', self, Info.from_script(script, txid))
 
 
     def undo_verifications_hook(self, txs: set):
@@ -1101,6 +1126,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         with self.lock:
             for txid in txs:
                 self._rm_vtx(txid)  # this is safe as a no-op if txid was not relevant
+                self._find_script(txid, False, giveto='w')
 
     def add_transaction_hook(self, txid: str, tx: object, out_n: int, script: ScriptOutput):
         ''' Called by wallet inside add_transaction (with wallet.lock held) to
@@ -1109,6 +1135,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         assert isinstance(script, ScriptOutput)
         with self.lock:
             self.wallet_reg_tx[txid] = self.RegTx(txid=txid, script=script)
+            self._find_script(txid, giveto='w')  # makes sure there is only 1 copy in wallet_reg_tx
 
     def remove_transaction_hook(self, txid: str):
         ''' Called by wallet inside remove_transaction (with wallet.lock held)
@@ -1123,14 +1150,13 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         in anticipation of a possible future verification coming in. '''
         with self.lock:
             self._rm_vtx(txid)
+            self._find_script(txid, False, giveto='w')
 
     def on_address_addition(self, address):
-        ''' Called by wallet when a new address is added in imported wallet.
-        TODO: Implement. '''
+        ''' Called by wallet when a new address is added in imported wallet.'''
 
     def on_address_deletion(self, address):
-        ''' Called by wallet when an existing address is deleted in imported wallet
-        TODO: Implement. '''
+        ''' Called by wallet when an existing address is deleted in imported wallet.'''
 
     def on_clear_history(self):
         ''' Called by wallet rebuild history mechanism to clear everything. '''
@@ -1147,7 +1173,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     #######################
     def get_unverified_txs(self) -> dict:
         ''' Return a dict of tx_hash (hex encoded) -> height (int)'''
-        return self.ext_unverif.copy()
+        with self.lock:
+            return self.ext_unverif.copy()
 
     def add_verified_tx(self, tx_hash : str, height_ts_pos_tup : tuple, header : dict) -> None:
         ''' Called when a verification is successful.
@@ -1157,19 +1184,22 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             #3 the header - dict. This can be subsequently serialized using
                blockchain.serialize_header if so desiered, or it can be ignored.
         '''
-        self.print_error('verified external:', tx_hash, height_ts_pos_tup, blockchain.hash_header(header))
+        self.print_error('verified external:', tx_hash, height_ts_pos_tup)
+
+        with self.wallet.lock:  # thread safety, even though for 1-liners in CPython it hardly matters.
+            # maintain invariant -- this is because pvt verifier can get kicked
+            # off on .load() for any missing unverified tx (wallet or external)
+            # so we have to determine here where to put the final tx should live
+            giveto = 'w' if tx_hash in self.wallet.transactions else 'e'
 
         with self.lock:
             self.ext_unverif.pop(tx_hash, None)  # pop it off unconditionally
 
-            height = height_ts_pos_tup[0]
-            if not height or height < activation_height:
-                self.print_error(f"Warning: Got a tx {tx_hash} with height {height} < activation height {activation_height}!")
-                self._wipe_tx(tx_hash)
+            height = self._add_vtx_chk_height(tx_hash, height_ts_pos_tup)  # prints to print_error and wipes tx on error
+            if not height:
                 return
-
-            script = self._find_script(tx_hash, incomplete=True)
-            # call back into the same codepath that registers tx's as verified...
+            script = self._find_script(tx_hash, incomplete=True, giveto=giveto)
+            # call back into the same codepath that registers tx's as verified, and completes them...
             self._add_verified_tx_common(script, tx_hash, height, header)
 
         # this needs to be done without the lock held
@@ -1231,7 +1261,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     def scan_servers_for_registrations(self, start=100, stop=None, progress_cb=None, error_cb=None, timeout=10.0,
                                        add_only_mine=True):
         ''' This is slow and not particularly useful.  Will maybe delete this
-        code soon.
+        code soon. I used it for testing to populate wallet.
 
         progress_cb is called with (progress : float, num_added : int, number : int) as args!
         error_cb is called with no arguments to indicate failure.
