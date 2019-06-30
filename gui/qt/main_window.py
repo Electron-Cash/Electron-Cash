@@ -984,7 +984,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_address = None
         self.receive_address_e = ButtonsLineEdit()
         self.receive_address_e.addCopyButton()
-        self.receive_address_e.addButton(":icons/cashacct-logo.png", self.register_new_cash_account, _("Register a Cash Account alias for this address"))
+        self.receive_address_e.addButton(":icons/cashacct-logo.png", self.register_new_cash_account, _("Register a new Cash Account for this address"))
         self.receive_address_e.setReadOnly(True)
         msg = _('Bitcoin Cash address where the payment should be received. Note that each payment request uses a different Bitcoin Cash address.')
         label = HelpLabel(_('&Receiving address'), msg)
