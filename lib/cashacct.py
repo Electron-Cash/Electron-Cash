@@ -726,8 +726,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     with self.lock:
                         self.minimal_ch_cache.put(key, minimal_chash)
                     self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
-                    if self.wallet.network and found and minimal_chash != collision_hash:
-                        self.wallet.network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(found), minimal_chash)
+                    if self.network and found and minimal_chash != collision_hash:
+                        self.network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(found), minimal_chash)
                 lookup_asynch_all(name=name, number=number, success_cb=on_success)
             if self.network:  # only do this if not 'offline'
                 do_lookup()  # start the asynch lookup
@@ -788,11 +788,17 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         for txid, script_dict in wat_d.items():
             txid = txid.lower()
-            seen_scripts[txid] = script = ScriptOutput.from_dict(script_dict)
-            self.wallet_reg_tx[txid] = self.RegTx(txid, script)
+            script = ScriptOutput.from_dict(script_dict)
+            if script.is_complete():
+                # sanity check
+                seen_scripts[txid] = script
+                self.wallet_reg_tx[txid] = self.RegTx(txid, script)
         for txid, script_dict in eat_d.items():
-            seen_scripts[txid] = script = ScriptOutput.from_dict(script_dict)
-            self.ext_reg_tx[txid] = self.RegTx(txid, script)
+            script = ScriptOutput.from_dict(script_dict)
+            if script.is_complete():
+                # sanity check
+                seen_scripts[txid] = script
+                self.ext_reg_tx[txid] = self.RegTx(txid, script)
         for txid, info in vtx_d.items():
             block_height, block_hash = info
             script = seen_scripts.get(txid)
@@ -804,6 +810,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.minimal_ch_cache.put(tuple(key), value)  # re-populate the cache
 
         # re-enqueue previously unverified for verification
+        # FIXME: This means that failed verifications will forever retry
+        # on wallet restart. TODO: handle this situation.
         for txid, item in self.ext_reg_tx.items():
             if txid not in self.v_tx and item.script.number is not None:
                 self.ext_unverif[txid] = num2bh(item.script.number)
@@ -880,6 +888,25 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         continue
                     ret.append(Info.from_script(script, txid))
         return ret
+
+    def add_ext_tx(self, txid : str, script : ScriptOutput):
+        ''' This will add txid to our ext_tx cache, and kick off verification,
+        but only if it's not verified already and/or not in wallet_reg_tx. '''
+        if not isinstance(script, ScriptOutput) or not script.is_complete():
+            raise ArgumentError("Please pass an 'is_complete' script to add_ext_tx")
+        with self.lock:
+            if txid not in self.wallet_reg_tx:
+                self.ext_reg_tx[txid] = self.RegTx(txid, script)
+            if txid not in self.v_tx:
+                self.ext_unverif[txid] = num2bh(script.number)
+
+    def has_tx(self, txid: str) -> bool:
+        with self.lock:
+            return bool(self._find_script(txid, False))
+
+    def is_verified(self, txid: str) -> bool:
+        with self.lock:
+            return txid in self.v_tx
 
     ###################
     # Private Methods #
@@ -1041,5 +1068,80 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         ''' TODO.. figure out what to do here. Or with wallet verification in
         general in this error case. '''
         self.print_error(f"SPV failed for {tx_hash}, reason: '{reason}'")
+        try:
+            with self.lock:
+                script = self._find_script(tx_hash)
+                if self.verifier.failure_reasons.index(reason) < 3 or not script or not script.is_complete():
+                    # actual verification failure.. remove this tx
+                    self.print_error("removing tx from ext_reg_tx cache")
+                    self.ext_unverif.pop(tx_hsh, None)
+                    self.ext_reg_tx.pop(tx_hash, None)
+                else:
+                    # Note that the above ^ branch can also be reached due to a
+                    # misbehaving server so .. not really sure what to do here.
+                    # TODO: Determine best strategy for verification failures.
+                    self.print_error("ignoring failure due to misbehaving server.. will try again next session")
+        except ValueError:
+            self.print_error(f"Cannot find '{reason}' in verifier reason list! FIXME!")
 
     # /SPVDelegate Methods
+
+    ###############################################
+    # Experimental Methods (stuff we may not use) #
+    ###############################################
+
+    def scan_servers_for_registrations(self, start=100, stop=None, progress_cb=None, error_cb=None, timeout=10.0):
+        ''' This is slow and not particularly useful.  Will maybe delete this
+        code soon. '''
+        if not self.network:
+            return
+        import queue
+        cancel_evt = threading.Event()
+        stop = num2bh(stop) if stop is not None else stop
+        start = num2bh(max(start or 0, 100))
+        def stop_height():
+            return stop or self.wallet.get_local_height()+1
+        def progress(h, added):
+            if progress_cb:
+                progress_cb(max((h-start)/(stop_height() - start), 0.0), added)
+        def thread_func():
+            q = queue.Queue()
+            h = start
+            added = 0
+            while self.network and not cancel_evt.is_set() and h < stop_height():
+                num = bh2num(h)
+                lookup_asynch_all(number=num,
+                                  success_cb = q.put,
+                                  error_cb = q.put,
+                                  timeout=timeout)
+                try:
+                    thing = q.get(timeout=timeout)
+                    if isinstance(thing, Exception):
+                        e = thing
+                        self.print_error(f"Height {h} got exception in lookup: {repr(e)}")
+                    elif isinstance(thing, list):
+                        for rtx in thing:
+                            if rtx.txid not in self.wallet_reg_tx and rtx.txid not in self.ext_reg_tx and self.wallet.is_mine(rtx.script.address):
+                                self.add_ext_tx(rtx.txid, rtx.script)
+                                added += 1
+                    progress(h, added)
+                except queue.Empty:
+                    self.print_error("Could not complete request, timed out!")
+                    if error_cb:
+                        error_cb()
+                    return
+                h += 1
+            progress(h, added)
+        t = threading.Thread(daemon=True, target=thread_func)
+        t.start()
+        class Stopper:
+            def __init__(self, t, e):
+                self.thread = t
+                self.event = e
+            def is_alive(self): return self.thread.is_alive()
+            def stop(self):
+                if self.is_alive():
+                    self.event.set()
+                    self.thread.join()
+        return Stopper(t, cancel_evt)
+

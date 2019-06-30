@@ -584,6 +584,10 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 block_hash = block_hash or self.wallet.get_block_hash(self.tx_height) or None
                 if block_hash:
                     addr.make_complete(block_height=self.tx_height, block_hash=block_hash, txid=self.tx_hash)
+                    if self.wallet.is_mine(addr.address):
+                        # add tx to cashaccts ext tx's and verify, since it
+                        # happened to be "is_mine"
+                        self.wallet.cashacct.add_ext_tx(self.tx_hash, addr)
             # /CashAccounts support
             addrstr = addr.to_ui_string()
             cursor.insertText(addrstr, text_format(addr))
