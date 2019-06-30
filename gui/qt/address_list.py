@@ -409,27 +409,13 @@ class AddressList(MyTreeWidget):
             self._ca_minimal_chash_updated_signal.emit(args[1], args[2])
 
     def _ca_get_default(self, ca_list):
-        ''' No-op for now just returns the last info item. Intended to be used
-        to read prefs for default cashaccount for a particular address.'''
-        if ca_list:
-            last = ca_list[-1]
-            d = self.wallet.storage.get('cash_accounts_address_defaults')
-            if isinstance(d, dict):
-                tup = d.get(last.address.to_storage_string())
-                if isinstance(tup, (tuple, list)) and len(tup) == 3:
-                    name, number, chash = tup
-                    if isinstance(name, str) and isinstance(number, (int, float)) and isinstance(chash, str):
-                        # find the matching one in the list
-                        for ca in ca_list:
-                            if (name.lower(), number, chash) == (ca.name.lower(), ca.number, ca.collision_hash):
-                                return ca
-            # just return the latest one if no default specified
-            return last
+        ''' Alias for self.wallet.cashacct.get_address_default '''
+        return self.wallet.cashacct.get_address_default(ca_list)
 
     def _ca_set_default(self, ca_info, show_tip = False):
-        d = self.wallet.storage.get('cash_accounts_address_defaults', {})
-        d[ca_info.address.to_storage_string()] = [ca_info.name, ca_info.number, ca_info.collision_hash]
-        self.wallet.storage.put('cash_accounts_address_defaults', d)
+        ''' Similar to self.wallet.cashacct.set_address_default, but also
+        shows a tooltip optionally, and updates self. '''
+        self.wallet.cashacct.set_address_default(ca_info)
         if show_tip:
             QToolTip.showText(QCursor.pos(), _("Cash Account has been made the default for this address"), self)
         self.update()

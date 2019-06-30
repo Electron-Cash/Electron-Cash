@@ -35,6 +35,7 @@ import threading
 import random
 import time
 from collections import defaultdict, namedtuple
+from typing import List, Tuple
 from . import bitcoin
 from . import util
 from .address import Address, OpCodes, Script, ScriptError
@@ -789,7 +790,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             # network signal to get final minimal_chash when it is ready.
             return collision_hash
 
-    def get_cashaccounts(self, domain=None, inv=False) -> list:
+    def get_cashaccounts(self, domain=None, inv=False) -> List[Info]:
         ''' Returns a list of Info objects for verified cash accounts in domain.
         Domain must be an iterable of addresses (either wallet or external).
         If domain is None, every verified cash account we know about is returned.
@@ -814,12 +815,12 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         return ret
 
-    def get_wallet_cashaccounts(self) -> list:
+    def get_wallet_cashaccounts(self) -> List[Info]:
         ''' Convenience method, returns all the verified cash accounts we
         know about for wallet addresses only. '''
         return self.get_cashaccounts(domain=self.wallet.get_addresses())
 
-    def get_external_cashaccounts(self) -> list:
+    def get_external_cashaccounts(self) -> List[Info]:
         ''' Convenience method, retruns all the verified cash accounts we
         know about that are not for wallet addresses. '''
         return self.get_cashaccounts(domain=self.wallet.get_addresses(), inv=True)
@@ -924,7 +925,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if write:
             self.wallet.storage.write()
 
-    def find_verified(self, name: str, number: int = None, collision_prefix: str = None) -> list:
+    def find_verified(self, name: str, number: int = None, collision_prefix: str = None) -> List[Info]:
         ''' Returns a list of Info objects for verified cash accounts matching
         lowercased name.  Optionally you can narrow the search by specifying
         number (int) and a collision_prefix (str of digits) '''
@@ -978,6 +979,37 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.ext_incomplete_tx[txid] = self.RegTx(txid, script)
             self.ext_unverif[txid] = block_height
 
+
+    ############################
+    # UI / Prefs / Convenience #
+    ############################
+
+    def get_address_default(self, infos : List[Info]) -> Info:
+        ''' Returns the preferred Info object for a particular address from
+        a given list. `infos' is a list of Info objects pertaining to a
+        particular address (they should all pertain to said address, but this
+        is not checked). '''
+        if infos:
+            last = infos[-1]
+            d = self.wallet.storage.get('cash_accounts_address_defaults')
+            if isinstance(d, dict):
+                tup = d.get(last.address.to_storage_string())
+                if isinstance(tup, (tuple, list)) and len(tup) == 3:
+                    name, number, chash = tup
+                    if isinstance(name, str) and isinstance(number, (int, float)) and isinstance(chash, str):
+                        # find the matching one in the list
+                        for info in infos:
+                            if (name.lower(), number, chash) == (info.name.lower(), info.number, info.collision_hash):
+                                return info
+            # just return the latest one if no default specified
+            return last
+
+    def set_address_default(self, info : Info):
+        ''' Set the default CashAccount for a particular address. Pass the Info
+        object pertaining to the Cash Account / Address in question. '''
+        d = self.wallet.storage.get('cash_accounts_address_defaults', {})
+        d[info.address.to_storage_string()] = [info.name, info.number, info.collision_hash]
+        self.wallet.storage.put('cash_accounts_address_defaults', d)
 
 
     ###################
