@@ -977,6 +977,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
             self._add_verified_tx_common(added.script, txid, height_ts_pos_tup[0], header)
 
+        # this needs to be done without the lock held
+        if self.network and added.script.is_complete():  # paranoia checks
+            self.network.trigger_callback('ca_verified_tx', self, Info.from_regtx(added))
+
 
     def undo_verifications_hook(self, txs: set):
         ''' Called by wallet when it itself got called to undo_verifictions by
@@ -1042,10 +1046,16 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                blockchain.serialize_header if so desiered, or it can be ignored.
         '''
         self.print_error('verified external:', tx_hash, height_ts_pos_tup, blockchain.hash_header(header))
+
         with self.lock:
             self.ext_unverif.pop(tx_hash, None)
+            script = self._find_script(tx_hash)
             # call back into the same codepath that registers tx's as verified...
-            self._add_verified_tx_common(self._find_script(tx_hash), tx_hash, height_ts_pos_tup[0], header)
+            self._add_verified_tx_common(script, tx_hash, height_ts_pos_tup[0], header)
+
+        # this needs to be done without the lock held
+        if self.network and script and script.is_complete():  # paranoia checks
+            self.network.trigger_callback('ca_verified_tx', self, Info.from_script(script, tx_hash))
 
     def is_up_to_date(self) -> bool:
         '''Return True to kick off network wallet_updated callback and
