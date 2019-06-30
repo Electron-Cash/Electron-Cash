@@ -574,28 +574,49 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         ca_script = None
         opret_ct = 0
         for i, tup in enumerate(self.tx.outputs()):
+            my_addr_in_script = None
             typ, addr, v = tup
             for fmt in (ext, rec, chg, lnk):
                 fmt.setAnchorNames([f"output {i}"])  # anchor name for this line (remember input#); used by context menu creation
             # CashAccounts support
             if isinstance(addr, ScriptOutput) and addr.is_opreturn():
                 opret_ct += 1
-                if isinstance(addr, cashacct.ScriptOutput) and not addr.is_complete() and self.tx_hash and self.tx_height and self.tx_height >= cashacct.activation_height:
+                if isinstance(addr, cashacct.ScriptOutput):
                     ca_script = addr
-                    # The below will fail and return None if the height is less than
-                    # networks.net.VERIFICATION_BLOCK_HEIGHT - 146 and if we lack
-                    # this header.
-                    # This is not catastrophic -- it just means the ScriptOutput
-                    # won't be as pretty with the emoji and collision_hash.
-                    # In many cases however we will have the header if the
-                    # CashAccounts tx being viewed was verified by us.
-                    self.block_hash = self.block_hash or self.wallet.get_block_hash(self.tx_height) or None
-                    if self.block_hash:
-                        # make it complete right away if we have the block_hash for pretty UI printing a few lines below...
-                        ca_script.make_complete(block_height=self.tx_height, block_hash=self.block_hash, txid=self.tx_hash)
-            # /CashAccounts support
+                    my_addr_in_script = (self.wallet.is_mine(ca_script.address) and ca_script.address) or None
+                    if not addr.is_complete() and self.tx_hash and self.tx_height and self.tx_height >= cashacct.activation_height:
+                        # The below will fail and return None if the height is less than
+                        # networks.net.VERIFICATION_BLOCK_HEIGHT - 146 and if we lack
+                        # this header.
+                        # This is not catastrophic -- it just means the ScriptOutput
+                        # won't be as pretty with the emoji and collision_hash.
+                        # In many cases however we will have the header if the
+                        # CashAccounts tx being viewed was verified by us.
+                        self.block_hash = self.block_hash or self.wallet.get_block_hash(self.tx_height) or None
+                        if self.block_hash:
+                            # make it complete right away if we have the block_hash for pretty UI printing a few lines below...
+                            ca_script.make_complete(block_height=self.tx_height, block_hash=self.block_hash, txid=self.tx_hash)
+                    else:
+                        # "forget" the script in this case so we don't keep
+                        # processing it further below..
+                        ca_script = None
+            # Format Cash Accounts address *in* script to be highlighted with
+            # our preferred yellow/green for change/receiving and also
+            # linkify it.
             addrstr = addr.to_ui_string()
-            cursor.insertText(addrstr, text_format(addr))
+            my_addr_in_script_str = my_addr_in_script and my_addr_in_script.to_ui_string()
+            idx = my_addr_in_script_str and addrstr.find(my_addr_in_script_str)
+            if idx is not None and idx > -1:
+                cursor.insertText(addrstr[:idx], text_format(addr))
+                len2 = idx+len(my_addr_in_script_str)
+                cursor.insertText(addrstr[idx:len2], text_format(my_addr_in_script))
+                cursor.insertText(addrstr[len2:], text_format(addr))
+            else:
+                # Regular format. Was not a Cash Accounts script, just
+                # any old Address/ScriptOutput/PublicKey output.
+                cursor.insertText(addrstr, text_format(addr))
+            # /CashAccounts support
+            # Mark B. Lundeberg's patented output formatter logic™
             if v is not None:
                 if len(addrstr) > 42: # for long outputs, make a linebreak.
                     cursor.insertBlock()
@@ -605,6 +626,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 cursor.insertText(' '*(43 - len(addrstr)), ext)
                 cursor.insertText(format_amount(v), ext)
             cursor.insertBlock()
+            # /Mark B. Lundeberg's patented output formatting logic™
 
         # Cash Accounts support
         if ca_script:
@@ -618,7 +640,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                     self.wallet.cashacct.add_ext_tx(self.tx_hash, ca_script)
                 else:
                     # Not complete -- kick off ext verifier anyway
-                    # We will get an update() signal should it verify ok.
+                    # We will get an update() signal should it verify ok...
+                    # At which point it may become is_complete() and UI can
+                    # display all the info.
                     self.print_error("adding incomplete tx to Cash Accounts")
                     self.wallet.cashacct.add_ext_incomplete_tx(self.tx_hash, self.tx_height, ca_script)
             else:
@@ -738,12 +762,18 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             # figure out which output they right-clicked on .. output lines have an anchor named "output N"
             i = int(name.split()[1])  # split "output N", translate N -> int
             ignored, addr, value = (self.tx.outputs())[i]
+            ca_script = (isinstance(addr, cashacct.ScriptOutput) and addr) or None
             menu.addAction(_("Output") + " #" + str(i)).setDisabled(True)
             menu.addSeparator()
             self._add_addr_to_io_menu_lists_for_widget(addr, show_list, copy_list, o_text)
             if isinstance(value, int):
                 value_fmtd = self.main_window.format_amount(value)
                 copy_list += [ ( _("Copy Amount"), lambda: self._copy_to_clipboard(value_fmtd, o_text) ) ]
+            if ca_script:
+                copy_list += [ ( _("Copy Address (Embedded)"), lambda: self._copy_to_clipboard(ca_script.address.to_ui_string(), o_text) ) ]
+                if ca_script.is_complete():
+                    text = self.wallet.cashacct.fmt_info(cashacct.Info.from_script(ca_script, self.tx_hash))
+                    copy_list += [ ( _("Copy Cash Account"), lambda: self._copy_to_clipboard(text, o_text) ) ]
         except (TypeError, ValueError, IndexError, KeyError) as e:
             self.print_error("Outputs right-click menu exception:", repr(e))
 
