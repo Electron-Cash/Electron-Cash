@@ -124,12 +124,6 @@ class AddressList(MyTreeWidget):
         if not self._ca_cb_registered and self.wallet.network:
             self.wallet.network.register_callback(self._ca_updated_minimal_chash_callback, ['ca_updated_minimal_chash'])
             self._ca_cb_registered = True
-        # Cash Account support
-        ca_list = self.wallet.cashacct.get_wallet_cashaccounts()
-        ca_by_addr = defaultdict(list)
-        for info in ca_list:
-            ca_by_addr[info.address].append(info)
-        # / cash account
         had_item_count = self.topLevelItemCount()
         sels = self.selectedItems()
         addresses_to_re_select = {item.data(0, self.DataRoles.address) for item in sels}
@@ -171,16 +165,23 @@ class AddressList(MyTreeWidget):
             used_item = QTreeWidgetItem( [ _("Used"), '', '', '', '', ''] )
             used_flag = False
             addr_list = change_addresses if is_change else receiving_addresses
+            # Cash Account support - we do this here with the already-prepared addr_list for performance reasons
+            ca_list_all = self.wallet.cashacct.get_cashaccounts(addr_list)
+            ca_by_addr = defaultdict(list)
+            for info in ca_list_all:
+                ca_by_addr[info.address].append(info)
+            del ca_list_all
+            # / cash account
             for n, address in enumerate(addr_list):
                 num = len(self.wallet.get_address_history(address))
                 is_used = self.wallet.is_used(address)
                 balance = sum(self.wallet.get_addr_balance(address))
                 address_text = address.to_ui_string()
-                ca_info, ca_list = None, None
-                if address in ca_by_addr:
+                # Cash Accounts
+                ca_info, ca_list = None, ca_by_addr.get(address)
+                if ca_list:
                     # Add Cash Account emoji -- the emoji used is the most
                     # recent cash account registration for said address
-                    ca_list = ca_by_addr[address]
                     ca_list.sort(key=lambda x: ((x.number or 0), str(x.collision_hash)))
                     for ca in ca_list:
                         # grab minimal_chash and stash in an attribute. this may kick off the network
@@ -188,6 +189,7 @@ class AddressList(MyTreeWidget):
                     ca_info = self._ca_get_default(ca_list)
                     if ca_info:
                         address_text = ca_info.emoji + " " + address_text
+                # /Cash Accounts
                 label = self.wallet.labels.get(address.to_storage_string(), '')
                 balance_text = self.parent.format_amount(balance, whitespaces=True)
                 columns = [address_text, str(n), label, balance_text, str(num)]
@@ -212,7 +214,8 @@ class AddressList(MyTreeWidget):
                 address_item.setData(0, self.DataRoles.address, address)
                 address_item.setData(0, self.DataRoles.can_edit_label, True) # label can be edited
                 if ca_list:
-                    address_item.setData(0, self.DataRoles.cash_accounts, ca_list)  # the list of cashacct infos
+                    # Save the list of cashacct infos, if any
+                    address_item.setData(0, self.DataRoles.cash_accounts, ca_list)
 
                 if self.wallet.is_frozen(address):
                     address_item.setBackground(0, QColor('lightblue'))
