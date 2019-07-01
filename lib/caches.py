@@ -11,7 +11,7 @@ import queue
 import weakref
 import math
 from collections import defaultdict
-from .util import PrintError
+from .util import PrintError, print_error
 
 class ExpiringCache:
     ''' A fast cache useful for storing tens of thousands of lightweight items.
@@ -197,7 +197,10 @@ class _ExpiringCacheMgr(PrintError):
     @classmethod
     def _try_to_expire_old_items(cls, d_orig, num):
         d = d_orig.copy()  # yes, this is slow but this makes it so we don't need locks.
-        assert len(d) > num and num > 0
+        if len(d) < num or num <= 0:
+            # cache modified from underneath our feet. We abort gracefully and complain.
+            print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. This is out-of-spec, aborting operation and will try again later...')
+            return 0
 
         # bin the cache.dict items by 'tick' (when they were last accessed)
         bins = defaultdict(list)
@@ -206,9 +209,9 @@ class _ExpiringCacheMgr(PrintError):
             bins[tick].append(k)
         del d
 
-        # now, expire the old items starting with the oldest until we
-        # expire num items. note that during this loop it's possible
-        # for items to get their timestamp updateed by ExpiringCache.get().
+        # Now, expire the old items starting with the oldest until we
+        # expire num items. Note that during this loop it's possible
+        # for items to get their timestamp updated by ExpiringCache.get().
         # This loop will not detect that situation and will expire them anyway.
         # This is fine, because it's a corner case and in the interests of
         # keeping this code as simple as possible, we don't bother to guard
@@ -220,7 +223,7 @@ class _ExpiringCacheMgr(PrintError):
             for key in bins[tick]:
                 # KeyError here should never happen in normal use, but it
                 # may if client code is messing with the .d dict.
-                try: del d_orig[key]
+                try: del d_orig[key]  # despite appearances, this is atomic (thread-safe)
                 except KeyError: pass
                 ct += 1
                 if ct >= num:
@@ -233,7 +236,10 @@ class _ExpiringCacheMgr(PrintError):
     @classmethod
     def _remove_timed_out_items(cls, d_orig, tick_cutoff):
         d = d_orig.copy()  # yes, this is slow but this makes it so we don't need locks.
-        assert len(d) and tick_cutoff >= 0
+        if not len(d) or tick_cutoff < 0:
+            # cache modified from underneath our feet. We abort gracefully and complain.
+            print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. This is out-of-spec, aborting operation and will try again later...')
+            return 0
 
         # scan the cache.dict for items whose 'tick' is older than tick_cutoff
         ct = 0
