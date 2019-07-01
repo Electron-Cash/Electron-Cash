@@ -257,6 +257,7 @@ def get_object_size(obj_0):
     by deeply examining its contents recursively (more accurate than
     sys.getsizeof as a result). '''
     import sys
+    import warnings
     from numbers import Number
     from collections import Set, Mapping, deque
 
@@ -281,7 +282,10 @@ def get_object_size(obj_0):
             elif isinstance(obj, (tuple, list, Set, deque)):
                 size += sum(inner(i) for i in obj)
             elif isinstance(obj, Mapping) or hasattr(obj, iteritems):
-                size += sum(inner(k) + inner(v) for k, v in getattr(obj, iteritems)())
+                try:
+                    size += sum(inner(k) + inner(v) for k, v in getattr(obj, iteritems)())
+                except Exception as e:
+                    warnings.warn(f"warning: unable to process object '{obj}' due to exception: {repr(e)}", RuntimeWarning, stacklevel=2)
             # Check for custom object instances - may subclass above too
             if hasattr(obj, '__dict__'):
                 size += inner(vars(obj))
