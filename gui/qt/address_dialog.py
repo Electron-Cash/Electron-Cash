@@ -38,6 +38,9 @@ from .qrtextedit import ShowQRTextEdit
 
 class AddressDialog(PrintError, WindowModalDialog):
 
+    MIN_WIDTH_NO_FX_HIST = 700
+    MIN_WIDTH_FX_HIST = MIN_WIDTH_NO_FX_HIST + 75
+
     def __init__(self, parent, address, *, windowParent=None):
         assert isinstance(address, Address)
         windowParent = windowParent or parent
@@ -49,7 +52,7 @@ class AddressDialog(PrintError, WindowModalDialog):
         self.app = parent.app
         self.saved = True
 
-        self.setMinimumWidth(700)
+        self.setMinimumWidth(self.MIN_WIDTH_FX_HIST if self.parent.fx and self.parent.fx.show_history() else self.MIN_WIDTH_NO_FX_HIST)
         vbox = QVBoxLayout()
         self.setLayout(vbox)
 
