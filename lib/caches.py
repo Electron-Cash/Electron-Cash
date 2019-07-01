@@ -218,7 +218,10 @@ class _ExpiringCacheMgr(PrintError):
         while ct < num and bins:
             tick = sorted_bin_keys[0]
             for key in bins[tick]:
-                del d_orig[key]  # KeyError here should never happen. if it does we want the exception because it means a bug in this code
+                # KeyError here should never happen in normal use, but it
+                # may if client code is messing with the .d dict.
+                try: del d_orig[key]
+                except KeyError: pass
                 ct += 1
                 if ct >= num:
                     break
@@ -237,7 +240,8 @@ class _ExpiringCacheMgr(PrintError):
         for k,v in d.items():
             tick = v[0]
             if tick < tick_cutoff:
-                del d_orig[k]  # despite appearances, this is atomic (thread-safe)
+                try: del d_orig[k]  # despite appearances, this is atomic (thread-safe)
+                except KeyError: pass
                 ct += 1
         return ct
 
