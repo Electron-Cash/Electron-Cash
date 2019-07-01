@@ -1,4 +1,5 @@
 ##!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 #
 # Electron Cash - A Bitcoin Cash SPV Wallet
 # This file Copyright (c) 2019 Calin Culianu <calin.culianu@gmail.com>
