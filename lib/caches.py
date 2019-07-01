@@ -199,7 +199,7 @@ class _ExpiringCacheMgr(PrintError):
         d = d_orig.copy()  # yes, this is slow but this makes it so we don't need locks.
         if len(d) < num or num <= 0:
             # cache modified from underneath our feet. We abort gracefully and complain.
-            print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. This is out-of-spec, aborting operation and will try again later...')
+            print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. Aborting flush operation and will try again later...')
             return 0
 
         # bin the cache.dict items by 'tick' (when they were last accessed)
@@ -238,7 +238,7 @@ class _ExpiringCacheMgr(PrintError):
         d = d_orig.copy()  # yes, this is slow but this makes it so we don't need locks.
         if not len(d) or tick_cutoff < 0:
             # cache modified from underneath our feet. We abort gracefully and complain.
-            print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. This is out-of-spec, aborting operation and will try again later...')
+            print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. Aborting flush operation and will try again later...')
             return 0
 
         # scan the cache.dict for items whose 'tick' is older than tick_cutoff
