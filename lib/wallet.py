@@ -218,7 +218,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # wallet.up_to_date is true when the wallet is synchronized (stronger requirement)
         self.up_to_date = False
 
-        # locks: if you need to take multiple ones, acquire them in the order they are defined here!
+        # The only lock. We used to have two here. That was more technical debt
+        # without much purpose. 1 lock is sufficient. In particular data
+        # structures that are touched by the network thread as well as the GUI
+        # (such as self.transactions, history, etc) need to be synchronized
+        # using this mutex.
         self.lock = threading.RLock()
 
         # load requests
@@ -574,7 +578,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self.get_block_hash(height)
 
     def get_block_hash(self, height):
-        '''Convenience method equivalent to Blockchain.get_height() '''
+        '''Convenience method equivalent to Blockchain.get_height(), except our
+        version returns None instead of NULL_HASH_HEX on 'not found' header. '''
         ret = None
         if self.network and height is not None and height >= 0 and height <= self.get_local_height():
             bchain = self.network.blockchain()

@@ -1674,24 +1674,6 @@ class Network(util.DaemonThread):
                 msg = _("Could not retrieve transaction for the specified hash.")
             return False, msg
 
-    #def get_raw_block_header_for_height(self, height, timeout=30):
-    #    ''' Used by wallet code (Wallet.get_block_hash) as a fallback to
-    #    retrieve a block header for a given height.
-    #
-    #    Note this only actually works if Interface.mode == MODE_DEFAULT, and
-    #    even then I am not entirely sure it's race-condition-proof and totally
-    #    safe (see on_block_header for all the gotchas).  Do not use this
-    #    function for now.
-    #
-    #    Returns the raw header as a hex encoded string or None on failure. '''
-    #    try:
-    #        if not self.interface or self.interface.mode != Interface.MODE_DEFAULT:
-    #            raise RuntimeError('Cannot get raw block header from network while interface is not connected and/or not in MODE_DEFFAULT')
-    #        return self.synchronous_get(('blockchain.block.header', [height]), timeout=timeout)
-    #    except Exception as e:
-    #        self.print_error(f"Exception retrieving block header at height {height}: {repr(e)}")
-    #
-
     @staticmethod
     def __wait_for(it, timeout=30):
         """Wait for the result of calling lambda `it`.
