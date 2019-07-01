@@ -54,10 +54,7 @@ class ExpiringCache:
     def __init__(self, *, maxlen=10000, name="An Unnamed Cache", timeout=None):
         assert maxlen > 0
         timeout = (isinstance(timeout, (float, int)) and timeout > 0.0 and timeout) or None
-        if timeout:
-            self.timeout_ticks = math.ceil(timeout/_ExpiringCacheMgr.tick_interval)
-        else:
-            self.timeout_ticks = None
+        self.timeout_ticks = timeout and math.ceil(timeout/_ExpiringCacheMgr.tick_interval)
         self.maxlen = maxlen
         self.name = name
         self.d = dict()
