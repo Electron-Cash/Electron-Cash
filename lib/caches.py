@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-
+#
+# Electron Cash - A Bitcoin Cash SPV Wallet
+#
+# This file Copyright (C) 2019 Calin Culianu <calin.culianu@gmail.com>
+# License: MIT License
+#
 import time
 import threading
 import queue
 import weakref
+import math
 from collections import defaultdict
 from .util import PrintError
 
@@ -21,13 +27,19 @@ class ExpiringCache:
         3. The memory tradeoff is acceptable. (As with all caches, you are
            trading CPU cost for memory cost).
 
-    And example of this is UI code or string formatting code that refreshes the
+    An example of this is UI code or string formatting code that refreshes the
     display with (mostly) the same output over and over again. In that case it
     may make more sense to just cache the output items (such as the formatted
     amount results from format_satoshis), rather than regenerate them, as a
     performance tweak.
 
     ExpiringCache automatically has old items expire if `maxlen' is exceeded.
+
+    Or, alternatively, if `timeout' is not None (and a positive nonzero number)
+    items are auto-removed if they are older than `timeout' seconds (even if
+    `maxlen' was otherwise not exceeded).  Note that the actual timeout used
+    may be rounded up to match the tick granularity of the cache manager (see
+    below).
 
     Items are timestamped with a 'tick count' (granularity of 10 seconds per
     tick). Their timestamp is updated each time they are accessed via `get' (so
@@ -39,8 +51,13 @@ class ExpiringCache:
     to manage the cache's size and/or to flush old items).  This background
     thread runs every 10 seconds -- so caches may temporarily overflow past
     their maxlen for up to 10 seconds. '''
-    def __init__(self, *, maxlen=10000, name="An Unnamed Cache"):
+    def __init__(self, *, maxlen=10000, name="An Unnamed Cache", timeout=None):
         assert maxlen > 0
+        timeout = (isinstance(timeout, (float, int)) and timeout > 0.0 and timeout) or None
+        if timeout:
+            self.timeout_ticks = math.ceil(timeout/_ExpiringCacheMgr.tick_interval)
+        else:
+            self.timeout_ticks = None
         self.maxlen = maxlen
         self.name = name
         self.d = dict()
@@ -68,6 +85,14 @@ class ExpiringCache:
         return self.d.copy()
     def __len__(self):
         return len(self.d)
+    def __repr__(self):
+        name, address, length, maxlen, timeout = (
+            self.name, '0x{:x}'.format(id(self)), len(self), self.maxlen,
+            ('{:1.1f}'.format(float(self.timeout_ticks * _ExpiringCacheMgr.tick_interval))
+                if self.timeout_ticks
+                else self.timeout_ticks)
+        )
+        return (f'<{__class__.__name__} "{name}" at {address}, {length} item{"s" if length != 1 else ""} (maxlen={maxlen} timeout={timeout})>')
 
 class _ExpiringCacheMgr(PrintError):
     '''Do not use this class directly. Instead just create ExpiringCache
@@ -153,12 +178,21 @@ class _ExpiringCacheMgr(PrintError):
                     pass
                 cls.tick += 1
                 for c in tuple(self.caches):  # prevent cache from dying while we iterate
+                    # 1. timeout check (off by default unless client code specified a timeout)
+                    if c.timeout_ticks and len(c.d) and 0 == (cls.tick % c.timeout_ticks):
+                        # expire timed-out items first, if any. This check only runs every timeout_ticks ticks.
+                        t0 = time.time()
+                        num = cls._remove_timed_out_items(c.d, cls.tick - c.timeout_ticks)
+                        tf = time.time()
+                        if num:
+                            self.print_error("{}: flushed {} timed-out items in {:.02f} msec".format(c.name, num, (tf-t0)*1e3))
+                    # 2. maxlen check (always on)
                     len_c = len(c.d)  # capture length here as c.d may mutate and grow while this code executes.
                     if len_c > c.maxlen:
                         t0 = time.time()
                         num = cls._try_to_expire_old_items(c.d, len_c - c.maxlen)
                         tf = time.time()
-                        self.print_error("{}: flushed {} items in {:.02f} msec".format(c.name, num,(tf-t0)*1e3))
+                        self.print_error("{}: flushed {} items in {:.02f} msec".format(c.name, num, (tf-t0)*1e3))
         finally:
             if cls.debug:
                 self.print_error("thread exit")
@@ -194,6 +228,20 @@ class _ExpiringCacheMgr(PrintError):
             else:
                 del bins[tick]
                 del sorted_bin_keys[0]
+        return ct
+
+    @classmethod
+    def _remove_timed_out_items(cls, d_orig, tick_cutoff):
+        d = d_orig.copy()  # yes, this is slow but this makes it so we don't need locks.
+        assert len(d) and tick_cutoff >= 0
+
+        # scan the cache.dict for items whose 'tick' is older than tick_cutoff
+        ct = 0
+        for k,v in d.items():
+            tick = v[0]
+            if tick < tick_cutoff:
+                del d_orig[k]  # despite appearances, this is atomic (thread-safe)
+                ct += 1
         return ct
 
 
