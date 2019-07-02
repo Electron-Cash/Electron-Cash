@@ -33,6 +33,7 @@ carefully if also importing address.py.
 import re
 import requests
 import threading
+import queue
 import random
 import time
 from collections import defaultdict, namedtuple
@@ -472,9 +473,12 @@ servers = [
 
 debug = False
 
-def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> list:
-    ''' Synchronous lookup, returns a list of RegTx [(txid, script) tuples], or
-    None on error. Note the .script in each returned RegTx will always have
+def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> tuple:
+    ''' Synchronous lookup, returns a tuple of:
+
+            block_hash, List[ RegTx(txid, script) namedtuples ]
+
+    or None on error. Note the .script in each returned RegTx will always have
     .is_complete() == True (has all fields filled-in from the lookup server).
 
     Optionally, pass a list as the `exc` parameter and the exception encountered
@@ -510,12 +514,17 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
         number = bh2num(block)
         if not isinstance(res, list) or number < 100:
             raise RuntimeError('Bad response')
+        block_hash, header_prev = None, None
         for d in res:
             txraw = d['transaction']
-            header_hex = d['inclusion_proof'][:blockchain.HEADER_SIZE*2]
+            header_hex = d['inclusion_proof'][:blockchain.HEADER_SIZE*2].lower()
+            header_prev = header_prev or header_hex
             if len(header_hex)//2 != blockchain.HEADER_SIZE:
                 raise AssertionError('Could not get header')
-            block_hash = blockchain.hash_header_hex(header_hex)
+            if not block_hash:
+                block_hash = blockchain.hash_header_hex(header_hex)
+            elif header_prev != header_hex:
+                raise AssertionError('Differing headers in results')
             tx = Transaction(txraw)
             txid = Transaction._txid(txraw)
             op_return_count = 0
@@ -535,7 +544,7 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
                     util.print_error(f"lookup: {txid} had no valid registrations in it using server {server} (len(tx_regs)={len(tx_regs)} op_return_count={op_return_count})")
         if debug:
             util.print_error(f"lookup: found {len(ret)} reg txs at block height {block} (number={number})")
-        return ret
+        return block_hash, ret
     except Exception as e:
         if debug:
             util.print_error("lookup:", repr(e))
@@ -548,7 +557,7 @@ def lookup_asynch(server, number, success_cb, error_cb=None,
     asynchronously.
 
     success_cb - will be called on successful completion with a single arg:
-                 the results list.
+                 a tuple of (block_hash, the results list).
     error_cb   - will be called on failure with a single arg: the exception
                  (guaranteed to be an Exception subclass).
 
@@ -573,7 +582,7 @@ def lookup_asynch(server, number, success_cb, error_cb=None,
             called = True
         if not called:
             # this should never happen
-            uti.print_error("WARNING: no callback called for ", threading.current_thread().name)
+            util.print_error("WARNING: no callback called for ", threading.current_thread().name)
     t = threading.Thread(name=f"CashAcct lookup_asynch: {server} {number} ({name},{collision_prefix},{timeout})",
                          target=thread_func, daemon=True)
     t.start()
@@ -620,6 +629,56 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
                       success_cb = on_succ, error_cb = on_err,
                       name = name, collision_prefix = collision_prefix, timeout = timeout)
 
+class ProcessedBlock:
+    __slots__ = ( 'hash',  # str binhex block header hash
+                  'height',  # int blockchain block height
+                  'status_hash',  # str binhex computed value derived from Hash(hash + height + reg_txs..) see compute_status_hash
+                  'reg_txs' )  # dict of txid -> RegTx(txid, script) namedtuple
+
+    def __init__(self, *args, **kwargs):
+        assert not args, "This class only takes kwargs"
+        assert all(k in self.__slots__ for k in kwargs), "Unknown kwarg specified"
+        for s in self.__slots__:
+            setattr(self, s, kwargs.get(s))
+        assert self.reg_txs is None or (isinstance(self.reg_txs, dict) and all(bytes.fromhex(k).hex() == bytes.fromhex(v.txid).hex() for k,v in self.reg_txs.items()))
+        assert self.hash is None or (isinstance(self.hash, str) and bytes.fromhex(self.hash).hex())
+        assert self.height is None or (isinstance(self.height, int) and self.height >= activation_height)
+        self.status_hash or self.set_status_hash()  # tries to recompute if not provided
+        assert self.status_hash is None or (isinstance(self.status_hash, str) and bytes.fromhex(self.status_hash))
+
+    def __repr__(self):
+        return ( f'<ProcessedBlock at 0x{id(self):x} hash={self.hash} height={self.height} status_hash={self.status_hash}'
+                 + f' with {0 if not self.reg_txs else len(self.reg_txs)} registration(s)>')
+
+    def set_status_hash(self) -> str:
+        self.status_hash = self.compute_status_hash(self.hash, self.height, self.reg_txs)
+        return self.status_hash
+
+    def set_hash_from_raw_header_hex(self, rawhex : str) -> str:
+        assert len(rawhex) >= blockchain.HEADER_SIZE * 2
+        self.hash = blockchain.hash_header_hex(rawhex[:blockchain.HEADER_SIZE*2])
+        return self.hash
+
+    @staticmethod
+    def compute_status_hash(hash_hex : str, height : int, reg_txs : dict) -> str:
+        if hash_hex and isinstance(height, int) and isinstance(reg_txs, dict):
+            ba = bytearray()
+            ba.extend(int.to_bytes(height, length=4, byteorder='little'))
+            ba.extend(bytes.fromhex(hash_hex))
+            for txid in sorted(reg_txs.keys()):
+                ba.extend(bytes.fromhex(txid))
+            status_hash = bitcoin.hash_encode(bitcoin.Hash(ba))
+            return status_hash
+
+    def __eq__(self, other):
+        if isinstance(other, ProcessedBlock):
+            if other is self: return True
+            return self.hash == other.hash and self.height == other.height and (self.status_hash or self.set_status_hash()) == (other.status_hash or other.set_status_hash())
+        return False
+
+    def __neq__(self, other):
+        return not self.__eq__(other)
+
 
 class CashAcct(util.PrintError, verifier.SPVDelegate):
     ''' Class implementing cash account subsystem such as verification, etc. '''
@@ -653,6 +712,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         # minimal collision hash encodings cache. keyed off (name.lower(), number, collision_hash) -> '03' string or '' string
         self.minimal_ch_cache = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct minimal collision_hash cache")
+
+        # Dict of block_height -> ProcessedBlock
+        self.processed_blocks = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct processed block cache", maxlen=5000, timeout=3600.0)
 
     def diagnostic_name(self):
         return f'{self.wallet.diagnostic_name()}.{__class__.__name__}'
@@ -755,9 +817,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         else:
             def do_lookup():
                 t0 = time.time()
-                def on_success(res):
+                def on_success(res_tup):
                     i = 0
                     found = None
+                    block_hash, res = res_tup
                     num_res = int(bool(res) and len(res))
                     if num_res > 1:
                         i = 1
@@ -1308,7 +1371,6 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         '''
         if not self.network:
             return
-        import queue
         cancel_evt = threading.Event()
         stop = num2bh(stop) if stop is not None else stop
         start = num2bh(max(start or 0, 100))
@@ -1333,8 +1395,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         e = thing
                         if debug:
                             self.print_error(f"Height {h} got exception in lookup: {repr(e)}")
-                    elif isinstance(thing, list):
-                        for rtx in thing:
+                    elif isinstance(thing, tuple):
+                        block_hash, res = thing
+                        for rtx in res:
                             if rtx.txid not in self.wallet_reg_tx and rtx.txid not in self.ext_reg_tx and (not add_only_mine or self.wallet.is_mine(rtx.script.address)):
                                 self.add_ext_tx(rtx.txid, rtx.script)
                                 added += 1
@@ -1356,3 +1419,56 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     self.event.set()
                     self.thread.join()
         return ScanStopper(t, cancel_evt)
+
+    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
+        ''' Processes a whole block from the lookup server and returns it.
+        Returns None on failure, and puts the Exception in the exc parameter.
+
+        Note if this returns successfully, then all the tx's in the returned ProcessedBlock
+        are guaranteed to have verified successfully. '''
+        if not isinstance(number, int) or number < 100:
+            raise ArgumentError('number must be >= 100')
+        if not isinstance(server, str) or not server:
+            raise ArgumentError('bad server arg')
+        if not isinstance(exc, list):
+            raise ArgumentError('bad exc arg')
+        network = self.network  # just in case network goes away, capture it
+        if not network:
+            exc.append(RuntimeError('no network'))
+            return
+        res = lookup(server=server, number=number, timeout=timeout, exc=exc)
+        if not res:
+            return
+        pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
+        with self.lock:
+            pb_cached = self.processed_blocks.get(pb.height)
+            if pb_cached and pb != pb_cached:
+                self.processed_blocks.put(pb.height, None)
+                self.print_error(f"Warning, retrieved block info from server {server} is {pb} which differs from cached version {pb_cached}! Reverifying!")
+                for txid in set(set(pb_cached.reg_txs or set()) | set(pb.reg_txs or set())):
+                    self._rm_vtx(txid)
+                verify_txs = True
+        def num_needed():
+            with self.lock:
+                return len(set(pb.reg_txs) - set(self.v_tx))
+        if verify_txs and pb.reg_txs and num_needed():
+            q = queue.Queue()
+            def on_verified(event, *args):
+                if event == 'ca_verified_tx' and args[0] is self:
+                    if not num_needed():
+                        q.put('done')
+            try:
+                network.register_callback(on_verified, ['ca_verified_tx'])
+                for txid, regtx in pb.reg_txs.items():
+                    self.add_ext_tx(txid, regtx.script)  # NB: this is a no-op if already verified and/or in wallet_reg_txs
+                if num_needed():
+                    q.get(timeout=timeout)
+            except queue.Empty as e:
+                if num_needed():
+                    exc.append(e)
+                    return
+            finally:
+                network.unregister_callback(on_verified)
+        with self.lock:
+            self.processed_blocks.put(pb.height, pb)
+        return pb
