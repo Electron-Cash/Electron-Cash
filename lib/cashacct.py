@@ -493,9 +493,9 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
     a substring.
 
     Note:
-    Results are not verified by this function and further verification is
-    necessary before presenting any results to the user for the purposes of
-    sending funds.'''
+    Resulting tx's are not verified (in the SPV sense) by this function and
+    further verification (SPV) is necessary before presenting any results to the
+    user for the purposes of sending funds.'''
     url = f'{server}/lookup/{number}'
     if name:
         name = name.strip().lower()
@@ -842,7 +842,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                             if rtx.script.name.lower() != lname:
                                 continue
                             ch = rtx.script.collision_hash
-                            if ch == collision_hash and number == rtx.script.number:
+                            if ch == collision_hash and rtx.script.number == number:
                                 found = rtx
                                 continue
                             while i < N and ch.startswith(collision_hash[:i]):
@@ -1101,7 +1101,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     ct += 1
             if debug: self.print_error(f"verify_block_asynch: called {ct} error callbacks for #{number}")
         def on_success(res, server):
-            pb = self._verify_block_synch_inner(res, network, server, number, True, timeout, exc)
+            pb = self._verify_block_inner(res, network, server, number, True, timeout, exc, debug=debug)
             if pb:
                 with self.lock:
                     l = self._blocks_in_flight.pop(number, [])
@@ -1122,7 +1122,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             else:
                 if debug: self.print_error(f"verify_block_asynch: #{number} already in-flight, will just enqueue callbacks")
 
-    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
+    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[], debug=debug) -> ProcessedBlock:
         ''' Processes a whole block from the lookup server and returns it.
         Returns None on failure, and puts the Exception in the exc parameter.
 
@@ -1134,31 +1134,49 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         res = lookup(server=server, number=number, timeout=timeout, exc=exc)
         if not res:
             return
-        return self._verify_block_synch_inner(res, network, server, number, verify_txs, timeout, exc)
+        return self._verify_block_inner(res, network, server, number, verify_txs, timeout, exc, debug=debug)
 
-    def _verify_block_synch_inner(self, res, network, server, number, verify_txs, timeout, exc) -> ProcessedBlock:
+    def _verify_block_inner(self, res, network, server, number, verify_txs, timeout, exc, debug=debug) -> ProcessedBlock:
         ''' Do not call this from the Network thread, as it actually relies on
         the network thread being another thread (it waits for callbacks from it
         to proceed).  Caller should NOT hold any locks. '''
         pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
-        with self.lock:
-            pb_cached = self.processed_blocks.get(pb.height)
-            if pb_cached and pb != pb_cached:
-                # Poor man's reorg detection below...
-                self.processed_blocks.put(pb.height, None)
-                self.print_error(f"Warning, retrieved block info from server {server} is {pb} which differs from cached version {pb_cached}! Reverifying!")
-                keys = set()  # (lname, number, collision_hash) tuples
-                for txid in set(set(pb_cached.reg_txs or set()) | set(pb.reg_txs or set())):
-                    self._rm_vtx(txid, rm_from_verifier=True)
-                    script = self._find_script(txid, False)
-                    if script:
-                        keys.add((script.name.lower(), script.number, script.collision_hash))
-                # invalidate minimal_chashes for block
-                for k in keys:
-                    if self.minimal_ch_cache.get(k):
-                        self.print_error("invalidated minimal_chash", k)
-                        self.minimal_ch_cache.put(k, None)  # invalidate cache item
-                verify_txs = True
+        # REORG or BAD SERVER CHECK
+        def check_sanity_detect_reorg_etc():
+            minimal_ch_removed = []
+            with self.lock:
+                pb_cached = self.processed_blocks.get(pb.height)
+                if pb_cached and pb != pb_cached:
+                    # Poor man's reorg detection below...
+                    self.processed_blocks.put(pb.height, None)
+                    self.print_error(f"Warning, retrieved block info from server {server} is {pb} which differs from cached version {pb_cached}! Reverifying!")
+                    keys = set()  # (lname, number, collision_hash) tuples
+                    chash_rtxs = dict()  # chash_key_tuple -> regtx
+                    for txid in set(set(pb_cached.reg_txs or set()) | set(pb.reg_txs or set())):
+                        self._rm_vtx(txid, rm_from_verifier=True)
+                        script = self._find_script(txid, False)
+                        if script:
+                            k = (script.name.lower(), script.number, script.collision_hash)
+                            keys.add(k)
+                            rtx = pb.reg_txs.get(txid) or pb_cached.reg_txs.get(txid)
+                            if rtx: chash_rtxs[k] = rtx
+                    # invalidate minimal_chashes for block
+                    for k in keys:
+                        if self.minimal_ch_cache.get(k):
+                            self.print_error("invalidated minimal_chash", k)
+                            self.minimal_ch_cache.put(k, None)  # invalidate cache item
+                            rtx = chash_rtxs.get(k)
+                            if rtx:
+                                minimal_ch_removed.append((Info.from_regtx(rtx), rtx.script.collision_hash))
+                    verify_txs = True
+            # finally, inform interested GUI code about the invalidations so that
+            # it may re-enqueue some refreshes of the minimal collision hashes
+            for info, long_chash in minimal_ch_removed:
+                if debug:
+                    self.print_error("triggering ca_updated_minimal_chash for", info, long_chash)
+                network.trigger_callback('ca_updated_minimal_chash', self, info, long_chash)
+        check_sanity_detect_reorg_etc()
+        # /REORG or BAD SERVER CHECK
         def num_needed():
             with self.lock:
                 return len(set(pb.reg_txs) - set(self.v_tx))
