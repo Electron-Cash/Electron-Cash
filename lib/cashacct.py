@@ -703,6 +703,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         self._init_data()
 
+        # below is used by method self.verify_block_asynch:
+        self._blocks_in_flight = defaultdict(list)  # number (eg 100-based-modified height) -> List[tuple(success_cb, error_cb)]; guarded with lock
+
     def _init_data(self):
         self.wallet_reg_tx = dict() # dict of txid -> RegTx
         self.ext_reg_tx = dict() # dict of txid -> RegTx
@@ -1077,7 +1080,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return False
         return True
 
-    def verify_block_asynch(self, number : int, success_cb=None, error_cb=None, timeout=10.0):
+    def verify_block_asynch(self, number : int, success_cb=None, error_cb=None, timeout=10.0, debug=debug):
         ''' Tries all servers. Calls success_cb with the verified ProcessedBlock
         as the single argument on first successful retrieval of the block.
         Calls error_cb with the exc as the only argument on failure. Guaranteed
@@ -1089,16 +1092,35 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             if error_cb: error_cb((exc and exc[-1]) or RuntimeError('error'))
             return
         def on_error(exc):
-            if error_cb:
-                error_cb(exc)
+            with self.lock:
+                l = self._blocks_in_flight.pop(number, [])
+            ct = 0
+            for success_cb, error_cb in l:
+                if error_cb:
+                    error_cb(exc)
+                    ct += 1
+            if debug: self.print_error(f"verify_block_asynch: called {ct} error callbacks for #{number}")
         def on_success(res, server):
             pb = self._verify_block_synch_inner(res, network, server, number, True, timeout, exc)
             if pb:
-                if success_cb:
-                    success_cb(pb)
+                with self.lock:
+                    l = self._blocks_in_flight.pop(number, [])
+                ct = 0
+                for success_cb, error_cb in l:
+                    if success_cb:
+                        success_cb(pb)
+                        ct += 1
+                if debug: self.print_error(f"verify_block_asynch: called {ct} success callbacks for #{number}")
             else:
                 on_error(exc[-1])
-        return lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout)
+        with self.lock:
+            l = self._blocks_in_flight[number]
+            l.append((success_cb, error_cb))
+            if len(l) == 1:
+                if debug: self.print_error(f"verify_block_asynch: initiating new lookup_asynch_all on #{number}")
+                lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout)
+            else:
+                if debug: self.print_error(f"verify_block_asynch: #{number} already in-flight, will just enqueue callbacks")
 
     def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
         ''' Processes a whole block from the lookup server and returns it.
