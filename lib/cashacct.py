@@ -716,7 +716,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.ext_incomplete_tx = dict() # ephemeral (not saved) dict of txid -> RegTx (all regtx's are incomplete here)
 
         # minimal collision hash encodings cache. keyed off (name.lower(), number, collision_hash) -> '03' string or '' string
-        self.minimal_ch_cache = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct minimal collision_hash cache")
+        self.minimal_ch_cache = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct minimal collision_hash cache", timeout=3600.0)
 
         # Dict of block_height -> ProcessedBlock
         self.processed_blocks = caches.ExpiringCache(name=f"{self.wallet.diagnostic_name()} - CashAcct processed block cache", maxlen=5000, timeout=3600.0)
@@ -814,7 +814,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         saved to wallet storage, so over the course of the life of a wallet
         at least the GUI for the wallet's own addresses should contain correct
         results here. '''
-        key = (name.lower(), number, collision_hash)
+        lname = name.lower()
+        key = (lname, number, collision_hash)
         with self.lock:
             found = self.minimal_ch_cache.get(key)
         if found is not None:
@@ -822,23 +823,27 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         else:
             def do_lookup():
                 t0 = time.time()
-                def on_success(res_tup, server):
+                def on_success(pb : ProcessedBlock):
                     i = 0
                     found = None
-                    block_hash, res = res_tup
-                    num_res = int(bool(res) and len(res))
+                    block_hash, res_dict = pb.hash, pb.reg_txs
+                    num_res = int(bool(res_dict) and len(res_dict))
                     if num_res > 1:
                         i = 1
                         N = len(collision_hash)
-                        for rtx in res:
+                        for txid, rtx in res_dict.items():
+                            if rtx.script.name.lower() != lname:
+                                continue
                             ch = rtx.script.collision_hash
-                            if ch == collision_hash and rtx.script.name.lower() == name.lower() and number == rtx.script.number:
+                            if ch == collision_hash and number == rtx.script.number:
                                 found = rtx
                                 continue
                             while i < N and ch.startswith(collision_hash[:i]):
                                 i += 1
-                    elif num_res and res[0].script.collision_hash == collision_hash:
-                        found = res[0]
+                    elif num_res:
+                        rtx = list(res_dict.values())[0]
+                        if rtx.script.collision_hash == collision_hash:
+                            found = rtx
                     if not found:
                         # hmm. empty results.. or bad lookup. in either case,
                         # don't cache anything.
@@ -848,9 +853,11 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     with self.lock:
                         self.minimal_ch_cache.put(key, minimal_chash)
                     self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
-                    if self.network and found and minimal_chash != collision_hash:
-                        self.network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(found), minimal_chash)
-                lookup_asynch_all(name=name, number=number, success_cb=on_success)
+                    network = self.network  # capture network obj to avoid race conditions with self.stop()
+                    if network and found and minimal_chash != collision_hash:
+                        network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(found), minimal_chash)
+                # /on_success
+                self.verify_block_asynch(number=number, success_cb=on_success)
             if self.network:  # only do this if not 'offline'
                 do_lookup()  # start the asynch lookup
             # Immediately return the long-form chash so we give the caller a
@@ -978,6 +985,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 vtx_d[txid] = [vtx.block_height, vtx.block_hash]
             for key, tup in self.minimal_ch_cache.copy_dict().items():
                 value = tup[-1]
+                if value is None:
+                    # we sometimes write 'None' to the cache to invalidate
+                    # items but don't delete the entry.  Skip these.
+                    continue
                 min_enc_l.append([*key, value])
 
         data =  {
@@ -1048,6 +1059,101 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.ext_incomplete_tx[txid] = self.RegTx(txid, script)
             self.ext_unverif[txid] = block_height
 
+
+    @staticmethod
+    def _do_verify_block_argchecks(network, number, exc=[], server='https://unknown'):
+        if not isinstance(number, int) or number < 100:
+            raise ArgumentError('number must be >= 100')
+        if not isinstance(server, str) or not server:
+            raise ArgumentError('bad server arg')
+        if not isinstance(exc, list):
+            raise ArgumentError('bad exc arg')
+        if not network:
+            exc.append(RuntimeError('no network'))
+            return False
+        return True
+
+    def verify_block_asynch(self, number : int, success_cb=None, error_cb=None, timeout=10.0):
+        ''' Tries all servers. Calls success_cb with the verified ProcessedBlock
+        as the single argument on first successful retrieval of the block.
+        Calls error_cb with the exc as the only argument on failure. Guaranteed
+        to call 1 of the 2 callbacks in either case.  Callbacks are optional
+        and won't be called if specified as None. '''
+        network = self.network # capture network object in case it goes away while we are running
+        exc = []
+        if not self._do_verify_block_argchecks(network=network, number=number, exc=exc):
+            if error_cb: error_cb((exc and exc[-1]) or RuntimeError('error'))
+            return
+        def on_error(exc):
+            if error_cb:
+                error_cb(exc)
+        def on_success(res, server):
+            pb = self._verify_block_synch_inner(res, network, server, number, True, timeout, exc)
+            if pb:
+                if success_cb:
+                    success_cb(pb)
+            else:
+                on_error(exc[-1])
+        return lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout)
+
+    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
+        ''' Processes a whole block from the lookup server and returns it.
+        Returns None on failure, and puts the Exception in the exc parameter.
+
+        Note if this returns successfully, then all the tx's in the returned ProcessedBlock
+        are guaranteed to have verified successfully. '''
+        network = self.network  # just in case network goes away, capture it
+        if not self._do_verify_block_argchecks(network=network, number=number, exc=exc, server=server):
+            return
+        res = lookup(server=server, number=number, timeout=timeout, exc=exc)
+        if not res:
+            return
+        return self._verify_block_synch_inner(res, network, server, number, verify_txs, timeout, exc)
+
+    def _verify_block_synch_inner(self, res, network, server, number, verify_txs, timeout, exc) -> ProcessedBlock:
+        pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
+        with self.lock:
+            pb_cached = self.processed_blocks.get(pb.height)
+            if pb_cached and pb != pb_cached:
+                # Poor man's reorg detection below...
+                self.processed_blocks.put(pb.height, None)
+                self.print_error(f"Warning, retrieved block info from server {server} is {pb} which differs from cached version {pb_cached}! Reverifying!")
+                keys = set()  # (lname, number, collision_hash) tuples
+                for txid in set(set(pb_cached.reg_txs or set()) | set(pb.reg_txs or set())):
+                    self._rm_vtx(txid, rm_from_verifier=True)
+                    script = self._find_script(txid, False)
+                    if script:
+                        keys.add((script.name.lower(), script.number, script.collision_hash))
+                # invalidate minimal_chashes for block
+                for k in keys:
+                    if self.minimal_ch_cache.get(k):
+                        self.print_error("invalidated minimal_chash", k)
+                        self.minimal_ch_cache.put(k, None)  # invalidate cache item
+                verify_txs = True
+        def num_needed():
+            with self.lock:
+                return len(set(pb.reg_txs) - set(self.v_tx))
+        if verify_txs and pb.reg_txs and num_needed():
+            q = queue.Queue()
+            def on_verified(event, *args):
+                if event == 'ca_verified_tx' and args[0] is self:
+                    if not num_needed():
+                        q.put('done')
+            try:
+                network.register_callback(on_verified, ['ca_verified_tx'])
+                for txid, regtx in pb.reg_txs.items():
+                    self.add_ext_tx(txid, regtx.script)  # NB: this is a no-op if already verified and/or in wallet_reg_txs
+                if num_needed():
+                    q.get(timeout=timeout)
+            except queue.Empty as e:
+                if num_needed():
+                    exc.append(e)
+                    return
+            finally:
+                network.unregister_callback(on_verified)
+        with self.lock:
+            self.processed_blocks.put(pb.height, pb)
+        return pb
 
     ############################
     # UI / Prefs / Convenience #
@@ -1121,7 +1227,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_addr[script.address].add(vtx.txid)
         self.v_by_name[script.name.lower()].add(vtx.txid)
 
-    def _rm_vtx(self, txid, *, force=False):
+    def _rm_vtx(self, txid, *, force=False, rm_from_verifier=False):
         ''' lock should be held by caller '''
         vtx = self.v_tx.pop(txid, None)
         if not vtx:
@@ -1151,6 +1257,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     empty.add(n)
             for n in empty:
                 self.v_by_name.pop(n, None)
+        if rm_from_verifier:
+            verifier = self.verifier
+            if verifier:
+                verifier.remove_spv_proof_for_tx(txid)
 
     def _wipe_tx(self, txid):
         ''' called to completely forget a tx from all caches '''
@@ -1228,6 +1338,16 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             for txid in txs:
                 self._rm_vtx(txid)  # this is safe as a no-op if txid was not relevant
                 self._find_script(txid, False, giveto='w')
+            # Since we have a chain reorg, invalidate the processed block and
+            # minimal_ch_cache to force revalidation of our collision hashes.
+            # FIXME: Do this more elegantly. This casts a pretty wide net.
+            # NB: I believe assiging a new {} to .d is safer than d.clear()
+            # in this case as the caches._ExpiringCacheMgr doesn't like it
+            # when you remove items from the existing dict, but should run ok
+            # if you just assign a new dict (it keeps a working reference as
+            # it flushes the cache)... so assigning to .d is safer in this case.
+            self.minimal_ch_cache.d = {}
+            self.processed_blocks.d = {}
 
     def add_transaction_hook(self, txid: str, tx: object, out_n: int, script: ScriptOutput):
         ''' Called by wallet inside add_transaction (with wallet.lock held) to
@@ -1424,88 +1544,3 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     self.event.set()
                     self.thread.join()
         return ScanStopper(t, cancel_evt)
-
-    @staticmethod
-    def _do_verify_block_argchecks(network, number, exc=[], server='Unknown'):
-        if not isinstance(number, int) or number < 100:
-            raise ArgumentError('number must be >= 100')
-        if not isinstance(server, str) or not server:
-            raise ArgumentError('bad server arg')
-        if not isinstance(exc, list):
-            raise ArgumentError('bad exc arg')
-        if not network:
-            exc.append(RuntimeError('no network'))
-            return False
-        return True
-
-    def verify_block_asynch(self, number : int, success_cb=None, error_cb=None, timeout=10.0):
-        ''' Tries all servers. Calls success_cb with the verified ProcessedBlock
-        as the single argument on first successful retrieval of the block.
-        Calls error_cb with the exc as the only argument on failure. Guaranteed
-        to call 1 of the 2 callbacks in either case.  Callbacks are optional
-        and won't be called if None. '''
-        network = self.network # capture network object in case it goes away while we are running
-        exc = []
-        if not self._do_verify_block_argchecks(network=network, number=number, exc=exc):
-            if error_cb: error_cb((exc and exc[-1]) or RuntimeError('error'))
-            return
-        def on_error(exc):
-            if error_cb:
-                error_cb(exc)
-        def on_success(res, server):
-            pb = self._verify_block_synch_inner(res, network, server, number, True, timeout, exc)
-            if pb:
-                if success_cb:
-                    success_cb(pb)
-            else:
-                on_error(exc[-1])
-        return lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout)
-
-    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
-        ''' Processes a whole block from the lookup server and returns it.
-        Returns None on failure, and puts the Exception in the exc parameter.
-
-        Note if this returns successfully, then all the tx's in the returned ProcessedBlock
-        are guaranteed to have verified successfully. '''
-        network = self.network  # just in case network goes away, capture it
-        if not self._do_verify_block_argchecks(network=network, number=number, exc=exc, server=server):
-            return
-        res = lookup(server=server, number=number, timeout=timeout, exc=exc)
-        if not res:
-            return
-        return self._verify_block_synch_inner(res, network, server, number, verify_txs, timeout, exc)
-
-    def _verify_block_synch_inner(self, res, network, server, number, verify_txs, timeout, exc) -> ProcessedBlock:
-        pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
-        with self.lock:
-            pb_cached = self.processed_blocks.get(pb.height)
-            if pb_cached and pb != pb_cached:
-                self.processed_blocks.put(pb.height, None)
-                self.print_error(f"Warning, retrieved block info from server {server} is {pb} which differs from cached version {pb_cached}! Reverifying!")
-                for txid in set(set(pb_cached.reg_txs or set()) | set(pb.reg_txs or set())):
-                    self._rm_vtx(txid)
-                verify_txs = True
-        def num_needed():
-            with self.lock:
-                return len(set(pb.reg_txs) - set(self.v_tx))
-        if verify_txs and pb.reg_txs and num_needed():
-            q = queue.Queue()
-            def on_verified(event, *args):
-                if event == 'ca_verified_tx' and args[0] is self:
-                    if not num_needed():
-                        q.put('done')
-            try:
-                network.register_callback(on_verified, ['ca_verified_tx'])
-                for txid, regtx in pb.reg_txs.items():
-                    self.add_ext_tx(txid, regtx.script)  # NB: this is a no-op if already verified and/or in wallet_reg_txs
-                if num_needed():
-                    q.get(timeout=timeout)
-            except queue.Empty as e:
-                if num_needed():
-                    exc.append(e)
-                    return
-            finally:
-                network.unregister_callback(on_verified)
-        with self.lock:
-            self.processed_blocks.put(pb.height, pb)
-        return pb
