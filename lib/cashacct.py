@@ -1111,6 +1111,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         return self._verify_block_synch_inner(res, network, server, number, verify_txs, timeout, exc)
 
     def _verify_block_synch_inner(self, res, network, server, number, verify_txs, timeout, exc) -> ProcessedBlock:
+        ''' Do not call this from the Network thread, as it actually relies on
+        the network thread being another thread (it waits for callbacks from it
+        to proceed).  Caller should NOT hold any locks. '''
         pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
         with self.lock:
             pb_cached = self.processed_blocks.get(pb.height)
