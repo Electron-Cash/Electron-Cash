@@ -593,6 +593,10 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
     from `servers` and if all fail, then calls the error_cb exactly once.
     If any succeed, calls success_cb exactly once.
 
+    Note: in this function success_cb is called with TWO args:
+      - first arg is the tuple of (block_hash, regtx-results-list)
+      - the second arg is the 'server' that was successful (server string)
+
     One of the two callbacks are guaranteed to be called in either case.
 
     Callbacks are called in another thread context so GUI-facing code should
@@ -603,14 +607,14 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
     N = len(my_servers)
     lock = threading.Lock()
     n_ok, n_err = 0, 0
-    def on_succ(res):
+    def on_succ(res, server):
         nonlocal n_ok
         with lock:
             #util.print_error("success", n_ok+n_err)
             if n_ok:
                 return
             n_ok += 1
-        success_cb(res)
+        success_cb(res, server)
     def on_err(exc):
         nonlocal n_err
         with lock:
@@ -626,7 +630,8 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
     for server in my_servers:
         #util.print_error("server:", server)
         lookup_asynch(server, number = number,
-                      success_cb = on_succ, error_cb = on_err,
+                      success_cb = lambda res,_server=server: on_succ(res,_server),
+                      error_cb = on_err,
                       name = name, collision_prefix = collision_prefix, timeout = timeout)
 
 class ProcessedBlock:
@@ -671,9 +676,9 @@ class ProcessedBlock:
             return status_hash
 
     def __eq__(self, other):
+        if other is self: return True
         if isinstance(other, ProcessedBlock):
-            if other is self: return True
-            return self.hash == other.hash and self.height == other.height and (self.status_hash or self.set_status_hash()) == (other.status_hash or other.set_status_hash())
+            return bool(self.hash == other.hash and self.height == other.height and (self.status_hash or self.set_status_hash()) == (other.status_hash or other.set_status_hash()))
         return False
 
     def __neq__(self, other):
@@ -817,7 +822,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         else:
             def do_lookup():
                 t0 = time.time()
-                def on_success(res_tup):
+                def on_success(res_tup, server):
                     i = 0
                     found = None
                     block_hash, res = res_tup
@@ -837,7 +842,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     if not found:
                         # hmm. empty results.. or bad lookup. in either case,
                         # don't cache anything.
-                        self.print_error("get_minimal_chash: no results found for", *key)
+                        self.print_error("get_minimal_chash: no results found for", *key, "(server =", server, ")")
                         return
                     minimal_chash = collision_hash[:i]
                     with self.lock:
@@ -1386,7 +1391,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             while self.network and not cancel_evt.is_set() and h < stop_height():
                 num = bh2num(h)
                 lookup_asynch_all(number=num,
-                                  success_cb = q.put,
+                                  success_cb = lambda res,server: q.put(res),
                                   error_cb = q.put,
                                   timeout=timeout)
                 try:
@@ -1420,25 +1425,57 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     self.thread.join()
         return ScanStopper(t, cancel_evt)
 
-    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
-        ''' Processes a whole block from the lookup server and returns it.
-        Returns None on failure, and puts the Exception in the exc parameter.
-
-        Note if this returns successfully, then all the tx's in the returned ProcessedBlock
-        are guaranteed to have verified successfully. '''
+    @staticmethod
+    def _do_verify_block_argchecks(network, number, exc=[], server='Unknown'):
         if not isinstance(number, int) or number < 100:
             raise ArgumentError('number must be >= 100')
         if not isinstance(server, str) or not server:
             raise ArgumentError('bad server arg')
         if not isinstance(exc, list):
             raise ArgumentError('bad exc arg')
-        network = self.network  # just in case network goes away, capture it
         if not network:
             exc.append(RuntimeError('no network'))
+            return False
+        return True
+
+    def verify_block_asynch(self, number : int, success_cb=None, error_cb=None, timeout=10.0):
+        ''' Tries all servers. Calls success_cb with the verified ProcessedBlock
+        as the single argument on first successful retrieval of the block.
+        Calls error_cb with the exc as the only argument on failure. Guaranteed
+        to call 1 of the 2 callbacks in either case.  Callbacks are optional
+        and won't be called if None. '''
+        network = self.network # capture network object in case it goes away while we are running
+        exc = []
+        if not self._do_verify_block_argchecks(network=network, number=number, exc=exc):
+            if error_cb: error_cb((exc and exc[-1]) or RuntimeError('error'))
+            return
+        def on_error(exc):
+            if error_cb:
+                error_cb(exc)
+        def on_success(res, server):
+            pb = self._verify_block_synch_inner(res, network, server, number, True, timeout, exc)
+            if pb:
+                if success_cb:
+                    success_cb(pb)
+            else:
+                on_error(exc[-1])
+        return lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout)
+
+    def verify_block_synch(self, server : str, number : int, verify_txs=True, timeout=10.0, exc=[]) -> ProcessedBlock:
+        ''' Processes a whole block from the lookup server and returns it.
+        Returns None on failure, and puts the Exception in the exc parameter.
+
+        Note if this returns successfully, then all the tx's in the returned ProcessedBlock
+        are guaranteed to have verified successfully. '''
+        network = self.network  # just in case network goes away, capture it
+        if not self._do_verify_block_argchecks(network=network, number=number, exc=exc, server=server):
             return
         res = lookup(server=server, number=number, timeout=timeout, exc=exc)
         if not res:
             return
+        return self._verify_block_synch_inner(res, network, server, number, verify_txs, timeout, exc)
+
+    def _verify_block_synch_inner(self, res, network, server, number, verify_txs, timeout, exc) -> ProcessedBlock:
         pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
         with self.lock:
             pb_cached = self.processed_blocks.get(pb.height)
