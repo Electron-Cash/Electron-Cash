@@ -813,7 +813,11 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         lookup should it complete successfully. Note that cached results get
         saved to wallet storage, so over the course of the life of a wallet
         at least the GUI for the wallet's own addresses should contain correct
-        results here. '''
+        results here.
+
+        Client code can use the 'ca_updated_minimal_chash' network callback
+        (see below) to be notified asynchronously when minimal_chash's are
+        updated. '''
         lname = name.lower()
         key = (lname, number, collision_hash)
         with self.lock:
