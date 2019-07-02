@@ -44,7 +44,9 @@ class Contacts(dict):
         # backward compatibility
         for k, v in self.items():
             _type, n = v
-            if _type == 'address' and Address.is_valid(n):
+            # Previous format was { name : (type, address) }
+            #   -> currect format { address : (type, name) }
+            if _type == 'address' and Address.is_valid(n) and not Address.is_valid(k):
                 self.pop(k)
                 self[n] = ('address', k)
 
