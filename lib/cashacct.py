@@ -821,6 +821,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if minimal_chash: minimal_chash = '.' + minimal_chash
         return f"{name}#{number}{minimal_chash};"
 
+
+    _number_re = re.compile(r'^[0-9]{3,}$')
+    _collision_re = re.compile(r'^[0-9]{0,10}$')
+
     @classmethod
     def parse_string(cls, s : str) -> tuple:
         ''' Returns a (name, number, collision_prefix) tuple on parse success
@@ -853,14 +857,15 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             number, collision_prefix = parts
         else:
             return None
+        if not cls._number_re.match(number):
+            return None
+        if not cls._collision_re.match(collision_prefix):
+            return None
         try:
             number = int(number)
-            collision_prefix = collision_prefix and str(int(collision_prefix)) and collision_prefix  # make sure it is all numbers
         except:
             return None
         if number < 100:
-            return None
-        if len(collision_prefix) > 10:
             return None
         return name, number, collision_prefix
 
@@ -1349,7 +1354,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if infos:
             last = infos[-1]
             d = self.wallet.storage.get('cash_accounts_address_defaults')
-            if isinstance(d, dict):
+            if isinstance(d, dict) and isinstance(last.address, Address):  # sanity check, .address may not always be Address but may be UnknownAddress
                 tup = d.get(last.address.to_storage_string())
                 if isinstance(tup, (tuple, list)) and len(tup) == 3:
                     name, number, chash = tup
@@ -1364,6 +1369,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     def set_address_default(self, info : Info):
         ''' Set the default CashAccount for a particular address. Pass the Info
         object pertaining to the Cash Account / Address in question. '''
+        if not isinstance(info.address, Address):
+            self.print_error("Warning: Info object does not have an Address", info)
+            return
         d = self.wallet.storage.get('cash_accounts_address_defaults', {})
         d[info.address.to_storage_string()] = [info.name, info.number, info.collision_hash]
         self.wallet.storage.put('cash_accounts_address_defaults', d)
