@@ -235,7 +235,7 @@ def hash160(x):
     return ripemd160(sha256(x))
 
 
-class UnknownAddress(object):
+class UnknownAddress:
 
     def to_ui_string(self):
         return '<UnknownAddress>'
