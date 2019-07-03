@@ -28,7 +28,7 @@ import traceback
 import sys
 
 from .address import Address
-from . import dnssec
+from . import dnssec, cashacct
 from .util import print_error
 
 
@@ -42,7 +42,7 @@ class Contacts(dict):
         except:
             return
         # backward compatibility
-        for k, v in self.items():
+        for k, v in self.copy().items():
             _type, n = v
             # Previous format was { name : (type, address) }
             #   -> currect format { address : (type, name) }
@@ -76,11 +76,12 @@ class Contacts(dict):
         dict.__setitem__(self, key, value)
         self.save()
 
-    # This breaks expected dictionary pop behaviour.  In the normal case, it'd return the popped value, or throw a KeyError.
-    def pop(self, key):
-        if key in self.keys():
-            dict.pop(self, key)
-            self.save()
+    def pop(self, key, default=None):
+        ''' This modifies expected dictionary pop behavior, because it never
+        throws KeyError when no default is specified. '''
+        ret = dict.pop(self, key, default)
+        self.save()
+        return ret
 
     def resolve(self, k):
         if Address.is_valid(k):
@@ -134,13 +135,19 @@ class Contacts(dict):
             return None
 
     def _validate(self, data):
-        for k,v in list(data.items()):
+        for k,v in data.copy().items():
             if k == 'contacts':
                 return self._validate(v)
-            if not Address.is_valid(k):
-                data.pop(k)
-            else:
-                _type,_ = v
-                if _type != 'address':
+            _type, n = v
+            if _type == 'address':
+                if not Address.is_valid(k):
                     data.pop(k)
+            elif _type == 'openalias':
+                if '@' not in k:
+                    data.pop(k)
+            elif _type == 'cashacct':
+                if not Address.is_valid(k) or not cashacct.CashAcct.parse_string(n):
+                    data.pop(k)
+            else:
+                data.pop(k)
         return data

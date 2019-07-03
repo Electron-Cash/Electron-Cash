@@ -34,7 +34,7 @@ from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from electroncash import bitcoin
 from electroncash.address import Address, ScriptOutput
 from electroncash import networks
-from electroncash.util import print_error
+from electroncash.util import PrintError
 
 from . import util
 
@@ -47,7 +47,7 @@ RX_COINTEXT = re.compile(RE_COINTEXT, re.I)
 frozen_style = "PayToEdit { border:none;}"
 normal_style = "PayToEdit { }"
 
-class PayToEdit(ScanQRTextEdit):
+class PayToEdit(PrintError, ScanQRTextEdit):
 
     def __init__(self, win):
         ScanQRTextEdit.__init__(self)
@@ -326,7 +326,7 @@ class PayToEdit(ScanQRTextEdit):
         try:
             data = self.win.contacts.resolve(key)
         except Exception as e:
-            print_error(f'error resolving alias: {repr(e)}')
+            self.print_error(f'error resolving alias: {repr(e)}')
             return
         if not data:
             return
