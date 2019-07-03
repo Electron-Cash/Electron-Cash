@@ -835,13 +835,13 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                         # don't cache anything.
                         self.print_error("get_minimal_chash: no results found for", name, number, collision_hash)
                         return
-                    found, minimal_chash = tup
+                    rtx, minimal_chash = tup
                     with self.lock:
                         self.minimal_ch_cache.put(key, minimal_chash)
                     self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
                     network = self.network  # capture network obj to avoid race conditions with self.stop()
-                    if network and found and minimal_chash != collision_hash:
-                        network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(found), minimal_chash)
+                    if network and rtx and minimal_chash != collision_hash:
+                        network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(rtx), minimal_chash)
                 # /on_success
                 self.verify_block_asynch(number=number, success_cb=on_success)
             if self.network:  # only do this if not 'offline'
