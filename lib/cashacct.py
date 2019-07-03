@@ -1012,6 +1012,16 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if write:
             self.wallet.storage.write()
 
+    def get_verified(self, ca_name) -> Info:
+        ''' Returns the Info object for ca_name of the form: Name#123.1234
+        or None if not found in self.v_tx '''
+        tup = self.parse_string(ca_name)
+        if tup:
+            name, num, cp = tup
+            l = self.find_verified(name=name, number=num, collision_prefix=cp)
+            if len(l) == 1:
+                return l[0]
+
     def find_verified(self, name: str, number: int = None, collision_prefix: str = None) -> List[Info]:
         ''' Returns a list of Info objects for verified cash accounts matching
         lowercased name.  Optionally you can narrow the search by specifying

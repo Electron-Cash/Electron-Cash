@@ -45,7 +45,7 @@ class Contacts(dict):
         for k, v in self.copy().items():
             _type, n = v
             # Previous format was { name : (type, address) }
-            #   -> currect format { address : (type, name) }
+            #   -> current format { address : (type, name) }
             if _type == 'address' and Address.is_valid(n) and not Address.is_valid(k):
                 self.pop(k)
                 self[n] = ('address', k)
@@ -90,6 +90,7 @@ class Contacts(dict):
                 'type': 'address'
             }
         if k in self.keys():
+            # FIXME: this looks way broken
             _type, addr = self[k]
             if _type == 'address':
                 return {
