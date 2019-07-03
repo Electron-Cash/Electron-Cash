@@ -64,7 +64,7 @@ from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
 from .transaction_dialog import show_transaction
 from .fee_slider import FeeSlider
 from .popup_widget import ShowPopupLabel, KillPopupLabel, PopupWidget
-
+from . import cashacctqt
 from .util import *
 
 class StatusBarButton(QPushButton):
@@ -2474,35 +2474,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         unambiguously resolve the Cash Account.
 
         On failure throws up an error window and returns None.'''
-        class Bad(Exception): pass
-        try:
-            if not self.wallet.network or not self.wallet.network.interface:
-                raise Bad(_("Cannot verify Cash Account as the network appears to be offline."))
-            ca_tup = self.wallet.cashacct.parse_string(name)
-            if not ca_tup:
-                raise Bad(_("Invalid Cash Account name specified: {name}").format(name=name))
-            info_min = None
-            def resolve_verify():
-                nonlocal info_min
-                info_min = self.wallet.cashacct.resolve_verify(name, skip_caches=True)
-            WaitingDialog(self.top_level_window(),
-                          _("Verifying Cash Account {name}, please wait ...").format(name=name),
-                          resolve_verify).exec_()
-            if not info_min:
-                raise Bad(_("Cash Account not found or ambiguous: {name}").format(name=name) + "\n\n"
-                          + _("Could not find the Cash Account name specified. "
-                              "It either does not exist or requires more collision hash characters to be resolved. "
-                              "Please double-check it and try again."))
-            info, mch = info_min
-            name = self.wallet.cashacct.fmt_info(info, mch)
-            if not isinstance(info.address, Address):
-                raise Bad(_("Unsupported payment data type.") + "\n\n"
-                          + _("The Cash Account {name} uses an account type that "
-                              "is not supported by Electron Cash.").format(name=name))
-            return info, name
-        except Bad as e:
-            self.show_error(str(e))
-        return None
+        return cashacctqt.resolve_cashacct(self, name)
 
     def set_contact(self, label, address, typ='address'):
         assert typ in ('address', 'cashacct')
