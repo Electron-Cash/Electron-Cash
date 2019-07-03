@@ -456,7 +456,7 @@ def emoji_index(block_hash, txid):
     ch = _collision_hash(block_hash, txid)[-4:]
     return int.from_bytes(ch, byteorder='big') % 100
 
-emoji_list = [ 128123, 128018, 128021, 128008, 128014, 128004, 128022, 128016,
+emoji_list = ( 128123, 128018, 128021, 128008, 128014, 128004, 128022, 128016,
                128042, 128024, 128000, 128007, 128063, 129415, 128019, 128039,
                129414, 129417, 128034, 128013, 128031, 128025, 128012, 129419,
                128029, 128030, 128375, 127803, 127794, 127796, 127797, 127809,
@@ -468,7 +468,9 @@ emoji_list = [ 128123, 128018, 128021, 128008, 128014, 128004, 128022, 128016,
                128276, 127925, 127908, 127911, 127928, 127930, 129345, 128269,
                128367, 128161, 128214, 9993, 128230, 9999, 128188, 128203,
                9986, 128273, 128274, 128296, 128295, 9878, 9775, 128681,
-               128099, 127838 ]
+               128099, 127838 )
+
+emoji_set = frozenset(emoji_list)
 
 def emoji(block_hash, txid):
     ''' Returns the emoji character givern a block hash and txid. May raise.'''
@@ -803,12 +805,16 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.verifier = None
             self.network = None
 
-    def fmt_info(self, info : Info, minimal_chash: str = None) -> str:
+    def fmt_info(self, info : Info, minimal_chash: str = None, emoji=False) -> str:
         ''' Given an Info object, returns a string of the form:
 
         name#123.1234;
         name2#100;
         name3#101.1234567890;
+
+        If emoji=True, then we will prepend the emoji character like so:
+
+        "🌶 NilacTheGrim#123.45"
 
         (Note that the returned string will always end in a semicolon.)
 
@@ -819,7 +825,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if minimal_chash is None:
             minimal_chash = self.get_minimal_chash(name, number, chash)
         if minimal_chash: minimal_chash = '.' + minimal_chash
-        return f"{name}#{number}{minimal_chash};"
+        emojipart = f'{info.emoji} ' if emoji and info.emoji else ''
+        return f"{emojipart}{name}#{number}{minimal_chash};"
 
 
     _number_re = re.compile(r'^[0-9]{3,}$')
@@ -847,6 +854,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if len(parts) != 2:
             return None
         name, therest = parts
+        if name and name[0] in emoji_set:  # support a custom style string with "emoji name#number.123" as the format
+            name = name[1:].strip()
         if not name_accept_re.match(name):
             return None
         parts = therest.split('.')
@@ -878,6 +887,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         If skip_caches is True, it won't check any caches and will go out
         to the network each time.  If False, it may return immediately if
         the results are cached/known already.
+
+        None is returned if there are multiple (ambiguous) results.
 
         timeout is a timeout in seconds. If timer expires None is returned.
 
