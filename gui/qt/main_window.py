@@ -2456,21 +2456,74 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payto_e.setText(text)
             self.payto_e.setFocus()
 
+    def resolve_cashacct(self, name):
+        ''' Throws up a WaitingDialog while it resolves a Cash Account.
+
+        Goes out to network, verifies all tx's.
+
+        Returns: a tuple of: (Info, Minimally_Encoded_Formatted_AccountName)
+
+        Argument `name` should be a Cash Account name string of the form:
+
+          name#number.123
+          name#number
+          name#number.;  etc
+
+        If the result would be ambigious, that is considered an error, so enough
+        of the account name#number.collision_hash needs to be specified to
+        unambiguously resolve the Cash Account.
+
+        On failure throws up an error window and returns None.'''
+        class Bad(Exception): pass
+        try:
+            if not self.wallet.network or not self.wallet.network.interface:
+                raise Bad(_("Cannot verify Cash Account as the network appears to be offline."))
+            ca_tup = self.wallet.cashacct.parse_string(name)
+            if not ca_tup:
+                raise Bad(_("Invalid Cash Account name specified: {name}").format(name=name))
+            info_min = None
+            def resolve_verify():
+                nonlocal info_min
+                info_min = self.wallet.cashacct.resolve_verify(name, skip_caches=True)
+            WaitingDialog(self.top_level_window(),
+                          _("Verifying Cash Account {name}, please wait ...").format(name=name),
+                          resolve_verify).exec_()
+            if not info_min:
+                raise Bad(_("Cash Account not found or ambiguous: {name}").format(name=name) + "\n\n"
+                          + _("Could not find the Cash Account name specified. "
+                              "It either does not exist or requires more collision hash characters to be resolved. "
+                              "Please double-check it and try again."))
+            info, mch = info_min
+            name = self.wallet.cashacct.fmt_info(info, mch)
+            if not isinstance(info.address, Address):
+                raise Bad(_("Unsupported payment data type.") + "\n\n"
+                          + _("The Cash Account {name} uses an account type that "
+                              "is not supported by Electron Cash.").format(name=name))
+            return info, name
+        except Bad as e:
+            self.show_error(str(e))
+        return None
+
     def set_contact(self, label, address, typ='address'):
         assert typ in ('address', 'cashacct')
         if typ == 'cashacct':
-           ca_tup = self.wallet.cashacct.parse_string(label)
-           if not ca_tup:
-               self.show_error(_("Invalid Cash Account name specified.") + "\n\n" + _("This is a Cash Account contact, you may only rename it to another valid Cash Account name."))
-               self.contact_list.update()
-               return False
-            ## TODO: resolve & verify here with waiting dialog to minimal chash and refuse if error
-        if not Address.is_valid(address):
+            tup = self.resolve_cashacct(label)  # this displays an error message for us
+            if not tup:
+                self.contact_list.update() # Displays original
+                return False
+            info, label = tup
+            old_entry = self.contacts.pop(address, None)
+            address = info.address.to_ui_string()
+            self.contacts[address] = (typ, label)
+        elif not Address.is_valid(address):
+            # Bad 'address' code path
             self.show_error(_('Invalid Address'))
             self.contact_list.update()  # Displays original unchanged value
             return False
-        old_entry = self.contacts.get(address, None)
-        self.contacts[address] = (typ, label)
+        else:
+            # Good 'address' code path...
+            old_entry = self.contacts.get(address, None)
+            self.contacts[address] = (typ, label)
         self.contact_list.update()
         self.history_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
