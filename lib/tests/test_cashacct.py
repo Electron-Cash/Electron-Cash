@@ -36,19 +36,24 @@ class TestCashAccounts(unittest.TestCase):
         '''Test for the cashacct.ScriptOutput class'''
 
         valid_registration_scripts = [
-            ( 'bv1', Address.from_string('bitcoincash:qzgvpjawln2l8wfmsg2qwnnytcua02hy45vpdvrqu5'),
+            ( 1, 'bv1', Address.from_string('bitcoincash:qzgvpjawln2l8wfmsg2qwnnytcua02hy45vpdvrqu5'),
               bytes.fromhex('6a040101010103627631150190c0cbaefcd5f3b93b8214074e645e39d7aae4ad')),
-            ( 'im_uname', Address.from_string('qqevtgm50kulte70smem643qs07fjkj47y5jv2d2v7'),
+            ( 1, 'im_uname', Address.from_string('qqevtgm50kulte70smem643qs07fjkj47y5jv2d2v7'),
               bytes.fromhex('6a040101010108696d5f756e616d65150132c5a3747db9f5e7cf86f3bd562083fc995a55f1')),
-            ( 'Mark', Address.from_string('qqy9myvyt7qffgye5a2mn2vn8ry95qm6asy40ptgx2'),
+            ( 1, 'Mark', Address.from_string('qqy9myvyt7qffgye5a2mn2vn8ry95qm6asy40ptgx2'),
               bytes.fromhex('6a0401010101044d61726b1501085d91845f8094a099a755b9a99338c85a037aec')),
-            ( 'Markk', Address.from_string('pqy9myvyt7qffgye5a2mn2vn8ry95qm6asnsjwvtah'),
+            ( 1, 'Markk', Address.from_string('pqy9myvyt7qffgye5a2mn2vn8ry95qm6asnsjwvtah'),
               '6a0401010101054d61726b6b1502085d91845f8094a099a755b9a99338c85a037aec'),  # also tests auto-un-hexlify of str arg
+            # an entry with more than 1 payment data in it
+            ( 3, "Mark", Address.from_string('qqy9myvyt7qffgye5a2mn2vn8ry95qm6asy40ptgx2'),
+              '6a0401010101044d61726b1501085d91845f8094a099a755b9a99338c85a037aec1501085d91845f8094a099a755b9a99338c85a037aec1501085d91845f8094a099a755b9a99338c85a037aec'),
         ]
-        for name, address, b in valid_registration_scripts:
+        for num, name, address, b in valid_registration_scripts:
             so = cashacct.ScriptOutput(b)
             self.assertEqual(name, so.name)
             self.assertEqual(address, so.address)
+            self.assertEqual(num, len(so.addresses))
+            self.assertTrue(address in so.addresses)
             so2 = cashacct.ScriptOutput.create_registration(name, address)
             self.assertEqual(so2, so)
             self.assertEqual(so2.name, name)
@@ -122,7 +127,7 @@ class TestCashAccounts(unittest.TestCase):
             # too long a name
             bytes.fromhex('6a04010101016561616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161611502085d91845f8094a099a755b9a99338c85a037aec'),
             # bad address type
-            bytes.fromhex('6a040101010103627631150390c0cbaefcd5f3b93b8214074e645e39d7aae4ad'),
+            bytes.fromhex('6a040101010103627631150990c0cbaefcd5f3b93b8214074e645e39d7aae4ad'),
             # bad length of pushdata
             bytes.fromhex('6a040101010103627631140190c0cbaefcd5f3b93b8214074e645e39d7aae4ad'),
             # extra garbage at the end

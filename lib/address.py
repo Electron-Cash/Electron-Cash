@@ -234,17 +234,26 @@ def hash160(x):
     Used to make bitcoin addresses from pubkeys.'''
     return ripemd160(sha256(x))
 
+class UnknownAddress(namedtuple("UnknownAddress", "meta")):
 
-class UnknownAddress:
+    def __new__(cls, meta=None):
+        return super(UnknownAddress, cls).__new__(cls, meta)
 
     def to_ui_string(self):
+        if self.meta is not None:
+            meta = self.meta
+            meta = (isinstance(meta, (bytes, bytearray)) and meta.hex()) or meta
+            if isinstance(meta, str) and len(meta) > 10:
+                l = len(meta) // 2
+                meta = "…" + meta[l-4:l+4] + "…"
+            return f'<UnknownAddress meta={meta}>'
         return '<UnknownAddress>'
 
     def __str__(self):
         return self.to_ui_string()
 
     def __repr__(self):
-        return '<UnknownAddress>'
+        return self.to_ui_string()
 
 
 class PublicKey(namedtuple("PublicKeyTuple", "pubkey")):

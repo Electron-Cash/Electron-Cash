@@ -91,7 +91,7 @@ class ScriptOutput(ScriptOutputBase):
     _protocol_prefix = _i2b(OpCodes.OP_RETURN) + _i2b(4) + protocol_code
 
     # Additional attributes outside of the base class tuple's 1 attribute
-    attrs_extra = ( 'name', 'address', 'number', 'collision_hash', 'emoji' )
+    attrs_extra = ( 'name', 'address', 'addresses', 'number', 'collision_hash', 'emoji' )
 
     @classmethod
     def _protocol_match_fast(cls, script_bytes):
@@ -136,7 +136,8 @@ class ScriptOutput(ScriptOutputBase):
             number, collision_hash, emoji = script.number, script.collision_hash, script.emoji
         script = cls._ensure_script(script)
         self = super(__class__, cls).__new__(cls, script)
-        self.name, self.address = self.parse_script(self.script)  # raises on error
+        self.name, self.address, self.addresses = self.parse_script(self.script)  # raises on error
+        assert self.address in self.addresses
         self.number, self.collision_hash, self.emoji = None, None, None  # ensure attributes defined
         self.make_complete2(number, collision_hash, emoji=emoji)  # raises if number  bad and/or if collision_hash is bad, otherwise just sets attributes. None ok for args.
         return self
@@ -146,17 +147,22 @@ class ScriptOutput(ScriptOutputBase):
         return ScriptOutput(self)
 
     @staticmethod
-    def _check_name_address(name, address, *, allow_unknown=False):
+    def _check_name_address(name, address, *, allow_unknown=False, addresses=None):
         '''Raises ArgumentError if either name or address are somehow invalid.'''
         if not isinstance(name, str) or not name_accept_re.match(name):
             raise ArgumentError('Invalid name specified: must be an alphanumeric ascii string of length 1-99', name)
         if name != name.encode('ascii', errors='ignore').decode('ascii', errors='ignore'):  # <-- ensure ascii.  Note that this test is perhaps superfluous but the mysteries of unicode and how re's deal with it elude me, so it's here just in case.
             raise ArgumentError('Name must be pure ascii', name)
-        allowed_classes = (Address, UnknownAddress) if allow_unknown else (Address,)
-        if not isinstance(address, allowed_classes):
-            raise ArgumentError(f'Address of type \'{allowed_classes}\' expected', address)
-        if isinstance(address, Address) and address.kind not in _addr_kind_data_types:
-            raise ArgumentError('Invalid or unsupported address type', address)
+        if addresses is None:
+            addresses = [address]
+        if address not in addresses:
+            raise ArgumentError('Address not in address list', address, addresses)
+        for address in addresses:
+            allowed_classes = (Address, UnknownAddress) if allow_unknown else (Address,)
+            if not isinstance(address, allowed_classes):
+                raise ArgumentError(f'Address of type \'{allowed_classes}\' expected', address)
+            if isinstance(address, Address) and address.kind not in _addr_kind_data_types:
+                raise ArgumentError('Invalid or unsupported address type', address)
         return True
 
     @staticmethod
@@ -177,7 +183,7 @@ class ScriptOutput(ScriptOutputBase):
         if fast_check:
             return self.name and self.address and self.number and self.collision_hash
         try:
-            return self._check_name_address(self.name, self.address, allow_unknown=True) and self._check_number_collision_hash(self.number, self.collision_hash)
+            return self._check_name_address(self.name, self.address, allow_unknown=True, addresses=self.addresses) and self._check_number_collision_hash(self.number, self.collision_hash)
         except ArgumentError:
             return False
 
@@ -210,6 +216,13 @@ class ScriptOutput(ScriptOutputBase):
         for a in __class__.attrs_extra:
             val = getattr(self, a, None)
             if val is not None:
+                if a == "addresses":
+                    # For the addresses list, we just show how many there are
+                    # in the list. We do not support more than the primary
+                    # address anyway. If list is 1 or empty, skip
+                    a, val = "num_addresses", len(val)
+                    if val < 2:
+                        continue
                 extra.append(f'{a}={val}')
         extra = ' '.join(extra)
         return f'{s} [CashAcct: {extra}]' if extra else f'{s} [CashAcct]'
@@ -253,7 +266,7 @@ class ScriptOutput(ScriptOutputBase):
         (name: str, address: Address) as a tuple. '''
         script = cls._ensure_script(script)
         # Check prefix, length, and that the 'type' byte is one we know about
-        if not cls._protocol_match_fast(script) or len(script) < 30: #or (script[-21] not in _data_types_addr_kind and script[-21] not in _unsupported_types):
+        if not cls._protocol_match_fast(script) or len(script) < 30:
             raise ArgumentError('Not a valid CashAcct registration script')
         script_short = script
         try:
@@ -262,44 +275,54 @@ class ScriptOutput(ScriptOutputBase):
         except Exception as e:
             raise ArgumentError('Bad CashAcct script', script_short.hex()) from e
         # Check for extra garbage at the end, too few items and/or other nonsense
-        if not ops or not len(ops) == 2 or not all(len(op) == 2 and op[1] for op in ops):
+        if not ops or not len(ops) >= 2 or not all(len(op) == 2 and op[1] for op in ops):
             raise ArgumentError('CashAcct script parse error', ops)
         name_bytes = ops[0][1]
-        type_byte = ops[1][1][0]
-        hash160_bytes = ops[1][1][1:]
         try:
             name = name_bytes.decode('ascii')
         except UnicodeError as e:
             raise ArgumentError('CashAcct names must be ascii encoded', name_bytes) from e
+        addresses = []
         try:
-            req_len = _data_type_lengths.get(type_byte) or 0
-            strict = req_len >= 0
-            req_len = abs(req_len)
-            if type_byte in _data_types_addr_kind:
-                if len(hash160_bytes) != req_len:
-                    if strict:
-                        raise AssertionError('hash160 had wrong length')
+            # parse the list of payment data (more than 1), and try and grab
+            # the first address we understand (type 1 or 2)
+            for op in ops[1:]:
+                def get_address(op):
+                    type_byte = op[1][0]
+                    hash160_bytes = op[1][1:]
+                    req_len = _data_type_lengths.get(type_byte) or 0
+                    strict = req_len >= 0
+                    req_len = abs(req_len)
+                    if type_byte in _data_types_addr_kind:
+                        if len(hash160_bytes) != req_len:
+                            if strict:
+                                raise AssertionError('hash160 had wrong length')
+                            else:
+                                util.print_error(f"parse_script: type 0x{type_byte:02x} had length {len(hash160_bytes)} != expected length of {req_len}, will proceed anyway")
+                        return Address(hash160_bytes, _data_types_addr_kind[type_byte])
+                    elif type_byte in _unsupported_types:
+                        # unsupported type, just acknowledge this registration but
+                        # mark the address as unknown
+                        if len(hash160_bytes) != req_len:
+                            msg = f"parse_script: unsupported type 0x{type_byte:02x} has unexpected length {len(hash160_bytes)}, expected {req_len}"
+                            util.print_error(msg)
+                            if strict:
+                                raise AssertionError(msg)
+                        return UnknownAddress(hash160_bytes)
                     else:
-                        util.print_error(f"parse_script: type 0x{type_byte:02x} had length {len(hash160_bytes)} != expected length of {req_len}, will proceed anyway")
-                address = Address(hash160_bytes, _data_types_addr_kind[type_byte])
-            elif type_byte in _unsupported_types:
-                # unsupported type, just acknowledge this registration but
-                # mark the address as unknown
-                if len(hash160_bytes) != req_len:
-                    msg = f"parse_script: unsupported type 0x{type_byte:02x} has unexpected length {len(hash160_bytes)}, expected {req_len}"
-                    util.print_error(msg)
-                    if strict:
-                        raise AssertionError(msg)
-                address = UnknownAddress()
-            else:
-                raise ValueError(f'unknown cash address type 0x{type_byte:02x}')
+                        raise ValueError(f'unknown cash address type 0x{type_byte:02x}')
+                # / get_address
+                addresses.append(get_address(op))
+            assert addresses
+            maybes = [a for a in addresses if isinstance(a, Address)]
+            address = (maybes and maybes[0]) or addresses[0]
         except Exception as e:
             # Paranoia -- this branch should never be reached at this point
             raise ArgumentError('Bad address or address could not be parsed') from e
 
-        cls._check_name_address(name, address, allow_unknown=True)  # raises if invalid
+        cls._check_name_address(name, address, addresses=addresses, allow_unknown=True)  # raises if invalid
 
-        return name, address
+        return name, address, addresses
 
     ############################################################################
     #                            FACTORY METHODS                               #
