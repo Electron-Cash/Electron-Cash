@@ -131,21 +131,17 @@ class ContactList(PrintError, MyTreeWidget):
             item.setData(0, self.DataRoles.Name, name)
             item.DataRole = self.DataRoles.Name
             if _type == 'cashacct':
-                nvc = self.wallet.cashacct.parse_string(name)
-                if nvc:
-                    nam, num, ch = nvc
-                    ca_list = self.wallet.cashacct.find_verified(nam, num, ch)
-                    ca_info = len(ca_list) == 1 and ca_list[0] or None
-                    if ca_info:
-                        item.setText(0, ca_info.emoji)
-                        tt = _('Validated Cash Account: <b><pre>{emoji} {account_string}</pre></b>').format(
-                            emoji = ca_info.emoji,
-                            account_string = f'{ca_info.name}#{ca_info.number}.{ca_info.collision_hash};'
-                        )
-                    else:
-                        item.setIcon(0, QIcon(":icons/unconfirmed.svg"))
-                        tt = _('Warning: This Cash Account is not validated')
-                    item.setToolTip(0, tt)
+                ca_info = self.wallet.cashacct.get_verified(name)
+                if ca_info:
+                    item.setText(0, ca_info.emoji)
+                    tt = _('Validated Cash Account: <b><pre>{emoji} {account_string}</pre></b>').format(
+                        emoji = ca_info.emoji,
+                        account_string = f'{ca_info.name}#{ca_info.number}.{ca_info.collision_hash};'
+                    )
+                else:
+                    item.setIcon(0, QIcon(":icons/unconfirmed.svg"))
+                    tt = _('Warning: This Cash Account is not validated')
+                item.setToolTip(0, tt)
             self.addTopLevelItem(item)
             if key == current_key:
                 self.setCurrentItem(item)
