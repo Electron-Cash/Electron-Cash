@@ -40,7 +40,7 @@ from collections import defaultdict, namedtuple
 from typing import List, Tuple
 from . import bitcoin
 from . import util
-from .address import Address, OpCodes, Script, ScriptError
+from .address import Address, OpCodes, Script, ScriptError, UnknownAddress
 from .address import ScriptOutput as ScriptOutputBase
 from .transaction import BCDataStream, Transaction
 from . import verifier
@@ -61,7 +61,12 @@ collision_hash_accept_re = re.compile(r'^[0-9]{10}$')
 
 # mapping of Address.kind -> cash account data types
 _addr_kind_data_types = { Address.ADDR_P2PKH : 0x1, Address.ADDR_P2SH : 0x2 }
+_unsupported_types = { 0x03, 0x04, 0x81, 0x82, 0x83, 0x84 }
+# negative lengths here indicate advisory and not enforced.
+_data_type_lengths = { 0x1 : 20, 0x2 : 20, 0x3 : 80, 0x4 : -66, 0x81 : 20, 0x82 : 20, 0x83 : 80, 0x84 : -66 }
 _data_types_addr_kind = util.inv_dict(_addr_kind_data_types)
+
+assert set(_unsupported_types) | set(_data_types_addr_kind) == set(_data_type_lengths)
 
 def _i2b(val): return bytes((val,))
 
@@ -141,15 +146,16 @@ class ScriptOutput(ScriptOutputBase):
         return ScriptOutput(self)
 
     @staticmethod
-    def _check_name_address(name, address):
+    def _check_name_address(name, address, *, allow_unknown=False):
         '''Raises ArgumentError if either name or address are somehow invalid.'''
         if not isinstance(name, str) or not name_accept_re.match(name):
             raise ArgumentError('Invalid name specified: must be an alphanumeric ascii string of length 1-99', name)
         if name != name.encode('ascii', errors='ignore').decode('ascii', errors='ignore'):  # <-- ensure ascii.  Note that this test is perhaps superfluous but the mysteries of unicode and how re's deal with it elude me, so it's here just in case.
             raise ArgumentError('Name must be pure ascii', name)
-        if not isinstance(address, Address):
-            raise ArgumentError('Address of type \'Address\' expected', address)
-        if address.kind not in _addr_kind_data_types:
+        allowed_classes = (Address, UnknownAddress) if allow_unknown else (Address,)
+        if not isinstance(address, allowed_classes):
+            raise ArgumentError(f'Address of type \'{allowed_classes}\' expected', address)
+        if isinstance(address, Address) and address.kind not in _addr_kind_data_types:
             raise ArgumentError('Invalid or unsupported address type', address)
         return True
 
@@ -171,7 +177,7 @@ class ScriptOutput(ScriptOutputBase):
         if fast_check:
             return self.name and self.address and self.number and self.collision_hash
         try:
-            return self._check_name_address(self.name, self.address) and self._check_number_collision_hash(self.number, self.collision_hash)
+            return self._check_name_address(self.name, self.address, allow_unknown=True) and self._check_number_collision_hash(self.number, self.collision_hash)
         except ArgumentError:
             return False
 
@@ -247,7 +253,7 @@ class ScriptOutput(ScriptOutputBase):
         (name: str, address: Address) as a tuple. '''
         script = cls._ensure_script(script)
         # Check prefix, length, and that the 'type' byte is one we know about
-        if not cls._protocol_match_fast(script) or len(script) < 30 or script[-21] not in _data_types_addr_kind:
+        if not cls._protocol_match_fast(script) or len(script) < 30: #or (script[-21] not in _data_types_addr_kind and script[-21] not in _unsupported_types):
             raise ArgumentError('Not a valid CashAcct registration script')
         script_short = script
         try:
@@ -266,12 +272,32 @@ class ScriptOutput(ScriptOutputBase):
         except UnicodeError as e:
             raise ArgumentError('CashAcct names must be ascii encoded', name_bytes) from e
         try:
-            address = Address(hash160_bytes, _data_types_addr_kind[type_byte])
+            req_len = _data_type_lengths.get(type_byte) or 0
+            strict = req_len >= 0
+            req_len = abs(req_len)
+            if type_byte in _data_types_addr_kind:
+                if len(hash160_bytes) != req_len:
+                    if strict:
+                        raise AssertionError('hash160 had wrong length')
+                    else:
+                        util.print_error(f"parse_script: type 0x{type_byte:02x} had length {len(hash160_bytes)} != expected length of {req_len}, will proceed anyway")
+                address = Address(hash160_bytes, _data_types_addr_kind[type_byte])
+            elif type_byte in _unsupported_types:
+                # unsupported type, just acknowledge this registration but
+                # mark the address as unknown
+                if len(hash160_bytes) != req_len:
+                    msg = f"parse_script: unsupported type 0x{type_byte:02x} has unexpected length {len(hash160_bytes)}, expected {req_len}"
+                    util.print_error(msg)
+                    if strict:
+                        raise AssertionError(msg)
+                address = UnknownAddress()
+            else:
+                raise ValueError(f'unknown cash address type 0x{type_byte:02x}')
         except Exception as e:
             # Paranoia -- this branch should never be reached at this point
             raise ArgumentError('Bad address or address could not be parsed') from e
 
-        cls._check_name_address(name, address)  # raises if invalid
+        cls._check_name_address(name, address, allow_unknown=True)  # raises if invalid
 
         return name, address
 
@@ -473,7 +499,7 @@ servers = [
 
 debug = False
 
-def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[]) -> tuple:
+def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[], debug=debug) -> tuple:
     ''' Synchronous lookup, returns a tuple of:
 
             block_hash, List[ RegTx(txid, script) namedtuples ]
@@ -515,6 +541,7 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
         if not isinstance(res, list) or number < 100:
             raise RuntimeError('Bad response')
         block_hash, header_prev = None, None
+        unparseable = set()
         for d in res:
             txraw = d['transaction']
             header_hex = d['inclusion_proof'][:blockchain.HEADER_SIZE*2].lower()
@@ -542,6 +569,12 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
             else:
                 if debug:
                     util.print_error(f"lookup: {txid} had no valid registrations in it using server {server} (len(tx_regs)={len(tx_regs)} op_return_count={op_return_count})")
+                unparseable.add(txid)
+        if unparseable:
+            util.print_error(f"lookup: Warning for block number {number}: got "
+                             f"{len(res)} transactions from the server but "
+                             f"unable to parse {len(unparseable)} of them."
+                             " See if the Cash Accounts spec has changed!", unparseable)
         if debug:
             util.print_error(f"lookup: found {len(ret)} reg txs at block height {block} (number={number})")
         return block_hash, ret
@@ -552,7 +585,7 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
             exc.append(e)
 
 def lookup_asynch(server, number, success_cb, error_cb=None,
-                  name=None, collision_prefix=None, timeout=10.0):
+                  name=None, collision_prefix=None, timeout=10.0, debug=debug):
     ''' Like lookup() above, but spawns a thread and does its lookup
     asynchronously.
 
@@ -571,7 +604,7 @@ def lookup_asynch(server, number, success_cb, error_cb=None,
 
     def thread_func():
         exc = []
-        res = lookup(server=server, number=number, name=name, collision_prefix=collision_prefix, timeout=timeout, exc=exc)
+        res = lookup(server=server, number=number, name=name, collision_prefix=collision_prefix, timeout=timeout, exc=exc, debug=debug)
         called = False
         if res is None:
             if callable(error_cb) and exc:
@@ -588,7 +621,7 @@ def lookup_asynch(server, number, success_cb, error_cb=None,
     t.start()
 
 def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
-                      collision_prefix=None, timeout=10.0):
+                      collision_prefix=None, timeout=10.0, debug=debug):
     ''' Like lookup_asynch above except it tries *all* the hard-coded servers
     from `servers` and if all fail, then calls the error_cb exactly once.
     If any succeed, calls success_cb exactly once.
@@ -632,7 +665,8 @@ def lookup_asynch_all(number, success_cb, error_cb=None, name=None,
         lookup_asynch(server, number = number,
                       success_cb = lambda res,_server=server: on_succ(res,_server),
                       error_cb = on_err,
-                      name = name, collision_prefix = collision_prefix, timeout = timeout)
+                      name = name, collision_prefix = collision_prefix, timeout = timeout,
+                      debug = debug)
 
 class ProcessedBlock:
     __slots__ = ( 'hash',  # str binhex block header hash
@@ -1192,7 +1226,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             l.append((success_cb, error_cb))
             if len(l) == 1:
                 if debug: self.print_error(f"verify_block_asynch: initiating new lookup_asynch_all on #{number}")
-                lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout)
+                lookup_asynch_all(number=number, success_cb=on_success, error_cb=on_error, timeout=timeout, debug=debug)
             else:
                 if debug: self.print_error(f"verify_block_asynch: #{number} already in-flight, will just enqueue callbacks")
 
@@ -1205,7 +1239,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         network = self.network  # just in case network goes away, capture it
         if not self._do_verify_block_argchecks(network=network, number=number, exc=exc, server=server):
             return
-        res = lookup(server=server, number=number, timeout=timeout, exc=exc)
+        res = lookup(server=server, number=number, timeout=timeout, exc=exc, debug=debug)
         if not res:
             return
         return self._verify_block_inner(res, network, server, number, verify_txs, timeout, exc, debug=debug)
@@ -1215,6 +1249,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         the network thread being another thread (it waits for callbacks from it
         to proceed).  Caller should NOT hold any locks. '''
         pb = ProcessedBlock(hash=res[0], height=num2bh(number), reg_txs={ r.txid : r for r in res[1] })
+        if len(pb.reg_txs) == 0:
+            self.print_error(f"Warning, received a block from server with number {number}"
+                             "but we didn't recognize any tx's in it. "
+                             "To the dev reading this: See if the Cash Account spec has changed!")
         # REORG or BAD SERVER CHECK
         def check_sanity_detect_reorg_etc():
             minimal_ch_removed = []
@@ -1629,7 +1667,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     ###############################################
 
     def scan_servers_for_registrations(self, start=100, stop=None, progress_cb=None, error_cb=None, timeout=10.0,
-                                       add_only_mine=True):
+                                       add_only_mine=True, debug=debug):
         ''' This is slow and not particularly useful.  Will maybe delete this
         code soon. I used it for testing to populate wallet.
 
@@ -1662,7 +1700,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 lookup_asynch_all(number=num,
                                   success_cb = lambda res,server: q.put(res),
                                   error_cb = q.put,
-                                  timeout=timeout)
+                                  timeout=timeout, debug=debug)
                 try:
                     thing = q.get(timeout=timeout)
                     if isinstance(thing, Exception):
