@@ -562,7 +562,9 @@ def lookup(server, number, name=None, collision_prefix=None, timeout=10.0, exc=[
         if not isinstance(d, dict) or not d.get('results') or not isinstance(d.get('block'), int):
             raise RuntimeError('Unexpected response', r.text)
         res, block = d['results'], int(d['block'])
-        number = bh2num(block)
+        bnumber = bh2num(block)
+        if bnumber != number:
+            raise RuntimeError('Bad response')
         if not isinstance(res, list) or number < 100:
             raise RuntimeError('Bad response')
         block_hash, header_prev = None, None
@@ -937,7 +939,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return
         # note at this point pb is a verified block and we are sure it has our interested cashacct in it, so figure out the minimal chash
         info = Info.from_regtx(found)
-        tup = self._calc_minimal_chash(info.name, info.number, info.collision_hash, pb)
+        tup = self._calc_minimal_chash(info.name, info.collision_hash, pb)
         if not tup:
             return
         return info, tup[1]
@@ -982,7 +984,10 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 def on_success(pb : ProcessedBlock):
                     minimal_chash = collision_hash  # start with worst-case, so finally block below has data no matter what happens..
                     try:
-                        tup = self._calc_minimal_chash(name, number, collision_hash, pb)
+                        if bh2num(pb.height) != number:
+                            self.print_error(f"get_minimal_chash: WARNING - Internal error. pb.height: {pb.height} != num2bh: {num2bh(number)}")
+                            return
+                        tup = self._calc_minimal_chash(name, collision_hash, pb)
                         if not tup:
                             # hmm. empty results.. or bad lookup. in either case,
                             # don't cache anything.
@@ -1393,27 +1398,30 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     ###################
 
     @staticmethod
-    def _calc_minimal_chash(name: str, number: int, collision_hash: str, pb : ProcessedBlock) -> tuple:
+    def _calc_minimal_chash(name: str, collision_hash: str, pb : ProcessedBlock) -> tuple:
         ''' returns None on failure, otherwise returns (RegTx, minimal_chash) tuple '''
         lname = name.lower()
         i = 0
         found = None
         res_dict = pb.reg_txs
         num_res = int(bool(res_dict) and len(res_dict))
+        pb_num = bh2num(pb.height)
         if num_res > 1:
             N = len(collision_hash)
             for txid, rtx in res_dict.items():
+                if pb_num != rtx.script.number:
+                    util.print_error("_calc_minimal_chash: WARNING, Internal error: Processed block has a differing number from its tx", pb_num, rtx.script.number, txid)
                 if rtx.script.name.lower() != lname:
                     continue
                 ch = rtx.script.collision_hash
-                if ch == collision_hash and rtx.script.number == number:
+                if ch == collision_hash:
                     found = rtx
                     continue
                 while i < N and ch.startswith(collision_hash[:i]):
                     i += 1
         elif num_res == 1:
             rtx = list(res_dict.values())[0]
-            if rtx.script.collision_hash == collision_hash and rtx.script.name.lower() == lname and rtx.script.number == number:
+            if rtx.script.collision_hash == collision_hash and rtx.script.name.lower() == lname:
                 found = rtx
         if not found:
             return
