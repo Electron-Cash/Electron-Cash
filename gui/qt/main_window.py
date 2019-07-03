@@ -2456,13 +2456,21 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payto_e.setText(text)
             self.payto_e.setFocus()
 
-    def set_contact(self, label, address):
+    def set_contact(self, label, address, typ='address'):
+        assert typ in ('address', 'cashacct')
+        if typ == 'cashacct':
+           ca_tup = self.wallet.cashacct.parse_string(label)
+           if not ca_tup:
+               self.show_error(_("Invalid Cash Account name specified.") + "\n\n" + _("This is a Cash Account contact, you may only rename it to another valid Cash Account name."))
+               self.contact_list.update()
+               return False
+            ## TODO: resolve & verify here with waiting dialog to minimal chash and refuse if error
         if not Address.is_valid(address):
             self.show_error(_('Invalid Address'))
             self.contact_list.update()  # Displays original unchanged value
             return False
         old_entry = self.contacts.get(address, None)
-        self.contacts[address] = ('address', label)
+        self.contacts[address] = (typ, label)
         self.contact_list.update()
         self.history_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history

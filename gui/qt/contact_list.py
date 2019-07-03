@@ -27,28 +27,39 @@ from electroncash.i18n import _
 import electroncash.web as web
 from electroncash.address import Address
 from electroncash.plugins import run_hook
-from electroncash.util import FileImportFailed
+from electroncash.util import FileImportFailed, PrintError
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import (
     QAbstractItemView, QFileDialog, QMenu, QTreeWidgetItem)
 from .util import MyTreeWidget, webopen
+from enum import IntEnum
+from collections import defaultdict
 
+class ContactList(PrintError, MyTreeWidget):
+    filter_columns = [1, 2]  # Name, Address
 
-class ContactList(MyTreeWidget):
-    filter_columns = [0, 1]  # Key, Value
+    class DataRoles(IntEnum):
+        Key         = Qt.UserRole + 0
+        Name        = Qt.UserRole + 1
+        Type        = Qt.UserRole + 2
 
     def __init__(self, parent):
-        MyTreeWidget.__init__(self, parent, self.create_menu, [_('Name'), _('Address')], 0, [0], deferred_updates=True)
+        MyTreeWidget.__init__(self, parent, self.create_menu, ["", _('Name'), _('Address'), _('Type') ], 1, [1], deferred_updates=True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
+        self.wallet = parent.wallet
+        self.sortItems(1, Qt.AscendingOrder)
+        self.setIndentation(0)
 
     def on_permit_edit(self, item, column):
         # openalias items shouldn't be editable
-        return item.text(1) != "openalias"
+        return item.data(0, self.DataRoles.Type) != "openalias"
 
     def on_edited(self, item, column, prior_value):
-        self.parent.set_contact(item.text(0), item.text(1))
+        typ = item.data(0, self.DataRoles.Type)
+        name, value = item.text(1), item.text(2)
+        self.parent.set_contact(name, value, typ=typ)
 
     def import_contacts(self):
         wallet_folder = self.parent.get_wallet_folder()
@@ -83,14 +94,14 @@ class ContactList(MyTreeWidget):
             if len(self.parent.contacts):
                 menu.addAction(_("Export file"), lambda: self.export_contacts())
         else:
-            names = [item.text(0) for item in selected]
-            keys = [item.text(1) for item in selected]
+            names = [item.text(1) for item in selected]
+            keys = [item.data(0, self.DataRoles.Key) for item in selected]
             column = self.currentColumn()
             column_title = self.headerItem().text(column)
             column_data = '\n'.join([item.text(column) for item in selected])
             menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data))
-            if column in self.editable_columns:
-                item = self.currentItem()
+            item = self.currentItem()
+            if item and column in self.editable_columns and self.on_permit_edit(item, column):
                 menu.addAction(_("Edit {}").format(column_title), lambda: self.editItem(item, column))
             menu.addAction(_("Pay to"), lambda: self.parent.payto_contacts(keys))
             menu.addAction(_("Delete"), lambda: self.parent.delete_contacts(keys))
@@ -104,12 +115,37 @@ class ContactList(MyTreeWidget):
 
     def on_update(self):
         item = self.currentItem()
-        current_key = item.data(0, Qt.UserRole) if item else None
+        current_key = item.data(0, self.DataRoles.Key) if item else None
         self.clear()
+        type_names = defaultdict(lambda: _("Unknown"))
+        type_names.update({
+            'openalias' : _('OpenAlias'),
+            'cashacct'  : _('Cash Account'),
+            'address'   : _('Address'),
+        })
         for key in sorted(self.parent.contacts.keys()):
             _type, name = self.parent.contacts[key]
-            item = QTreeWidgetItem([name, key])
-            item.setData(0, Qt.UserRole, key)
+            item = QTreeWidgetItem(["", name, key, type_names[_type]])
+            item.setData(0, self.DataRoles.Key, key)
+            item.setData(0, self.DataRoles.Type, _type)
+            item.setData(0, self.DataRoles.Name, name)
+            item.DataRole = self.DataRoles.Name
+            if _type == 'cashacct':
+                nvc = self.wallet.cashacct.parse_string(name)
+                if nvc:
+                    nam, num, ch = nvc
+                    ca_list = self.wallet.cashacct.find_verified(nam, num, ch)
+                    ca_info = len(ca_list) == 1 and ca_list[0] or None
+                    if ca_info:
+                        item.setText(0, ca_info.emoji)
+                        tt = _('Validated Cash Account: <b><pre>{emoji} {account_string}</pre></b>').format(
+                            emoji = ca_info.emoji,
+                            account_string = f'{ca_info.name}#{ca_info.number}.{ca_info.collision_hash};'
+                        )
+                    else:
+                        item.setIcon(0, QIcon(":icons/unconfirmed.svg"))
+                        tt = _('Warning: This Cash Account is not validated')
+                    item.setToolTip(0, tt)
             self.addTopLevelItem(item)
             if key == current_key:
                 self.setCurrentItem(item)
