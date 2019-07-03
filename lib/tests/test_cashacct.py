@@ -54,7 +54,11 @@ class TestCashAccounts(unittest.TestCase):
             self.assertEqual(address, so.address)
             self.assertEqual(num, len(so.addresses))
             self.assertTrue(address in so.addresses)
-            so2 = cashacct.ScriptOutput.create_registration(name, address)
+            if num == 1:
+                so2 = cashacct.ScriptOutput.create_registration(name, address)
+            else:
+                so2 = cashacct.ScriptOutput(so)
+                self.assertTrue(all(isinstance(a, Address) for a in so2.addresses))
             self.assertEqual(so2, so)
             self.assertEqual(so2.name, name)
             self.assertEqual(so2.address, address)
