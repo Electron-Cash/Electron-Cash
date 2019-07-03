@@ -807,7 +807,6 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return None
         return name, number, collision_prefix
 
-
     def get_minimal_chash(self, name, number, collision_hash) -> str:
         ''' Returns a string of the minimal collision hash for a given
         name, number, collision_hash combination. This initially will just
@@ -821,8 +820,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         Client code can use the 'ca_updated_minimal_chash' network callback
         (see below) to be notified asynchronously when minimal_chash's are
         updated. '''
-        lname = name.lower()
-        key = (lname, number, collision_hash)
+        key = (name.lower(), number, collision_hash)
         with self.lock:
             found = self.minimal_ch_cache.get(key)
         if found is not None:
@@ -831,32 +829,13 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             def do_lookup():
                 t0 = time.time()
                 def on_success(pb : ProcessedBlock):
-                    i = 0
-                    found = None
-                    block_hash, res_dict = pb.hash, pb.reg_txs
-                    num_res = int(bool(res_dict) and len(res_dict))
-                    if num_res > 1:
-                        i = 1
-                        N = len(collision_hash)
-                        for txid, rtx in res_dict.items():
-                            if rtx.script.name.lower() != lname:
-                                continue
-                            ch = rtx.script.collision_hash
-                            if ch == collision_hash and rtx.script.number == number:
-                                found = rtx
-                                continue
-                            while i < N and ch.startswith(collision_hash[:i]):
-                                i += 1
-                    elif num_res:
-                        rtx = list(res_dict.values())[0]
-                        if rtx.script.collision_hash == collision_hash:
-                            found = rtx
-                    if not found:
+                    tup = self._calc_minimal_chash(name, number, collision_hash, pb)
+                    if not tup:
                         # hmm. empty results.. or bad lookup. in either case,
                         # don't cache anything.
-                        self.print_error("get_minimal_chash: no results found for", *key, "(server =", server, ")")
+                        self.print_error("get_minimal_chash: no results found for", name, number, collision_hash)
                         return
-                    minimal_chash = collision_hash[:i]
+                    found, minimal_chash = tup
                     with self.lock:
                         self.minimal_ch_cache.put(key, minimal_chash)
                     self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
@@ -1247,6 +1226,35 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     ###################
     # Private Methods #
     ###################
+
+    @staticmethod
+    def _calc_minimal_chash(name: str, number: int, collision_hash: str, pb : ProcessedBlock) -> tuple:
+        ''' returns None on failure, otherwise returns (RegTx, minimal_chash) tuple '''
+        lname = name.lower()
+        i = 0
+        found = None
+        res_dict = pb.reg_txs
+        num_res = int(bool(res_dict) and len(res_dict))
+        if num_res > 1:
+            i = 1
+            N = len(collision_hash)
+            for txid, rtx in res_dict.items():
+                if rtx.script.name.lower() != lname:
+                    continue
+                ch = rtx.script.collision_hash
+                if ch == collision_hash and rtx.script.number == number:
+                    found = rtx
+                    continue
+                while i < N and ch.startswith(collision_hash[:i]):
+                    i += 1
+        elif num_res:
+            rtx = list(res_dict.values())[0]
+            if rtx.script.collision_hash == collision_hash:
+                found = rtx
+        if not found:
+            return
+        minimal_chash = collision_hash[:i]
+        return found, minimal_chash
 
     def _fw_wallet_updated(self, evt, *args):
         ''' Our private verifier is done. Propagate updated signal to parent
