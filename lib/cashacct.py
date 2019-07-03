@@ -798,7 +798,7 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return None
         try:
             number = int(number)
-            collision_prefix = collision_prefix and str(int(collision_prefix))  # make sure it is all numbers
+            collision_prefix = collision_prefix and str(int(collision_prefix)) and collision_prefix  # make sure it is all numbers
         except:
             return None
         if number < 100:
@@ -807,7 +807,71 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return None
         return name, number, collision_prefix
 
-    def get_minimal_chash(self, name, number, collision_hash) -> str:
+    def resolve_verify(self, ca_string : str, timeout: float = 10.0, *,
+                       skip_caches: bool = False, only_cached: bool = False) -> tuple:
+        ''' Blocking resolver for Cash Account names. Given a ca_string of the
+        form: name#number[.123], will verify the block it is on and do other
+        magic. It will return a tuple of (Info, minimal_chash).
+
+        If skip_caches is True, it won't check any caches and will go out
+        to the network each time.  If False, it may return immediately if
+        the results are cached/known already.
+
+        timeout is a timeout in seconds. If timer expires None is returned.
+
+        It will return None on other failures as well. '''
+        assert not only_cached or (only_cached and not skip_caches)
+        tup = self.parse_string(ca_string)
+        if not tup:
+            return
+        name, number, chash = tup
+        if not skip_caches:
+            res = self.find_verified(name, number, chash)
+            if res and len(res) == 1:
+                info = res[0]
+                minimal_chash = info.collision_hash
+                done = threading.Event()
+                def on_success(tup, min_ch):
+                    nonlocal minimal_chash
+                    minimal_chash = min_ch
+                    done.set()
+                self.get_minimal_chash(info.name, info.number, info.collision_hash, skip_caches=False, success_cb=on_success, only_cached=only_cached)
+                if not done.wait(timeout=timeout):
+                    return
+                return info, minimal_chash
+        if only_cached:
+            # refuse to proceed if caller insisted on only_cached, returning failure result
+            return
+        # fall thuru if above fails
+        done = threading.Event()
+        pb = None
+        def done_cb(thing):
+            nonlocal pb
+            if isinstance(thing, ProcessedBlock) and thing.reg_txs:
+                pb = thing
+            done.set()
+        self.verify_block_asynch(number, success_cb=done_cb, error_cb=done_cb, timeout=timeout)
+        if not done.wait(timeout=timeout) or not pb:
+            return
+        candidates = set()
+        found = None
+        lname = name.lower()
+        for txid, rtx in pb.reg_txs.items():
+            if rtx.script.name.lower() == lname and rtx.script.number == number and rtx.script.collision_hash.startswith(chash):
+                candidates.add(txid)
+                found = rtx
+        if len(candidates) != 1 or not found:  # ambiguous or non-existent name/number/chash combo specified, return
+            return
+        # note at this point pb is a verified block and we are sure it has our interested cashacct in it, so figure out the minimal chash
+        info = Info.from_regtx(found)
+        tup = self._calc_minimal_chash(info.name, info.number, info.collision_hash, pb)
+        if not tup:
+            return
+        return info, tup[1]
+
+
+    def get_minimal_chash(self, name, number, collision_hash, *,
+                          success_cb = None, skip_caches = False, only_cached = False) -> str:
         ''' Returns a string of the minimal collision hash for a given
         name, number, collision_hash combination. This initially will just
         return collision_hash, but will go out to the network and
@@ -819,33 +883,54 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
 
         Client code can use the 'ca_updated_minimal_chash' network callback
         (see below) to be notified asynchronously when minimal_chash's are
-        updated. '''
+        updated.
+
+        Optionally client code can supply a success_cb callback function which
+        will be passed 2 args:  (name, number, collision_hash), minimal_collision_hash
+        Callback if specified is guaranteed to be called before or after this
+        function returns, but it may be called in another thread.'''
         key = (name.lower(), number, collision_hash)
-        with self.lock:
-            found = self.minimal_ch_cache.get(key)
+        def call_success_cb(min_ch):
+            ''' Inform caller if they supplied a callback that the process is done. '''
+            if success_cb: success_cb((name, number, collision_hash), min_ch)
+        found = None
+        if not skip_caches:
+            with self.lock:
+                found = self.minimal_ch_cache.get(key)
         if found is not None:
+            call_success_cb(found)
             return found
+        elif only_cached:
+            call_success_cb(collision_hash)
+            return collision_hash
         else:
             def do_lookup():
                 t0 = time.time()
                 def on_success(pb : ProcessedBlock):
-                    tup = self._calc_minimal_chash(name, number, collision_hash, pb)
-                    if not tup:
-                        # hmm. empty results.. or bad lookup. in either case,
-                        # don't cache anything.
-                        self.print_error("get_minimal_chash: no results found for", name, number, collision_hash)
-                        return
-                    rtx, minimal_chash = tup
-                    with self.lock:
-                        self.minimal_ch_cache.put(key, minimal_chash)
-                    self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
-                    network = self.network  # capture network obj to avoid race conditions with self.stop()
-                    if network and rtx and minimal_chash != collision_hash:
-                        network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(rtx), minimal_chash)
+                    minimal_chash = collision_hash  # start with worst-case, so finally block below has data no matter what happens..
+                    try:
+                        tup = self._calc_minimal_chash(name, number, collision_hash, pb)
+                        if not tup:
+                            # hmm. empty results.. or bad lookup. in either case,
+                            # don't cache anything.
+                            self.print_error("get_minimal_chash: no results found for", name, number, collision_hash)
+                            return
+                        rtx, minimal_chash = tup
+                        with self.lock:
+                            self.minimal_ch_cache.put(key, minimal_chash)
+                        self.print_error(f"get_minimal_chash: network lookup completed in {time.time()-t0:1.2f} seconds")
+                        network = self.network  # capture network obj to avoid race conditions with self.stop()
+                        if network and rtx and minimal_chash != collision_hash:
+                            network.trigger_callback('ca_updated_minimal_chash', self, Info.from_regtx(rtx), minimal_chash)
+                    finally:
+                        call_success_cb(minimal_chash)
                 # /on_success
                 self.verify_block_asynch(number=number, success_cb=on_success)
             if self.network:  # only do this if not 'offline'
                 do_lookup()  # start the asynch lookup
+            else:
+                # no network, just call success_cb anyway with what we have so caller doesn't block on waiting for callback...
+                call_success_cb(collision_hash)
             # Immediately return the long-form chash so we give the caller a
             # result immediately, even if it is not the final result.
             # The caller should subscribe to the ca_updated_minimal_chash
@@ -1236,7 +1321,6 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         res_dict = pb.reg_txs
         num_res = int(bool(res_dict) and len(res_dict))
         if num_res > 1:
-            i = 1
             N = len(collision_hash)
             for txid, rtx in res_dict.items():
                 if rtx.script.name.lower() != lname:
@@ -1247,9 +1331,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     continue
                 while i < N and ch.startswith(collision_hash[:i]):
                     i += 1
-        elif num_res:
+        elif num_res == 1:
             rtx = list(res_dict.values())[0]
-            if rtx.script.collision_hash == collision_hash:
+            if rtx.script.collision_hash == collision_hash and rtx.script.name.lower() == lname and rtx.script.number == number:
                 found = rtx
         if not found:
             return
