@@ -3130,7 +3130,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except SerializationError as e:
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
-    def do_process_from_txid(self, *, txid=None, parent=None):
+    def do_process_from_txid(self, *, txid=None, parent=None, tx_desc=None):
         parent = parent or self
         if self.gui_object.warn_if_no_network(parent):
             return
@@ -3144,7 +3144,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 parent.show_message(_("Error retrieving transaction") + ":\n" + r)
                 return
             tx = transaction.Transaction(r, sign_schnorr=self.wallet.is_schnorr_enabled())  # note that presumably the tx is already signed if it comes from blockchain so this sign_schnorr parameter is superfluous, but here to satisfy my OCD -Calin
-            self.show_transaction(tx)
+            self.show_transaction(tx, tx_desc=tx_desc)
 
     @protected
     def export_privkeys_dialog(self, password):

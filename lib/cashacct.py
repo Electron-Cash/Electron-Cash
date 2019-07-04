@@ -471,7 +471,7 @@ emoji_list = ( 128123, 128018, 128021, 128008, 128014, 128004, 128022, 128016,
                9986, 128273, 128274, 128296, 128295, 9878, 9775, 128681,
                128099, 127838 )
 
-emoji_set = frozenset(emoji_list)
+emoji_set = frozenset(chr(o) for o in emoji_list)
 
 def emoji(block_hash, txid):
     ''' Returns the emoji character givern a block hash and txid. May raise.'''
@@ -881,44 +881,24 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             return None
         return name, number, collision_prefix
 
-    def resolve_verify(self, ca_string : str, timeout: float = 10.0, *,
-                       skip_caches: bool = False, only_cached: bool = False) -> tuple:
+    def resolve_verify(self, ca_string : str, timeout: float = 10.0) -> List[Tuple[Info, str]]:
         ''' Blocking resolver for Cash Account names. Given a ca_string of the
         form: name#number[.123], will verify the block it is on and do other
-        magic. It will return a tuple of (Info, minimal_chash).
+        magic. It will return a list of tuple of (Info, minimal_chash).
 
-        If skip_caches is True, it won't check any caches and will go out
-        to the network each time.  If False, it may return immediately if
-        the results are cached/known already.
-
-        None is returned if there are multiple (ambiguous) results.
+        This goes out to the network each time, so use it in GUI code that
+        really needs to know verified CashAccount tx's (eg before sending funds),
+        but not in advisory GUI code, since it can be slow (on the order of less
+        than a second to several seconds depending on network speed).
 
         timeout is a timeout in seconds. If timer expires None is returned.
 
-        It will return None on other failures as well. '''
-        assert not only_cached or (only_cached and not skip_caches)
+        It will return None on failure or nothing found. '''
         tup = self.parse_string(ca_string)
         if not tup:
             return
         name, number, chash = tup
-        if not skip_caches:
-            res = self.find_verified(name, number, chash)
-            if res and len(res) == 1:
-                info = res[0]
-                minimal_chash = info.collision_hash
-                done = threading.Event()
-                def on_success(tup, min_ch):
-                    nonlocal minimal_chash
-                    minimal_chash = min_ch
-                    done.set()
-                self.get_minimal_chash(info.name, info.number, info.collision_hash, skip_caches=False, success_cb=on_success, only_cached=only_cached)
-                if not done.wait(timeout=timeout):
-                    return
-                return info, minimal_chash
-        if only_cached:
-            # refuse to proceed if caller insisted on only_cached, returning failure result
-            return
-        # fall thuru if above fails
+        specified_chash = chash or ''
         done = threading.Event()
         pb = None
         def done_cb(thing):
@@ -929,21 +909,31 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.verify_block_asynch(number, success_cb=done_cb, error_cb=done_cb, timeout=timeout)
         if not done.wait(timeout=timeout) or not pb:
             return
-        candidates = set()
+        matches = list()
         found = None
         lname = name.lower()
         for txid, rtx in pb.reg_txs.items():
-            if rtx.script.name.lower() == lname and rtx.script.number == number and rtx.script.collision_hash.startswith(chash):
-                candidates.add(txid)
-                found = rtx
-        if len(candidates) != 1 or not found:  # ambiguous or non-existent name/number/chash combo specified, return
-            return
-        # note at this point pb is a verified block and we are sure it has our interested cashacct in it, so figure out the minimal chash
-        info = Info.from_regtx(found)
-        tup = self._calc_minimal_chash(info.name, info.collision_hash, pb)
-        if not tup:
-            return
-        return info, tup[1]
+            rtx_lname = rtx.script.name.lower()
+            if rtx_lname == lname:
+                matches.append((txid, rtx_lname, rtx.script.collision_hash))
+
+        if not matches:
+            return # no match
+
+        d = self._calc_minimal_chashes_for_sorted_lcased_tups(sorted(t[1:] for t in matches))
+
+        ret = []
+        empty_dict = dict()
+        for txid, lname, chash in matches:
+            min_chash = d.get(lname, empty_dict).get(chash, None)
+            if min_chash is None:
+                self.print_error(f"resolve_verify: WARNING! Internal Error! Did not find calculated minimal chash for {lname}.{chash}. FIXME!")
+                min_chash = chash
+            rtx = pb.reg_txs[txid]
+            if rtx.script.collision_hash.startswith(specified_chash):
+                info = Info.from_regtx(rtx)
+                ret.append((info, min_chash))
+        return ret or None
 
 
     def get_minimal_chash(self, name, number, collision_hash, *,
