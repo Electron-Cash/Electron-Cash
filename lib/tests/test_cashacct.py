@@ -185,7 +185,7 @@ class TestCashAccounts(unittest.TestCase):
             '1939867611',
             '4677311172',
         ]
-        all_chs = my_collision_hash + other_collision_hashes
+        all_chs = [my_collision_hash] + other_collision_hashes
         myname = 'calin'
         l = []
         for ch in all_chs:
