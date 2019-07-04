@@ -170,3 +170,30 @@ class TestCashAccounts(unittest.TestCase):
         self.assertEqual(cashacct.emoji(bh, th), chr(9775))  # == '☯'
         # block height modification -> number
         self.assertEqual(cashacct.number_from_block_height(563720), 100)
+
+    def test_minimal_collision_hash(self):
+        ''' Tests the minimal collision hash calculaction algorithm '''
+        my_collision_hash = '0321123151'
+        other_collision_hashes = [
+            '2501905124',
+            '0736985563',
+            '3806873923',
+            '3401870692',
+            '0627868303',
+            '8419948552',
+            '5363727682',
+            '1939867611',
+            '4677311172',
+        ]
+        all_chs = my_collision_hash + other_collision_hashes
+        myname = 'calin'
+        l = []
+        for ch in all_chs:
+            l.append((myname, ch))
+        for i in range(10000):
+            n = 'jimmy' + chr(ord('a') + random.randrange(26))
+            for j in range(6):
+                l.append((n, all_chs[random.randrange(len(all_chs))]))
+        d = CashAcct._calc_minimal_chashes_for_sorted_lcased_tups(sorted(l))
+        self.assertEqual(sum(len(v) for k,v in d.items()), len(l))
+        self.assertEqual(d[myname][my_collision_hash], '03')
