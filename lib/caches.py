@@ -157,7 +157,7 @@ class _ExpiringCacheMgr(PrintError):
                 elif cls.debug:
                     slf.print_error("Warning: Cache thread was stoppped before we had a chance to kill it")
                 cls._instance = None  # kill self.
-        if thread2join:
+        if thread2join and thread2join is not threading.current_thread():
             # we do this here as defensive programming to avoid deadlocks in case
             # thread ends up taking locks in some future implementation.
             thread2join.join()
