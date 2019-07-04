@@ -93,22 +93,28 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet=None) -> Tuple
         ca_tup = wallet.cashacct.parse_string(name)
         if not ca_tup:
             raise Bad(_("Invalid Cash Account name specified: {name}").format(name=name))
-        info_min = None
+        results = None
         def resolve_verify():
-            nonlocal info_min
-            info_min = wallet.cashacct.resolve_verify(name, skip_caches=True)
+            nonlocal results
+            results = wallet.cashacct.resolve_verify(name)
         code = VerifyingDialog(parent.top_level_window(),
                                _("Verifying Cash Account {name}, please wait ...").format(name=name),
                                resolve_verify, auto_show=False).exec_()
         if code == QDialog.Rejected:
             # user cancel operation
             return
-        if not info_min:
-            raise Bad(_("Cash Account not found or ambiguous: {name}").format(name=name) + "\n\n"
+        if not results:
+            raise Bad(_("Cash Account not found: {name}").format(name=name) + "\n\n"
                       + _("Could not find the Cash Account name specified. "
-                          "It either does not exist or requires more collision hash characters to be resolved. "
+                          "It either does not exist or there may have been a network connectivity error. "
                           "Please double-check it and try again."))
-        info, mch = info_min
+        if len(results) > 1:
+            tup = multiple_result_picker(parent=parent, wallet=wallet, results=results)
+            if not tup:
+                # user cancel
+                return
+            results = [tup]
+        info, mch = results[0]
         name = wallet.cashacct.fmt_info(info, mch)
         if not isinstance(info.address, Address):
             raise Bad(_("Unsupported payment data type.") + "\n\n"
@@ -118,3 +124,130 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet=None) -> Tuple
     except Bad as e:
         parent.show_error(str(e))
     return None
+
+def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, gbtext=None):
+    assert parent
+    from .main_window import ElectrumWindow
+    if isinstance(parent, ElectrumWindow) and not wallet:
+        wallet = parent.wallet
+    assert wallet
+
+    # sort results by formatted cash account string, also adding the string to
+    # the results tuples; tuples now are modified to 3 elements:
+    # (info, min_chash, formatted_ca_string)
+    formatter = lambda x: (x[0], x[1], wallet.cashacct.fmt_info(x[0], x[1]))
+    results = sorted((formatter(x) for x in results), key=lambda tup:tup[2])
+    msg = msg or _('Multiple results were found, please select an option from the items below:')
+    title = title or _("Select Cash Account")
+    gbtext = gbtext or _("{number} Cash Account(s)").format(number=len(results))
+
+    d = WindowModalDialog(parent, title)
+    util.finalization_print_error(d)  # track object lifecycle
+    destroyed_print_error(d)
+
+    vbox = QVBoxLayout(d)
+    lbl = WWLabel(msg)
+    vbox.addWidget(lbl)
+
+    gb = QGroupBox(gbtext)
+    vbox.addWidget(gb)
+
+    grid = QGridLayout(gb)
+    but_grp = QButtonGroup(gb)
+    row, col = -1, 0
+    cols = 2
+
+
+    class AssociatedLabel(QLabel):
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.but = None
+            self.setTextInteractionFlags(self.textInteractionFlags() | Qt.TextSelectableByMouse)
+
+        def setBut(self, b): self.but = b
+
+        def mouseReleaseEvent(self, e):
+            super().mouseReleaseEvent(e)
+            if self.but:
+                if self.but.isEnabled():
+                    self.but.click()
+                elif self.but.toolTip() and not self.hasSelectedText():
+                    QToolTip.showText(QCursor.pos(), self.but.toolTip(), self)
+
+
+    def view_tx_link_activated(txid):
+        if isinstance(parent, ElectrumWindow):
+            parent.do_process_from_txid(txid=txid, tx_desc=wallet.get_label(txid))
+
+    grid.setVerticalSpacing(4)
+
+    for i, item in enumerate(results):
+        col = col % cols
+        if not col:
+            row += 1
+        info, min_chash, ca_string = item
+        # Radio button (by itself in colum 0)
+        rb = QRadioButton()
+        is_valid = True
+        if not isinstance(info.address, Address):
+            rb.setDisabled(True)
+            is_valid = False
+            rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
+        but_grp.addButton(rb, i)
+        grid.addWidget(rb, row*3, col*4, 1, 1)
+        pretty_string = info.emoji + " " + ca_string[:-1]
+        chash_extra = info.collision_hash[len(min_chash):]
+        if not min_chash:
+            chash_extra = "." + chash_extra
+
+        # Cash Account name
+        ca_lbl = AssociatedLabel(f'<b>{pretty_string}</b><font size=-1><i>{chash_extra}</i></font><b>;</b>')
+        ca_lbl.setBut(rb)
+        grid.addWidget(ca_lbl, row*3, col*4+1, 1, 1)
+
+        # View tx ...
+        viewtx = _("View tx")
+        view_tx_lbl = WWLabel(f'<font size=-1><a href="{info.txid}">{viewtx}...</a></font>')
+        grid.addWidget(view_tx_lbl, row*3, col*4+2, 1, 1)
+
+        # copy button
+        copy_but = QPushButton(QIcon(":icons/copy.png"), "")
+        copy_but.setFlat(True)
+        grid.addWidget(copy_but, row*3, col*4+3, 1, 1)
+
+        if isinstance(parent, ElectrumWindow):
+            view_tx_lbl.linkActivated.connect(view_tx_link_activated)
+            copy_but.clicked.connect(lambda ignored=None, ca_string=ca_string, copy_but=copy_but:
+                                         parent.copy_to_clipboard(text=ca_string, tooltip=_('Cash Account copied to clipboard'), widget=copy_but) )
+        else:
+            view_tx_lbl.setHidden(True)
+            copy_but.setHidden(True)
+
+        addr_lbl = AssociatedLabel('')
+        addr_lbl.setBut(rb)
+        if is_valid:
+            addr_lbl.setText(f'{info.address.to_ui_string()}')
+        else:
+            addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
+            addr_lbl.setToolTip(rb.toolTip())
+        grid.addWidget(addr_lbl, row*3+1, col*4+1, 1, 3)
+
+        spacer = QSpacerItem(1, 8)
+        grid.addItem(spacer, row*3+2, col*4, 1, 4)
+
+        col += 1
+
+    ok_but = OkButton(d)
+    buts = Buttons(CancelButton(d), ok_but)
+    vbox.addLayout(buts)
+    ok_but.setEnabled(False)
+
+    but_grp.buttonClicked.connect(lambda x: ok_but.setEnabled(True))
+
+    code = d.exec_()
+
+    if code == QDialog.Accepted:
+        which = but_grp.checkedId()
+        if which > -1 and which < len(results):
+            return results[which][:-1]
