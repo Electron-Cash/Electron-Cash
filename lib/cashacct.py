@@ -37,7 +37,7 @@ import queue
 import random
 import time
 from collections import defaultdict, namedtuple
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from . import bitcoin
 from . import util
 from .address import Address, OpCodes, Script, ScriptError, UnknownAddress
@@ -53,11 +53,12 @@ protocol_code = bytes.fromhex("01010101")
 
 activation_height = 563720  # all cash acct registrations are invalid if they appear before this block height
 height_modification = activation_height - 100  # compute the cashacct.number by subtracting this value from tx block height
+collision_hash_length = 10  # DO NOT MODIFY -- this is hard-coded in spec
 
 # This RE is used to accept/reject names
 name_accept_re = re.compile(r'^[a-zA-Z0-9_]{1,99}$')
 # Accept/reject collision_hash -- must be a number string of precisely length 10
-collision_hash_accept_re = re.compile(r'^[0-9]{10}$')
+collision_hash_accept_re = re.compile(f'^[0-9]{{{collision_hash_length}}}$')
 
 # mapping of Address.kind -> cash account data types
 _addr_kind_data_types = { Address.ADDR_P2PKH : 0x1, Address.ADDR_P2SH : 0x2 }
@@ -1397,36 +1398,77 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
     # Private Methods #
     ###################
 
-    @staticmethod
-    def _calc_minimal_chash(name: str, collision_hash: str, pb : ProcessedBlock) -> tuple:
+    @classmethod
+    def _calc_minimal_chash(cls, name: str, collision_hash: str, pb : ProcessedBlock) -> Tuple[RegTx, str]:
         ''' returns None on failure, otherwise returns (RegTx, minimal_chash) tuple '''
-        lname = name.lower()
-        i = 0
-        found = None
-        res_dict = pb.reg_txs
-        num_res = int(bool(res_dict) and len(res_dict))
+        num_res = int(bool(pb.reg_txs) and len(pb.reg_txs))
         pb_num = bh2num(pb.height)
-        if num_res > 1:
-            N = len(collision_hash)
-            for txid, rtx in res_dict.items():
-                if pb_num != rtx.script.number:
-                    util.print_error("_calc_minimal_chash: WARNING, Internal error: Processed block has a differing number from its tx", pb_num, rtx.script.number, txid)
-                if rtx.script.name.lower() != lname:
-                    continue
-                ch = rtx.script.collision_hash
-                if ch == collision_hash:
-                    found = rtx
-                    continue
-                while i < N and ch.startswith(collision_hash[:i]):
-                    i += 1
-        elif num_res == 1:
-            rtx = list(res_dict.values())[0]
-            if rtx.script.collision_hash == collision_hash and rtx.script.name.lower() == lname:
-                found = rtx
-        if not found:
+        if not num_res:
+            util.print_error(f"_calc_minimal_chash: no results in block {pb_num}!")
             return
-        minimal_chash = collision_hash[:i]
+        lc_name = name.lower()
+        d = cls._calc_minimal_chashes_for_block(pb, lc_name)
+        minimal_chash = d.get(lc_name, {}).get(collision_hash, None)
+        if minimal_chash is None:
+            util.print_error(f"_calc_minimal_chash: WARNING INTERNAL ERROR: Could not find the minimal_chash for {pb_num} {lc_name}!")
+            return
+        found = None
+        for rtx in pb.reg_txs.values():
+            if lc_name == rtx.script.name.lower() and collision_hash == rtx.script.collision_hash:
+                found = rtx
+                break
+        if not found:
+            util.print_error(f"_calc_minimal_chash: WARNING INTERNAL ERROR: Could not find the minimal_chash for {pb_num} {lc_name}!")
+            return
+        if found.script.number != pb_num:
+            util.print_error(f"_calc_minimal_chash: WARNING: script number differs from block number for block {pb_num} {lc_name} {found.txid}!")
         return found, minimal_chash
+
+    @classmethod
+    def _calc_minimal_chashes_for_block(cls, pb : ProcessedBlock, name: str = None) -> Dict[str, Dict[str, str]]:
+        ''' Given a ProcessedBlock, returns a dict of:
+            lc_name -> dict of collision_hash -> minimal_collision_hash.
+
+            Optionally, pass a name to filter by name. '''
+        if name is not None:
+            name = name.lower()
+            tups = sorted( (rtx.script.name.lower(), rtx.script.collision_hash)
+                           for rtx in pb.reg_txs.values()
+                           if rtx.script.name.lower() == name )
+        else:
+            tups = sorted( (rtx.script.name.lower(), rtx.script.collision_hash)
+                           for rtx in pb.reg_txs.values() )
+        # tups is now a sorted list of (name, collision_hash)
+        return cls._calc_minimal_chashes_for_sorted_lcased_tups(tups)
+
+    @staticmethod
+    def _calc_minimal_chashes_for_sorted_lcased_tups(tups : List[Tuple[str,str]]) -> Dict[str, Dict[str, str]]:
+        '''' Given a list of sorted tuples, with names already all lowercased,
+        returns a dict of:
+
+        lc_ name -> dict of collision_hash -> minimal_collision_hash '''
+        ret = defaultdict(dict)
+
+        N = collision_hash_length
+        idxs = [0] * len(tups)
+        for i in range(len(tups)-1):
+
+            pnam, pch = tups[i]
+            nam, ch = tups[i+1]
+
+            j = 0
+            if pnam == nam:
+                while j < N and ch[:j] == pch[:j]:
+                    j += 1
+            idxs[i] = max(idxs[i], j)
+            idxs[i+1] = max(idxs[i+1], j)
+
+        for n, tupe in enumerate(tups):
+            nam, ch = tupe
+            ret[nam][ch] = ch[:idxs[n]]
+
+        return ret
+
 
     def _fw_wallet_updated(self, evt, *args):
         ''' Our private verifier is done. Propagate updated signal to parent
