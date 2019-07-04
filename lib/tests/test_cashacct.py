@@ -194,6 +194,6 @@ class TestCashAccounts(unittest.TestCase):
             n = 'jimmy' + chr(ord('a') + random.randrange(26))
             for j in range(6):
                 l.append((n, all_chs[random.randrange(len(all_chs))]))
-        d = CashAcct._calc_minimal_chashes_for_sorted_lcased_tups(sorted(l))
+        d = cashacct.CashAcct._calc_minimal_chashes_for_sorted_lcased_tups(sorted(l))
         self.assertEqual(sum(len(v) for k,v in d.items()), len(l))
         self.assertEqual(d[myname][my_collision_hash], '03')
