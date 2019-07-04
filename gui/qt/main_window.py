@@ -4603,11 +4603,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             name = line_dialog(self, _("Register A New Cash Account"),
                                (_("You are registering a new <a href='ca'>Cash Account</a> for address <b>{address}</b>.").format(address=addr.to_ui_string())
                                 + "<br><br>" + _("How it works: <a href='ca'>Cash Accounts</a> registrations work by issuing an <b>OP_RETURN</b> transaction to yourself, costing fractions of a penny. "
-                                                 "In order to proceed, you must specify the <b>name</b> you wish to associate with the above <b>address</b>. "
                                                  "You will be offered the opportunity to review the generated transaction before broadcasting it to the blockchain.")
                                 + "<br><br>" + _("The current block height is <b><i>{block_height}</i></b>, so the new cash account will likely look like: <b><u><i>AccountName<i>#{number}</u></b>.")
                                 .format(block_height=lh or '???', number=max(cashacct.bh2num(lh or 0)+1, 0) or '???')
-                                + "<br><br>" + _("Specify the account name below (limit to 99 characters):") ),
+                                + "<br><br>" + _("Specify the <b>account name</b> below (limited to 99 characters):") ),
                                _("Proceed to Send Tab"), default=name, linkActivated=on_link)
             if name is None:
                 # user cancel
