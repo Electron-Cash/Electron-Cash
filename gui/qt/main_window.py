@@ -1017,7 +1017,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     self.wallet.network.register_callback(slf.on_network, ['ca_updated_minimal_chash'])
             def clean_up(slf):
                 slf.cleaned_up = True
-                self.wallet.network.unregister_callback(slf.on_network)
+                if self.wallet.network:
+                    self.wallet.network.unregister_callback(slf.on_network)
             def set_cash_acct(slf, info: cashacct.Info = None, minimal_chash = None):
                 if not info and self.receive_address:
                     minimal_chash = None
