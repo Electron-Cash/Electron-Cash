@@ -102,7 +102,12 @@ class _ExpiringCacheMgr(PrintError):
 
     Note that after the last cache is gc'd the manager thread will exit and
     this singleton object also will expire and clean itself up automatically.'''
-    _lock = threading.RLock()  # used to lock _instance and self.caches
+
+    # This lock is used to lock _instance and self.caches.
+    # NOTE: This lock *must* be a recursive lock as the gc callback function
+    # may end up executing in the same thread as our add_cache() method,
+    # due to the way Python GC works!
+    _lock = threading.RLock()
     _instance = None
     tick = 0
     tick_interval = 10.0  # seconds; we wake up this often to update 'tick' and also to expire old items for overflowing caches
