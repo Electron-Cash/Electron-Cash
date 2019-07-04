@@ -102,7 +102,7 @@ class _ExpiringCacheMgr(PrintError):
 
     Note that after the last cache is gc'd the manager thread will exit and
     this singleton object also will expire and clean itself up automatically.'''
-    _lock = threading.Lock()  # used to lock _instance and self.caches
+    _lock = threading.RLock()  # used to lock _instance and self.caches
     _instance = None
     tick = 0
     tick_interval = 10.0  # seconds; we wake up this often to update 'tick' and also to expire old items for overflowing caches
