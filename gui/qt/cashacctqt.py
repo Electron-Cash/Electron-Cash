@@ -125,6 +125,25 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet=None) -> Tuple
         parent.show_error(str(e))
     return None
 
+class ButtonAssociatedLabel(QLabel):
+
+    def __init__(self, *args, **kwargs):
+        but = kwargs.pop('button', None)
+        super().__init__(*args, **kwargs)
+        self.but = but
+        self.setTextInteractionFlags(self.textInteractionFlags() | Qt.TextSelectableByMouse)
+
+    def setButton(self, b): self.but = b
+    def button(self): return self.but
+
+    def mouseReleaseEvent(self, e):
+        super().mouseReleaseEvent(e)
+        if self.but:
+            if self.but.isEnabled():
+                self.but.click()
+            elif self.but.toolTip() and not self.hasSelectedText():
+                QToolTip.showText(QCursor.pos(), self.but.toolTip(), self)
+
 def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, gbtext=None):
     assert parent
     from .main_window import ElectrumWindow
@@ -158,27 +177,17 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
     cols = 2
 
 
-    class AssociatedLabel(QLabel):
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.but = None
-            self.setTextInteractionFlags(self.textInteractionFlags() | Qt.TextSelectableByMouse)
-
-        def setBut(self, b): self.but = b
-
-        def mouseReleaseEvent(self, e):
-            super().mouseReleaseEvent(e)
-            if self.but:
-                if self.but.isEnabled():
-                    self.but.click()
-                elif self.but.toolTip() and not self.hasSelectedText():
-                    QToolTip.showText(QCursor.pos(), self.but.toolTip(), self)
-
-
     def view_tx_link_activated(txid):
         if isinstance(parent, ElectrumWindow):
             parent.do_process_from_txid(txid=txid, tx_desc=wallet.get_label(txid))
+
+    def view_addr_link_activated(addr):
+        if isinstance(parent, ElectrumWindow):
+            try:
+                address = Address.from_string(addr)
+                parent.show_address(address, parent=parent.top_level_window())
+            except Exception as e:
+                parent.print_error(repr(e))
 
     grid.setVerticalSpacing(4)
 
@@ -190,10 +199,13 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
         # Radio button (by itself in colum 0)
         rb = QRadioButton()
         is_valid = True
+        is_mine = False
         if not isinstance(info.address, Address):
             rb.setDisabled(True)
             is_valid = False
             rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
+        elif wallet.is_mine(info.address):
+            is_mine = True
         but_grp.addButton(rb, i)
         grid.addWidget(rb, row*3, col*4, 1, 1)
         pretty_string = info.emoji + " " + ca_string[:-1]
@@ -202,8 +214,7 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
             chash_extra = "." + chash_extra
 
         # Cash Account name
-        ca_lbl = AssociatedLabel(f'<b>{pretty_string}</b><font size=-1><i>{chash_extra}</i></font><b>;</b>')
-        ca_lbl.setBut(rb)
+        ca_lbl = ButtonAssociatedLabel(f'<b>{pretty_string}</b><font size=-1><i>{chash_extra}</i></font><b>;</b>', button=rb)
         grid.addWidget(ca_lbl, row*3, col*4+1, 1, 1)
 
         # View tx ...
@@ -224,10 +235,14 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
             view_tx_lbl.setHidden(True)
             copy_but.setHidden(True)
 
-        addr_lbl = AssociatedLabel('')
-        addr_lbl.setBut(rb)
+        addr_lbl = ButtonAssociatedLabel('', button=rb)
         if is_valid:
-            addr_lbl.setText(f'{info.address.to_ui_string()}')
+            if is_mine:
+                addr_lbl.setText(f'<a href="{info.address.to_ui_string()}">{info.address.to_ui_string()}</a>')
+                addr_lbl.linkActivated.connect(view_addr_link_activated)
+                addr_lbl.setButton(None)  # disable click to select
+            else:
+                addr_lbl.setText(f'{info.address.to_ui_string()}')
         else:
             addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
             addr_lbl.setToolTip(rb.toolTip())
