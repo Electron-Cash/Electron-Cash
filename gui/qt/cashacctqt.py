@@ -257,11 +257,19 @@ class InfoGroupBox(PrintError, QGroupBox):
         saved_selection = [tup[0] for tup in self.selectedItems()]
 
         # clear existing subwidges on refresh
+        for i in range(grid.count()):
+            item = grid.itemAt(i)
+            if item:
+                grid.removeItem(item)
+                w = item.widget()
+                lo = item.layout()
+                if w: w.deleteLater()
+                if lo: lo.deleteLater()
         for c in self.children():
             if isinstance(c, QWidget):
                 if isinstance(c, QAbstractButton):
                     but_grp.removeButton(c)
-                grid.removeWidget(c)
+                #grid.removeWidget(c)
                 c.setParent(None)
 
         def view_tx_link_activated(txid):
@@ -362,6 +370,14 @@ class InfoGroupBox(PrintError, QGroupBox):
             grid.addItem(spacer, row*3+2, col*4, 1, 4)
 
             col += 1
+
+        if len(items) == 1:
+            # just 1 item, put it on the left
+            grid.addItem(QSpacerItem(100,1), 0, 4)
+            grid.setColumnStretch(4, 100)
+        else:
+            grid.setColumnStretch(4, 0)
+
 
         if saved_selection and self.button_type != self.ButtonType.NoButton:
             for info in saved_selection:
