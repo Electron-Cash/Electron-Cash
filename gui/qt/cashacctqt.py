@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import *
 from .util import *
 
 from typing import Tuple, List
+from enum import IntEnum
 from electroncash import cashacct
 from electroncash import util
 from electroncash.address import Address, UnknownAddress
@@ -151,11 +152,18 @@ class ButtonAssociatedLabel(QLabel):
 
 class InfoGroupBox(PrintError, QGroupBox):
 
+    class ButtonType(IntEnum):
+        NoButton = 0  # If this is specified to button_type, then the buttons will be hidden. selectedItem and selectedItems will have undefined results.
+        Radio    = 1  # If specified, the on-screen buttons will be QRadioButtons and selectedItems() will always have 0 or 1 item.
+        CheckBox = 2  # If specified, the on-screen buttons will be QCheckBox and selectedItems() may be a list of more than 1 result
+
     def __init__(self,
                  parent : QWidget,  # widget parent for layout/embedding/etc
                  main_window : MessageBoxMixin,  # may be same as 'parent'; will raise if not an ElectrumWindow instance
                  items: List[Tuple[cashacct.Info, str, str]] = [], # list of 2 or 3 tuple : Info, minimal_chash[, formatted_string]
-                 title : str = None):
+                 title : str = None,
+                 button_type : ButtonType = ButtonType.Radio,  # Note that if CheckBox, the buttonGroup will be made non-exclusive and selectedItems() may return more than 1 item.
+                 ):
         from .main_window import ElectrumWindow
         assert isinstance(parent, QWidget) and isinstance(main_window, ElectrumWindow)
         super().__init__(parent)
@@ -163,16 +171,18 @@ class InfoGroupBox(PrintError, QGroupBox):
         self.wallet = self.main_window.wallet
         assert isinstance(self.wallet, Abstract_Wallet)
         self._setup()
-        self.setItems(items=items, title=title, auto_resize_parent=False)
+        self.setItems(items=items, title=title, auto_resize_parent=False, button_type=button_type)
 
     def _setup(self):
-        self.grid = QGridLayout(self)
-        self._but_grp = QButtonGroup(self)
-        self.cols = 2
+        self.grid = QGridLayout(self)  # client code shouldn't use this
+        self._but_grp = QButtonGroup(self)  # client code shouldn't use this but instead use selectedItems(), etc
+        self.cols = 2  # client code may set this but needs to call refresh()
+        self.no_items_text = _('No Cash Accounts')  # client code may set this directly
 
     def setItems(self,
                  items : List[Tuple[cashacct.Info, str, str]],  # list of 2 or 3 tuple : Info, minimal_chash[, formatted_string]
-                 title = None, auto_resize_parent = True, sort=True):
+                 title = None, auto_resize_parent = True, sort=True,
+                 button_type : ButtonType = ButtonType.Radio):
         items = items or []
         title = title or _("{number} Cash Account(s)").format(number=len(items))
         wallet = self.wallet
@@ -186,6 +196,7 @@ class InfoGroupBox(PrintError, QGroupBox):
             else:
                 items = [formatter(x) for x in items]
         self._items = items
+        self.button_type = button_type
         self.setTitle(title)
         self.refresh()
         if auto_resize_parent and self.parent():
@@ -195,6 +206,15 @@ class InfoGroupBox(PrintError, QGroupBox):
     def buttonGroup(self) -> QButtonGroup:
         ''' The button group id's will point to indices in self.items() '''
         return self._but_grp
+
+    def checkItemWithInfo(self, info : cashacct.Info):
+        ''' Pass an info object and the item that corresponds to that
+        Info object will be checked. Pass None to uncheck all items. '''
+        for i, item in enumerate(self._items):
+            if info is None:
+                self._but_grp.button(i).setChecked(False)
+            elif item[0] == info:
+                self._but_grp.button(i).setChecked(True)
 
     def items(self) -> List[Tuple[cashacct.Info, str, str]]:
         ''' The list of items on-screen. self.buttonGroup()'s ids will point
@@ -206,20 +226,37 @@ class InfoGroupBox(PrintError, QGroupBox):
 
     def selectedItem(self) -> Tuple[cashacct.Info, str, str]:
         ''' Returns the currently selected item tuple or None if none is selected '''
-        which = self._but_grp.checkedId()
-        if which > -1 and which < len(self._items):
-            return self._items[which]
+        items = self.selectedItems()
+        if items:
+            return items[0]
+
+    def selectedItems(self) -> List[Tuple[cashacct.Info, str, str]]:
+        ''' In multi-select mode (CheckBox mode), returns the currently selected
+        items as a list of 3-tuple. '''
+        ret = []
+        buts = self._but_grp.buttons()
+        for but in buts:
+            if but.isChecked():
+                which = self._but_grp.id(but)
+                if which > -1 and which < len(self._items):
+                    ret.append(self._items[which])
+        return ret
 
     def refresh(self):
         from .main_window import ElectrumWindow
         parent = self.main_window
         wallet = self.wallet
         items = self._items
+        button_type = self.button_type
         assert all(len(x) == 3 for x in items)
         but_grp = self._but_grp
         cols, col, row = self.cols, 0, -1
         grid = self.grid
 
+        # save selection
+        saved_selection = [tup[0] for tup in self.selectedItems()]
+
+        # clear existing subwidges on refresh
         for c in self.children():
             if isinstance(c, QWidget):
                 if isinstance(c, QAbstractButton):
@@ -239,7 +276,23 @@ class InfoGroupBox(PrintError, QGroupBox):
                 except Exception as e:
                     parent.print_error(repr(e))
 
+
+
+        if button_type == __class__.ButtonType.CheckBox:
+            BUTTON_CLASS = QCheckBox
+            but_grp.setExclusive(False)
+        else:
+            BUTTON_CLASS = QRadioButton
+            but_grp.setExclusive(True)
+        hide_but = button_type == __class__.ButtonType.NoButton
+
         grid.setVerticalSpacing(4)
+
+        if not items:
+            label = WWLabel("<i>" + self.no_items_text + "</i>")
+            label.setAlignment(Qt.AlignCenter)
+            grid.addWidget(label, 0, 0, -1, -1)
+
 
         for i, item in enumerate(items):
             col = col % cols
@@ -247,7 +300,9 @@ class InfoGroupBox(PrintError, QGroupBox):
                 row += 1
             info, min_chash, ca_string = item
             # Radio button (by itself in colum 0)
-            rb = QRadioButton()
+            rb = BUTTON_CLASS()
+            rb.setHidden(hide_but)
+            rb.setDisabled(hide_but)  # hidden buttons also disabled to prevent user clicking their labels to select them
             is_valid = True
             is_mine = False
             is_change = False
@@ -308,6 +363,11 @@ class InfoGroupBox(PrintError, QGroupBox):
 
             col += 1
 
+        if saved_selection and self.button_type != self.ButtonType.NoButton:
+            for info in saved_selection:
+                self.checkItemWithInfo(info)
+        else:
+            self.checkItemWithInfo(None)
 
 def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, gbtext=None):
     ''' Pops up a modal dialog telling you to pick a results. Used by the
