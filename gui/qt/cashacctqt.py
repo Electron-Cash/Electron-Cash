@@ -32,11 +32,12 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from .util import *
 
-from typing import Tuple
+from typing import Tuple, List
 from electroncash import cashacct
 from electroncash import util
 from electroncash.address import Address, UnknownAddress
 from electroncash.i18n import _
+from electroncash.wallet import Abstract_Wallet
 
 
 class VerifyingDialog(WaitingDialog):
@@ -64,7 +65,7 @@ class VerifyingDialog(WaitingDialog):
             self.exec_()
 
 
-def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet=None) -> Tuple[cashacct.Info, str]:
+def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet : Abstract_Wallet = None) -> Tuple[cashacct.Info, str]:
     ''' Throws up a WaitingDialog while it resolves a Cash Account.
 
     Goes out to network, verifies all tx's.
@@ -85,7 +86,7 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet=None) -> Tuple
     from .main_window import ElectrumWindow
     if isinstance(parent, ElectrumWindow) and not wallet:
         wallet = parent.wallet
-    assert wallet
+    assert isinstance(wallet, Abstract_Wallet)
     class Bad(Exception): pass
     try:
         if not wallet.network or not wallet.network.interface:
@@ -125,7 +126,10 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet=None) -> Tuple
         parent.show_error(str(e))
     return None
 
+
 class ButtonAssociatedLabel(QLabel):
+    ''' A QLabel, that if clicked on, sends a 'click()' call to an associated
+    QAbstractButton. '''
 
     def __init__(self, *args, **kwargs):
         but = kwargs.pop('button', None)
@@ -133,8 +137,8 @@ class ButtonAssociatedLabel(QLabel):
         self.but = but
         self.setTextInteractionFlags(self.textInteractionFlags() | Qt.TextSelectableByMouse)
 
-    def setButton(self, b): self.but = b
-    def button(self): return self.but
+    def setButton(self, b : QAbstractButton): self.but = b
+    def button(self) -> QAbstractButton: return self.but
 
     def mouseReleaseEvent(self, e):
         super().mouseReleaseEvent(e)
@@ -144,21 +148,173 @@ class ButtonAssociatedLabel(QLabel):
             elif self.but.toolTip() and not self.hasSelectedText():
                 QToolTip.showText(QCursor.pos(), self.but.toolTip(), self)
 
+
+class InfoGroupBox(PrintError, QGroupBox):
+
+    def __init__(self,
+                 parent : QWidget,  # widget parent for layout/embedding/etc
+                 main_window : MessageBoxMixin,  # may be same as 'parent'; will raise if not an ElectrumWindow instance
+                 items: List[Tuple[cashacct.Info, str, str]] = [], # list of 2 or 3 tuple : Info, minimal_chash[, formatted_string]
+                 title : str = None):
+        from .main_window import ElectrumWindow
+        assert isinstance(parent, QWidget) and isinstance(main_window, ElectrumWindow)
+        super().__init__(parent)
+        self.main_window = main_window
+        self.wallet = self.main_window.wallet
+        assert isinstance(self.wallet, Abstract_Wallet)
+        self._setup()
+        self.setItems(items=items, title=title, auto_resize_parent=False)
+
+    def _setup(self):
+        self.grid = QGridLayout(self)
+        self._but_grp = QButtonGroup(self)
+        self.cols = 2
+
+    def setItems(self,
+                 items : List[Tuple[cashacct.Info, str, str]],  # list of 2 or 3 tuple : Info, minimal_chash[, formatted_string]
+                 title = None, auto_resize_parent = True, sort=True):
+        items = items or []
+        title = title or _("{number} Cash Account(s)").format(number=len(items))
+        wallet = self.wallet
+        if items and (sort or len(items[0]) != 3):
+            # sort items by formatted cash account string, also adding the string to
+            # the items tuples; tuples now are modified to 3 elements:
+            # (info, min_chash, formatted_ca_string)
+            formatter = lambda x: (x[0], x[1], wallet.cashacct.fmt_info(x[0], x[1]))
+            if sort:
+                items = sorted((formatter(x) for x in items), key=lambda tup:tup[2])
+            else:
+                items = [formatter(x) for x in items]
+        self._items = items
+        self.setTitle(title)
+        self.refresh()
+        if auto_resize_parent and self.parent():
+            weakParent = util.Weak.ref(self.parent())
+            QTimer.singleShot(0, lambda: weakParent() and weakParent().resize(weakParent().sizeHint()))
+
+    def buttonGroup(self) -> QButtonGroup:
+        ''' The button group id's will point to indices in self.items() '''
+        return self._but_grp
+
+    def items(self) -> List[Tuple[cashacct.Info, str, str]]:
+        ''' The list of items on-screen. self.buttonGroup()'s ids will point
+        to indices in this list.
+
+        Returned list items are 3-tuples of:
+           (Info, min_chash: str, fmtd_acct_name: str) '''
+        return self._items
+
+    def selectedItem(self) -> Tuple[cashacct.Info, str, str]:
+        ''' Returns the currently selected item tuple or None if none is selected '''
+        which = self._but_grp.checkedId()
+        if which > -1 and which < len(self._items):
+            return self._items[which]
+
+    def refresh(self):
+        from .main_window import ElectrumWindow
+        parent = self.main_window
+        wallet = self.wallet
+        items = self._items
+        assert all(len(x) == 3 for x in items)
+        but_grp = self._but_grp
+        cols, col, row = self.cols, 0, -1
+        grid = self.grid
+
+        for c in self.children():
+            if isinstance(c, QWidget):
+                if isinstance(c, QAbstractButton):
+                    but_grp.removeButton(c)
+                grid.removeWidget(c)
+                c.setParent(None)
+
+        def view_tx_link_activated(txid):
+            if isinstance(parent, ElectrumWindow):
+                parent.do_process_from_txid(txid=txid, tx_desc=wallet.get_label(txid))
+
+        def view_addr_link_activated(addr):
+            if isinstance(parent, ElectrumWindow):
+                try:
+                    address = Address.from_string(addr)
+                    parent.show_address(address, parent=parent.top_level_window())
+                except Exception as e:
+                    parent.print_error(repr(e))
+
+        grid.setVerticalSpacing(4)
+
+        for i, item in enumerate(items):
+            col = col % cols
+            if not col:
+                row += 1
+            info, min_chash, ca_string = item
+            # Radio button (by itself in colum 0)
+            rb = QRadioButton()
+            is_valid = True
+            is_mine = False
+            if not isinstance(info.address, Address):
+                rb.setDisabled(True)
+                is_valid = False
+                rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
+            elif wallet.is_mine(info.address):
+                is_mine = True
+            but_grp.addButton(rb, i)
+            grid.addWidget(rb, row*3, col*4, 1, 1)
+            pretty_string = info.emoji + " " + ca_string[:-1]
+            chash_extra = info.collision_hash[len(min_chash):]
+            if not min_chash:
+                chash_extra = "." + chash_extra
+
+            # Cash Account name
+            ca_lbl = ButtonAssociatedLabel(f'<b>{pretty_string}</b><font size=-1><i>{chash_extra}</i></font><b>;</b>', button=rb)
+            grid.addWidget(ca_lbl, row*3, col*4+1, 1, 1)
+
+            # View tx ...
+            viewtx = _("View tx")
+            view_tx_lbl = WWLabel(f'<font size=-1><a href="{info.txid}">{viewtx}...</a></font>')
+            grid.addWidget(view_tx_lbl, row*3, col*4+2, 1, 1)
+
+            # copy button
+            copy_but = QPushButton(QIcon(":icons/copy.png"), "")
+            copy_but.setFlat(True)
+            grid.addWidget(copy_but, row*3, col*4+3, 1, 1)
+
+            if isinstance(parent, ElectrumWindow):
+                view_tx_lbl.linkActivated.connect(view_tx_link_activated)
+                copy_but.clicked.connect(lambda ignored=None, ca_string=ca_string, copy_but=copy_but:
+                                             parent.copy_to_clipboard(text=ca_string, tooltip=_('Cash Account copied to clipboard'), widget=copy_but) )
+            else:
+                view_tx_lbl.setHidden(True)
+                copy_but.setHidden(True)
+
+            addr_lbl = ButtonAssociatedLabel('', button=rb)
+            if is_valid:
+                if is_mine:
+                    addr_lbl.setText(f'<a href="{info.address.to_ui_string()}">{info.address.to_ui_string()}</a>')
+                    addr_lbl.linkActivated.connect(view_addr_link_activated)
+                    addr_lbl.setButton(None)  # disable click to select
+                else:
+                    addr_lbl.setText(f'{info.address.to_ui_string()}')
+            else:
+                addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
+                addr_lbl.setToolTip(rb.toolTip())
+            grid.addWidget(addr_lbl, row*3+1, col*4+1, 1, 3)
+
+            spacer = QSpacerItem(1, 8)
+            grid.addItem(spacer, row*3+2, col*4, 1, 4)
+
+            col += 1
+
+
 def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, gbtext=None):
+    ''' Pops up a modal dialog telling you to pick a results. Used by the
+    Contacts tab edit function, etc. '''
     assert parent
     from .main_window import ElectrumWindow
     if isinstance(parent, ElectrumWindow) and not wallet:
         wallet = parent.wallet
-    assert wallet
+    assert isinstance(wallet, Abstract_Wallet)
 
-    # sort results by formatted cash account string, also adding the string to
-    # the results tuples; tuples now are modified to 3 elements:
-    # (info, min_chash, formatted_ca_string)
-    formatter = lambda x: (x[0], x[1], wallet.cashacct.fmt_info(x[0], x[1]))
-    results = sorted((formatter(x) for x in results), key=lambda tup:tup[2])
     msg = msg or _('Multiple results were found, please select an option from the items below:')
     title = title or _("Select Cash Account")
-    gbtext = gbtext or _("{number} Cash Account(s)").format(number=len(results))
 
     d = WindowModalDialog(parent, title)
     util.finalization_print_error(d)  # track object lifecycle
@@ -168,101 +324,21 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
     lbl = WWLabel(msg)
     vbox.addWidget(lbl)
 
-    gb = QGroupBox(gbtext)
+    gb = InfoGroupBox(d, parent, results)
     vbox.addWidget(gb)
-
-    grid = QGridLayout(gb)
-    but_grp = QButtonGroup(gb)
-    row, col = -1, 0
-    cols = 2
-
-
-    def view_tx_link_activated(txid):
-        if isinstance(parent, ElectrumWindow):
-            parent.do_process_from_txid(txid=txid, tx_desc=wallet.get_label(txid))
-
-    def view_addr_link_activated(addr):
-        if isinstance(parent, ElectrumWindow):
-            try:
-                address = Address.from_string(addr)
-                parent.show_address(address, parent=parent.top_level_window())
-            except Exception as e:
-                parent.print_error(repr(e))
-
-    grid.setVerticalSpacing(4)
-
-    for i, item in enumerate(results):
-        col = col % cols
-        if not col:
-            row += 1
-        info, min_chash, ca_string = item
-        # Radio button (by itself in colum 0)
-        rb = QRadioButton()
-        is_valid = True
-        is_mine = False
-        if not isinstance(info.address, Address):
-            rb.setDisabled(True)
-            is_valid = False
-            rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
-        elif wallet.is_mine(info.address):
-            is_mine = True
-        but_grp.addButton(rb, i)
-        grid.addWidget(rb, row*3, col*4, 1, 1)
-        pretty_string = info.emoji + " " + ca_string[:-1]
-        chash_extra = info.collision_hash[len(min_chash):]
-        if not min_chash:
-            chash_extra = "." + chash_extra
-
-        # Cash Account name
-        ca_lbl = ButtonAssociatedLabel(f'<b>{pretty_string}</b><font size=-1><i>{chash_extra}</i></font><b>;</b>', button=rb)
-        grid.addWidget(ca_lbl, row*3, col*4+1, 1, 1)
-
-        # View tx ...
-        viewtx = _("View tx")
-        view_tx_lbl = WWLabel(f'<font size=-1><a href="{info.txid}">{viewtx}...</a></font>')
-        grid.addWidget(view_tx_lbl, row*3, col*4+2, 1, 1)
-
-        # copy button
-        copy_but = QPushButton(QIcon(":icons/copy.png"), "")
-        copy_but.setFlat(True)
-        grid.addWidget(copy_but, row*3, col*4+3, 1, 1)
-
-        if isinstance(parent, ElectrumWindow):
-            view_tx_lbl.linkActivated.connect(view_tx_link_activated)
-            copy_but.clicked.connect(lambda ignored=None, ca_string=ca_string, copy_but=copy_but:
-                                         parent.copy_to_clipboard(text=ca_string, tooltip=_('Cash Account copied to clipboard'), widget=copy_but) )
-        else:
-            view_tx_lbl.setHidden(True)
-            copy_but.setHidden(True)
-
-        addr_lbl = ButtonAssociatedLabel('', button=rb)
-        if is_valid:
-            if is_mine:
-                addr_lbl.setText(f'<a href="{info.address.to_ui_string()}">{info.address.to_ui_string()}</a>')
-                addr_lbl.linkActivated.connect(view_addr_link_activated)
-                addr_lbl.setButton(None)  # disable click to select
-            else:
-                addr_lbl.setText(f'{info.address.to_ui_string()}')
-        else:
-            addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
-            addr_lbl.setToolTip(rb.toolTip())
-        grid.addWidget(addr_lbl, row*3+1, col*4+1, 1, 3)
-
-        spacer = QSpacerItem(1, 8)
-        grid.addItem(spacer, row*3+2, col*4, 1, 4)
-
-        col += 1
 
     ok_but = OkButton(d)
     buts = Buttons(CancelButton(d), ok_but)
     vbox.addLayout(buts)
     ok_but.setEnabled(False)
 
-    but_grp.buttonClicked.connect(lambda x: ok_but.setEnabled(True))
+    but_grp = gb.buttonGroup()
+    but_grp.buttonClicked.connect(lambda x=None: ok_but.setEnabled(gb.selectedItem() is not None))
 
     code = d.exec_()
 
     if code == QDialog.Accepted:
-        which = but_grp.checkedId()
-        if which > -1 and which < len(results):
-            return results[which][:-1]
+        item = gb.selectedItem()
+        if item:
+            return item[:-1]
+
