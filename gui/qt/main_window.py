@@ -2477,26 +2477,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         On failure throws up an error window and returns None.'''
         return cashacctqt.resolve_cashacct(self, name)
 
-    def set_contact(self, label, address, typ='address'):
+    def set_contact(self, label, address, typ='address') -> str:
         assert typ in ('address', 'cashacct')
+        ret = None
         if typ == 'cashacct':
             tup = self.resolve_cashacct(label)  # this displays an error message for us
             if not tup:
                 self.contact_list.update() # Displays original
-                return False
+                return
             info, label = tup
             old_entry = self.contacts.pop(address, None)
             address = info.address.to_ui_string()
+            ret = address
             self.contacts[address] = (typ, label)
         elif not Address.is_valid(address):
             # Bad 'address' code path
             self.show_error(_('Invalid Address'))
             self.contact_list.update()  # Displays original unchanged value
-            return False
+            return
         else:
             # Good 'address' code path...
             old_entry = self.contacts.get(address, None)
             self.contacts[address] = (typ, label)
+            ret = address
         self.contact_list.update()
         self.history_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
@@ -2504,7 +2507,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         # The contact has changed, update any addresses that are displayed with the old information.
         run_hook('update_contact', address, self.contacts[address], old_entry)
-        return True
+        return ret
 
     def delete_contacts(self, addresses):
         contact_str = " + ".join(addresses) if len(addresses) <= 3 else _("{} contacts").format(len(addresses))
