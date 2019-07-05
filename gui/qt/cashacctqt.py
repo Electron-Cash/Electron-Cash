@@ -165,7 +165,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                  button_type : ButtonType = ButtonType.Radio,  # Note that if CheckBox, the buttonGroup will be made non-exclusive and selectedItems() may return more than 1 item.
                  ):
         from .main_window import ElectrumWindow
-        assert isinstance(parent, QWidget) and isinstance(main_window, ElectrumWindow)
+        assert isinstance(main_window, ElectrumWindow)
         super().__init__(parent)
         self.main_window = main_window
         self.wallet = self.main_window.wallet

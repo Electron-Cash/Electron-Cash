@@ -27,14 +27,14 @@ from electroncash.i18n import _
 import electroncash.web as web
 from electroncash.address import Address
 from electroncash.plugins import run_hook
-from electroncash.util import FileImportFailed, PrintError
+from electroncash.util import FileImportFailed, PrintError, finalization_print_error
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-from PyQt5.QtWidgets import (
-    QAbstractItemView, QFileDialog, QMenu, QTreeWidgetItem)
-from .util import MyTreeWidget, webopen
+from PyQt5.QtWidgets import *
+from .util import MyTreeWidget, webopen, WindowModalDialog, Buttons, CancelButton, OkButton, HelpLabel, WWLabel, destroyed_print_error, webopen
 from enum import IntEnum
 from collections import defaultdict
+from . import cashacctqt
 
 class ContactList(PrintError, MyTreeWidget):
     filter_columns = [1, 2]  # Name, Address
@@ -147,10 +147,11 @@ class ContactList(PrintError, MyTreeWidget):
                 menu.addAction(_("View on block explorer"), lambda: [URL and webopen(URL) for URL in URLs])
             menu.addSeparator()
 
-        menu.addAction(_("New contact"), self.parent.new_contact_dialog)
-        menu.addAction(_("Import file"), self.import_contacts)
+        menu.addAction(QIcon(":icons/cashacct-logo.png"), _("New Cash Account Contact"), self.new_cash_account_contact_dialog)
+        menu.addAction(QIcon(":icons/tab_contacts.png"), _("New Contact"), self.parent.new_contact_dialog)
+        menu.addAction(QIcon(":icons/import.svg"), _("Import file"), self.import_contacts)
         if len(self.parent.contacts):
-            menu.addAction(_("Export file"), self.export_contacts)
+            menu.addAction(QIcon(":icons/save.svg"), _("Export file"), self.export_contacts)
 
         run_hook('create_contact_menu', menu, selected)
         menu.exec_(self.viewport().mapToGlobal(position))
@@ -205,3 +206,98 @@ class ContactList(PrintError, MyTreeWidget):
                 item.setSelected(True)
         self._edited_item_cur_sel = (None,) * 3
         run_hook('update_contacts_tab', self)
+
+    def new_cash_account_contact_dialog(self):
+        ''' Context menu callback. Shows the "New Cash Account Contact"
+        interface. '''
+        wallet = self.wallet
+        d = WindowModalDialog(self.parent.top_level_window(), _("New Cash Account Contact"))
+        d.setObjectName("WindowModalDialog - New Cash Account")
+        finalization_print_error(d)
+        destroyed_print_error(d)
+
+        vbox = QVBoxLayout(d)
+        hbox = QHBoxLayout()
+        label = QLabel()
+        label.setPixmap(QIcon(":icons/cashacct-logo.png").pixmap(50))
+        hbox.addWidget(label)
+        hbox.addItem(QSpacerItem(10, 1))
+        label = QLabel("<font size=+1><b>" + _('New Cash Account Contact') + "</b></font>")
+        label.setAlignment(Qt.AlignVCenter|Qt.AlignLeft)
+        hbox.addWidget(label)
+        hbox.addStretch(2)
+        vbox.addLayout(hbox)
+        grid = QGridLayout()
+        grid.setContentsMargins(62, 32, 12, 12)
+        acct = QLineEdit()
+        acct.setPlaceholderText(_("Cash Account e.g. satoshi#123.45"))
+        acct.setMinimumWidth(280)
+        label2 = WWLabel('<a href="https://www.cashaccount.info/">' + _("Search online...") + "</a>")
+        label2.linkActivated.connect(webopen)
+
+
+        #acct.setFixedWidth(280)
+        label = HelpLabel(_("&Cash Account Name"), _("Enter a Cash Account name of the form Name#123.45, and Electron Cash will search for the contact and present you with its resolved address."))
+        label.setBuddy(acct)
+        search = QPushButton(_("Lookup"))
+        search.setEnabled(False)
+        grid.addWidget(label, 0, 0, 1, 1, Qt.AlignRight)
+        grid.addWidget(acct, 0, 1, 1, 1, Qt.AlignLeft)
+        grid.addWidget(search, 0, 2, 1, 1, Qt.AlignLeft)
+        grid.addWidget(label2, 0, 3, 1, 1, Qt.AlignLeft)
+        grid.setColumnStretch(3, 5)
+        vbox.addLayout(grid)
+        vbox.addItem(QSpacerItem(20,10))
+        frame = QFrame()
+        vbox2 = QVBoxLayout(frame)
+        ca = cashacctqt.InfoGroupBox(frame, self.parent)
+        ca.refresh()
+        frame.setMinimumWidth(760)
+        vbox2.addWidget(ca)
+        vbox.addWidget(frame)
+        ok = OkButton(d)
+        ok.setDisabled(True)
+        vbox.addLayout(Buttons(CancelButton(d), ok))
+
+        def ca_msg(m, clear=False):
+            ca.no_items_text = m
+            if clear:
+                ca.setItems([], auto_resize_parent=False)
+            else:
+                ca.refresh()
+
+        def on_return_pressed():
+            if search.isEnabled():
+                search.click()
+
+        def on_text_changed(txt):
+            ''' '''
+            search.setEnabled(bool(self.wallet.cashacct.parse_string(txt)))
+            if not txt and not ca.items():
+                ca_msg(" ")
+
+        def on_search():
+            name = acct.text()
+            tup = self.wallet.cashacct.parse_string(name)
+            if tup:
+                ca_msg(_("Searching, for <b>{name}</b> please wait ...").format(name=name), True)
+                qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
+                results = wallet.cashacct.resolve_verify(name)
+                if results:
+                    title =  name + " - " + _("{number} Cash Account(s)").format(number=len(results))
+                    ca.setItems(results, auto_resize_parent=False, title=title)
+                else:
+                    ca_msg(_("The specified Cash Account does not appear to be associated with any address"), True)
+            else:
+                ca_msg(_("Invalid Cash Account name, please try again"), True)
+
+        acct.textChanged.connect(on_text_changed)
+        search.clicked.connect(on_search)
+        acct.returnPressed.connect(on_return_pressed)
+
+        #ca_msg(_("No Results"))
+        ca_msg(" ")
+
+        if d.exec_():
+            pass
+            #self.set_contact(line2.text(), line1.text())
