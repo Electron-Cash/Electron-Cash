@@ -38,6 +38,7 @@ from collections import defaultdict
 
 class ContactList(PrintError, MyTreeWidget):
     filter_columns = [1, 2]  # Name, Address
+    default_sort = MyTreeWidget.SortSpec(1, Qt.AscendingOrder)
 
     class DataRoles(IntEnum):
         Key         = Qt.UserRole + 0
@@ -45,11 +46,12 @@ class ContactList(PrintError, MyTreeWidget):
         Type        = Qt.UserRole + 2
 
     def __init__(self, parent):
-        MyTreeWidget.__init__(self, parent, self.create_menu, ["", _('Name'), _('Address'), _('Type') ], 1, [1], deferred_updates=True)
+        MyTreeWidget.__init__(self, parent, self.create_menu,
+                              ["", _('Name'), _('Address'), _('Type') ], 1, [1],  # headers, stretch_column, editable_columns
+                              deferred_updates=True, save_sort_settings=True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
         self.wallet = parent.wallet
-        self.sortItems(1, Qt.AscendingOrder)
         self.setIndentation(0)
         self._edited_item_cur_sel = (None,) * 3
 
