@@ -240,12 +240,6 @@ class InfoGroupBox(PrintError, QGroupBox):
                     parent.print_error(repr(e))
 
         grid.setVerticalSpacing(4)
-        # we grab a set of the wallet addresses to make the below 'is_mine'-style
-        # check slightly faster than calling wallet.is_mine() which does an O(N)
-        # check each time. Set lookup is instead O(logN).
-        wallet_change_addrs = frozenset(wallet.get_change_addresses())
-        wallet_receiving_addrs = frozenset(wallet.get_receiving_addresses())
-        def _is_mine(x): return x in wallet_receiving_addrs or x in wallet_change_addrs
 
         for i, item in enumerate(items):
             col = col % cols
@@ -261,9 +255,9 @@ class InfoGroupBox(PrintError, QGroupBox):
                 rb.setDisabled(True)
                 is_valid = False
                 rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
-            elif _is_mine(info.address):
+            elif wallet.is_mine(info.address):
                 is_mine = True
-                is_change = info.address in wallet_change_addrs
+                is_change = wallet.is_change(info.address)
             but_grp.addButton(rb, i)
             grid.addWidget(rb, row*3, col*4, 1, 1)
             pretty_string = info.emoji + " " + ca_string[:-1]
@@ -352,4 +346,3 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
         item = gb.selectedItem()
         if item:
             return item[:-1]
-
