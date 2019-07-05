@@ -240,6 +240,12 @@ class InfoGroupBox(PrintError, QGroupBox):
                     parent.print_error(repr(e))
 
         grid.setVerticalSpacing(4)
+        # we grab a set of the wallet addresses to make the below 'is_mine'-style
+        # check slightly faster than calling wallet.is_mine() which does an O(N)
+        # check each time. Set lookup is instead O(logN).
+        wallet_change_addrs = frozenset(wallet.get_change_addresses())
+        wallet_receiving_addrs = frozenset(wallet.get_receiving_addresses())
+        def _is_mine(x): return x in wallet_receiving_addrs or x in wallet_change_addrs
 
         for i, item in enumerate(items):
             col = col % cols
@@ -250,12 +256,14 @@ class InfoGroupBox(PrintError, QGroupBox):
             rb = QRadioButton()
             is_valid = True
             is_mine = False
+            is_change = False
             if not isinstance(info.address, Address):
                 rb.setDisabled(True)
                 is_valid = False
                 rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
-            elif wallet.is_mine(info.address):
+            elif _is_mine(info.address):
                 is_mine = True
+                is_change = info.address in wallet_change_addrs
             but_grp.addButton(rb, i)
             grid.addWidget(rb, row*3, col*4, 1, 1)
             pretty_string = info.emoji + " " + ca_string[:-1]
@@ -271,6 +279,7 @@ class InfoGroupBox(PrintError, QGroupBox):
             viewtx = _("View tx")
             view_tx_lbl = WWLabel(f'<font size=-1><a href="{info.txid}">{viewtx}...</a></font>')
             grid.addWidget(view_tx_lbl, row*3, col*4+2, 1, 1)
+            view_tx_lbl.setToolTip(_("View Registration Transaction"))
 
             # copy button
             copy_but = QPushButton(QIcon(":icons/copy.png"), "")
@@ -281,6 +290,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                 view_tx_lbl.linkActivated.connect(view_tx_link_activated)
                 copy_but.clicked.connect(lambda ignored=None, ca_string=ca_string, copy_but=copy_but:
                                              parent.copy_to_clipboard(text=ca_string, tooltip=_('Cash Account copied to clipboard'), widget=copy_but) )
+                copy_but.setToolTip(_("Copy Cash Account"))
             else:
                 view_tx_lbl.setHidden(True)
                 copy_but.setHidden(True)
@@ -290,6 +300,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                 if is_mine:
                     addr_lbl.setText(f'<a href="{info.address.to_ui_string()}">{info.address.to_ui_string()}</a>')
                     addr_lbl.linkActivated.connect(view_addr_link_activated)
+                    addr_lbl.setToolTip(_('Wallet') + ' - ' + (_('Change Address') if is_change else _('Receiving Address')))
                     addr_lbl.setButton(None)  # disable click to select
                 else:
                     addr_lbl.setText(f'{info.address.to_ui_string()}')
