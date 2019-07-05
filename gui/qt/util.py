@@ -665,7 +665,9 @@ class MyTreeWidget(QTreeWidget):
             self._forced_update = False
             # self.deferred_update_ct will be set right after on_update is called because some subclasses use @rate_limiter on the update() method
 
-    def get_leaves(self, root):
+    def get_leaves(self, root=None):
+        if root is None:
+            root = self.invisibleRootItem()
         child_count = root.childCount()
         if child_count == 0:
             yield root
