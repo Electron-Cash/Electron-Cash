@@ -28,6 +28,8 @@ import electroncash.web as web
 from electroncash.address import Address
 from electroncash.plugins import run_hook
 from electroncash.util import FileImportFailed, PrintError, finalization_print_error
+# TODO: whittle down these * imports to what we actually use when done with
+# our changes to this class -Calin
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
@@ -210,106 +212,12 @@ class ContactList(PrintError, MyTreeWidget):
     def new_cash_account_contact_dialog(self):
         ''' Context menu callback. Shows the "New Cash Account Contact"
         interface. '''
-        wallet = self.wallet
-        d = WindowModalDialog(self.parent.top_level_window(), _("New Cash Account Contact"))
-        d.setObjectName("WindowModalDialog - New Cash Account")
-        finalization_print_error(d)
-        destroyed_print_error(d)
 
-        vbox = QVBoxLayout(d)
-        hbox = QHBoxLayout()
-        label = QLabel()
-        label.setPixmap(QIcon(":icons/cashacct-logo.png").pixmap(50))
-        hbox.addWidget(label)
-        hbox.addItem(QSpacerItem(10, 1))
-        label = QLabel("<font size=+1><b>" + _('New Cash Account Contact') + "</b></font>")
-        label.setAlignment(Qt.AlignVCenter|Qt.AlignLeft)
-        hbox.addWidget(label)
-        hbox.addStretch(2)
-        vbox.addLayout(hbox)
-        grid = QGridLayout()
-        grid.setContentsMargins(62, 32, 12, 12)
-        acct = QLineEdit()
-        acct.setPlaceholderText(_("Cash Account e.g. satoshi#123.45"))
-        acct.setMinimumWidth(280)
-        label2 = WWLabel('<a href="https://www.cashaccount.info/#lookup">' + _("Search online...") + "</a>")
-        label2.linkActivated.connect(webopen)
-
-
-        #acct.setFixedWidth(280)
-        label = HelpLabel(_("&Cash Account Name"), _("Enter a Cash Account name of the form Name#123.45, and Electron Cash will search for the contact and present you with its resolved address."))
-        label.setBuddy(acct)
-        search = QPushButton(_("Lookup"))
-        search.setEnabled(False)
-        grid.addWidget(label, 0, 0, 1, 1, Qt.AlignRight)
-        grid.addWidget(acct, 0, 1, 1, 1, Qt.AlignLeft)
-        grid.addWidget(search, 0, 2, 1, 1, Qt.AlignLeft)
-        grid.addWidget(label2, 0, 3, 1, 1, Qt.AlignLeft)
-        grid.setColumnStretch(3, 5)
-        vbox.addLayout(grid)
-        vbox.addItem(QSpacerItem(20,10))
-        frame = QScrollArea()
-        #vbox2 = QVBoxLayout(frame)
-        #vbox2.setContentsMargins(2,2,2,2)
-        ca = cashacctqt.InfoGroupBox(frame, self.parent)
-        ca.refresh()
-        #frame.setMinimumWidth(760)
-        #ca.setMinimumWidth(760)
-        #ca.setMinimumHeight(350)
-        frame.setMinimumWidth(765)
-        frame.setMinimumHeight(250)
-        frame.setWidget(ca)
-        frame.setWidgetResizable(True)
-        #vbox2.addWidget(ca)
-        vbox.addWidget(frame)
-        ok = OkButton(d)
-        ok.setDisabled(True)
-        vbox.addLayout(Buttons(CancelButton(d), ok))
-
-        def ca_msg(m, clear=False):
-            ca.no_items_text = m
-            if clear:
-                ca.setItems([], auto_resize_parent=False)
-            else:
-                ca.refresh()
-
-        def on_return_pressed():
-            if search.isEnabled():
-                search.click()
-
-        def on_text_changed(txt):
-            txt = txt.strip() if txt else ''
-            search.setEnabled(bool(self.wallet.cashacct.parse_string(txt)))
-            if not txt and not ca.items():
-                ca_msg(" ")
-
-        def on_search():
-            ok.setDisabled(True)
-            name = acct.text().strip()
-            tup = self.wallet.cashacct.parse_string(name)
-            if tup:
-                ca_msg(_("Searching for <b>{cash_account_name}</b> please wait ...").format(cash_account_name=name), True)
-                qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
-                results = wallet.cashacct.resolve_verify(name)
-                if results:
-                    nres = len(results)
-                    title =  name + " - " + ngettext("{number} Cash Account", "{number} Cash Accounts", nres).format(number=nres)
-                    ca.setItems(results, auto_resize_parent=False, title=title)
-                else:
-                    ca_msg(_("The specified Cash Account does not appear to be associated with any address"), True)
-            else:
-                ca_msg(_("Invalid Cash Account name, please try again"), True)
-
-        acct.textChanged.connect(on_text_changed)
-        search.clicked.connect(on_search)
-        acct.returnPressed.connect(on_return_pressed)
-        ca.buttonGroup().buttonClicked.connect(lambda x=None: ok.setEnabled(ca.selectedItem() is not None))
-
-        #ca_msg(_("No Results"))
-        ca_msg(" ")
-
-        if d.exec_() == QDialog.Accepted:
-            item = ca.selectedItem()
-            if item:
-                info, min_chash, name = item
-                self.parent.set_contact(name, info.address.to_ui_string(), typ='cashacct')
+        items = cashacctqt.lookup_cash_account_dialog(
+            self.parent, self.wallet, title=_("New Cash Account Contact"),
+            button_type=cashacctqt.InfoGroupBox.ButtonType.Radio
+        )
+        if items:
+            info, min_chash, name = items[0]
+            self.parent.set_contact(name, info.address.to_ui_string(), typ='cashacct')
+            run_hook('update_contacts_tab', self)

@@ -32,7 +32,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from .util import *
 
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 from enum import IntEnum
 from electroncash import cashacct
 from electroncash import util
@@ -174,9 +174,11 @@ class InfoGroupBox(PrintError, QGroupBox):
         self.setItems(items=items, title=title, auto_resize_parent=False, button_type=button_type)
 
     def _setup(self):
-        self.grid = QGridLayout(self)  # client code shouldn't use this
+        self.w = QWidget(self)
+        self.vbox = QVBoxLayout(self)
+        self.vbox.setContentsMargins(0,0,0,0)
+        self.vbox.addWidget(self.w)
         self._but_grp = QButtonGroup(self)  # client code shouldn't use this but instead use selectedItems(), etc
-        self.cols = 2  # client code may set this but needs to call refresh()
         self.no_items_text = _('No Cash Accounts')  # client code may set this directly
 
     def setItems(self,
@@ -251,27 +253,25 @@ class InfoGroupBox(PrintError, QGroupBox):
         button_type = self.button_type
         assert all(len(x) == 3 for x in items)
         but_grp = self._but_grp
-        cols, col, row = self.cols, 0, -1
-        grid = self.grid
+        cols, col, row = 2, 0, -1
 
-        # save selection
-        saved_selection = [tup[0] for tup in self.selectedItems()]
-
-        # clear existing subwidges on refresh
-        for i in range(grid.count()):
-            item = grid.itemAt(i)
-            if item:
-                grid.removeItem(item)
-                w = item.widget()
-                lo = item.layout()
-                if w: w.deleteLater()
-                if lo: lo.deleteLater()
-        for c in self.children():
-            if isinstance(c, QWidget):
+        if self.w:
+            # save selection
+            saved_selection = [tup[0] for tup in self.selectedItems()]
+            # tear down the dummy container widget from before and everything
+            # in it
+            for c in self.findChildren(QAbstractButton, "InfoGroupBoxButton"):
                 if isinstance(c, QAbstractButton):
                     but_grp.removeButton(c)
-                #grid.removeWidget(c)
-                c.setParent(None)
+            self.w.hide()
+            self.vbox.removeWidget(self.w)
+            self.w.setParent(None)
+            self.w.deleteLater()
+            self.w = None
+        self.w = w = QWidget(self)
+        self.vbox.addWidget(w)
+
+        grid = QGridLayout(w)
 
         def view_tx_link_activated(txid):
             if isinstance(parent, ElectrumWindow):
@@ -310,6 +310,7 @@ class InfoGroupBox(PrintError, QGroupBox):
             info, min_chash, ca_string = item
             # Radio button (by itself in colum 0)
             rb = BUTTON_CLASS()
+            rb.setObjectName("InfoGroupBoxButton")
             rb.setHidden(hide_but)
             rb.setDisabled(hide_but)  # hidden buttons also disabled to prevent user clicking their labels to select them
             is_valid = True
@@ -323,7 +324,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                 is_mine = True
                 is_change = wallet.is_change(info.address)
             but_grp.addButton(rb, i)
-            grid.addWidget(rb, row*3, col*4, 1, 1)
+            grid.addWidget(rb, row*3, col*5, 1, 1)
             pretty_string = info.emoji + " " + ca_string[:-1]
             chash_extra = info.collision_hash[len(min_chash):]
             if not min_chash:
@@ -331,18 +332,18 @@ class InfoGroupBox(PrintError, QGroupBox):
 
             # Cash Account name
             ca_lbl = ButtonAssociatedLabel(f'<b>{pretty_string}</b><font size=-1><i>{chash_extra}</i></font><b>;</b>', button=rb)
-            grid.addWidget(ca_lbl, row*3, col*4+1, 1, 1)
+            grid.addWidget(ca_lbl, row*3, col*5+1, 1, 1)
 
             # View tx ...
             viewtx = _("View tx")
             view_tx_lbl = WWLabel(f'<font size=-1><a href="{info.txid}">{viewtx}...</a></font>')
-            grid.addWidget(view_tx_lbl, row*3, col*4+2, 1, 1)
+            grid.addWidget(view_tx_lbl, row*3, col*5+2, 1, 1)
             view_tx_lbl.setToolTip(_("View Registration Transaction"))
 
             # copy button
             copy_but = QPushButton(QIcon(":icons/copy.png"), "")
             copy_but.setFlat(True)
-            grid.addWidget(copy_but, row*3, col*4+3, 1, 1)
+            grid.addWidget(copy_but, row*3, col*5+3, 1, 1)
 
             if isinstance(parent, ElectrumWindow):
                 view_tx_lbl.linkActivated.connect(view_tx_link_activated)
@@ -365,19 +366,28 @@ class InfoGroupBox(PrintError, QGroupBox):
             else:
                 addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
                 addr_lbl.setToolTip(rb.toolTip())
-            grid.addWidget(addr_lbl, row*3+1, col*4+1, 1, 3)
+            grid.addWidget(addr_lbl, row*3+1, col*5+1, 1, 3)
+
+            if (col % cols) == 0:
+                # insert stretch in between the two columns
+                spacer = QSpacerItem(1,0)
+                grid.addItem(spacer, row, col*5+4, 1, 1)
+                grid.setColumnStretch(col*5+4, 10)
 
             spacer = QSpacerItem(1, 8)
-            grid.addItem(spacer, row*3+2, col*4, 1, 4)
+            grid.addItem(spacer, row*3+2, col*5, 1, 4)
 
             col += 1
 
+
         if len(items) == 1:
             # just 1 item, put it on the left
-            grid.addItem(QSpacerItem(100,1), 0, 4)
-            grid.setColumnStretch(4, 100)
-        else:
-            grid.setColumnStretch(4, 0)
+            grid.addItem(QSpacerItem(100,1), 0, 5)
+            grid.setColumnStretch(5, 100)
+        if len(items) <= 2:
+            # just 1 row, push it up to the top
+            grid.addItem(QSpacerItem(1,100), 3, 0, -1, -1)
+            grid.setRowStretch(3, 100)
 
 
         if saved_selection and self.button_type != self.ButtonType.NoButton:
@@ -423,3 +433,125 @@ def multiple_result_picker(parent, results, wallet=None, msg=None, title=None, g
         item = gb.selectedItem()
         if item:
             return item[:-1]
+
+def lookup_cash_account_dialog(
+    parent, wallet, *,  # parent and wallet are required and parent must be an ElectrumWindow instance.
+        title: str = None,  # the title to use, defaults to "Lookup Cash Account" (translated) and is bold and larger. Can be rich text.
+        blurb: str = None,  # will appear in the same label, can be rich text, will get concatenated to title.
+        title_label_link_activated_slot: Callable[[str], None] = None,  # if you embed links in the blub, pass a callback to handle them
+        button_type: InfoGroupBox.ButtonType = InfoGroupBox.ButtonType.NoButton  #  see InfoGroupBox
+) -> List[Tuple[cashacct.Info, str, str]]:  # Returns a list of tuples
+    ''' Shows the generic Cash Account lookup interface. '''
+    from .main_window import ElectrumWindow
+    ok_disables = button_type != InfoGroupBox.ButtonType.NoButton
+    title = title or _("Lookup Cash Account")
+    blurb = blurb or ''
+    assert isinstance(parent, ElectrumWindow) and isinstance(wallet, Abstract_Wallet)
+    d = WindowModalDialog(parent.top_level_window(), title)
+    d.setObjectName("WindowModalDialog - " + title)
+    finalization_print_error(d)
+    destroyed_print_error(d)
+
+    vbox = QVBoxLayout(d)
+    hbox = QHBoxLayout()
+    label = QLabel()
+    label.setPixmap(QIcon(":icons/cashacct-logo.png").pixmap(50))
+    hbox.addWidget(label)
+    hbox.addItem(QSpacerItem(10, 1))
+    label = QLabel("<font size=+1><b>" + title + "</b></font>" + blurb)
+    if callable(title_label_link_activated_slot):
+        label.linkActivated.connect(title_label_link_activated_slot)
+    label.setAlignment(Qt.AlignVCenter|Qt.AlignLeft)
+    hbox.addWidget(label)
+    hbox.addStretch(2)
+    vbox.addLayout(hbox)
+    grid = QGridLayout()
+    grid.setContentsMargins(62, 32, 12, 12)
+    acct = QLineEdit()
+    acct.setPlaceholderText(_("Cash Account e.g. satoshi#123.45"))
+    acct.setMinimumWidth(280)
+    label2 = WWLabel('<a href="https://www.cashaccount.info/#lookup">' + _("Search online...") + "</a>")
+    label2.linkActivated.connect(webopen)
+
+
+    #acct.setFixedWidth(280)
+    label = HelpLabel(_("&Cash Account Name"), _("Enter a Cash Account name of the form Name#123.45, and Electron Cash will search for the contact and present you with its resolved address."))
+    label.setBuddy(acct)
+    search = QPushButton(_("Lookup"))
+    search.setEnabled(False)
+    grid.addWidget(label, 0, 0, 1, 1, Qt.AlignRight)
+    grid.addWidget(acct, 0, 1, 1, 1, Qt.AlignLeft)
+    grid.addWidget(search, 0, 2, 1, 1, Qt.AlignLeft)
+    grid.addWidget(label2, 0, 3, 1, 1, Qt.AlignLeft)
+    grid.setColumnStretch(3, 5)
+    vbox.addLayout(grid)
+    vbox.addItem(QSpacerItem(20,10))
+    frame = QScrollArea()
+    #vbox2 = QVBoxLayout(frame)
+    #vbox2.setContentsMargins(2,2,2,2)
+    ca = InfoGroupBox(frame, parent, button_type = button_type)
+    ca.refresh()
+    #frame.setMinimumWidth(760)
+    #ca.setMinimumWidth(760)
+    #ca.setMinimumHeight(350)
+    frame.setMinimumWidth(765)
+    frame.setMinimumHeight(250)
+    frame.setWidget(ca)
+    frame.setWidgetResizable(True)
+    #vbox2.addWidget(ca)
+    vbox.addWidget(frame)
+    search.setDefault(True)
+    if ok_disables:
+        ok = OkButton(d)
+        ok.setDisabled(ok_disables)
+        vbox.addLayout(Buttons(CancelButton(d), ok))
+    else:
+        ok = CloseButton(d)
+        ok.setDefault(False)
+        vbox.addLayout(Buttons(ok))
+
+    def ca_msg(m, clear=False):
+        ca.no_items_text = m
+        if clear:
+            ca.setItems([], auto_resize_parent=False)
+        else:
+            ca.refresh()
+
+    def on_return_pressed():
+        if search.isEnabled():
+            search.click()
+
+    def on_text_changed(txt):
+        txt = txt.strip() if txt else ''
+        search.setEnabled(bool(wallet.cashacct.parse_string(txt)))
+        if not txt and not ca.items():
+            ca_msg(" ")
+
+    def on_search():
+        ok.setDisabled(ok_disables)
+        name = acct.text().strip()
+        tup = wallet.cashacct.parse_string(name)
+        if tup:
+            ca_msg(_("Searching for <b>{cash_account_name}</b> please wait ...").format(cash_account_name=name), True)
+            qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
+            results = wallet.cashacct.resolve_verify(name)
+            if results:
+                nres = len(results)
+                title =  name + " - " + ngettext("{number} Cash Account", "{number} Cash Accounts", nres).format(number=nres)
+                ca.setItems(results, auto_resize_parent=False, title=title)
+            else:
+                ca_msg(_("The specified Cash Account does not appear to be associated with any address"), True)
+        else:
+            ca_msg(_("Invalid Cash Account name, please try again"), True)
+
+    acct.textChanged.connect(on_text_changed)
+    search.clicked.connect(on_search)
+    acct.returnPressed.connect(on_return_pressed)
+    ca.buttonGroup().buttonClicked.connect(lambda x=None: ok.setEnabled(ok_disables and ca.selectedItem() is not None))
+
+    #ca_msg(_("No Results"))
+    ca_msg(" ")
+
+    if d.exec_() == QDialog.Accepted:
+        return ca.selectedItems()
+    return None

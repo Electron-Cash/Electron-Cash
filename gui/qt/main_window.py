@@ -654,6 +654,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From the &blockchain"), self.do_process_from_txid)
         raw_transaction_menu.addAction(_("From &QR code"), self.read_tx_from_qrcode)
         self.raw_transaction_menu = raw_transaction_menu
+        tools_menu.addSeparator()
+        tools_menu.addAction(_("Lookup &Cash Account..."), self.lookup_cash_account_dialog)
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))
@@ -2769,6 +2771,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox.addLayout(Buttons(CancelButton(d), OkButton(d)))
         if d.exec_():
             self.set_contact(line2.text(), line1.text())
+
+    def lookup_cash_account_dialog(self):
+        blurb = "<br><br>" + _('Enter a string of the form <b>name#<i>number</i></b>')
+        cashacctqt.lookup_cash_account_dialog(self, self.wallet, blurb=blurb)
 
     def show_master_public_keys(self):
         dialog = WindowModalDialog(self.top_level_window(), _("Wallet Information"))
