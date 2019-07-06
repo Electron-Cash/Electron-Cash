@@ -2774,7 +2774,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def lookup_cash_account_dialog(self):
         blurb = "<br><br>" + _('Enter a string of the form <b>name#<i>number</i></b>')
-        cashacctqt.lookup_cash_account_dialog(self, self.wallet, blurb=blurb)
+        cashacctqt.lookup_cash_account_dialog(self, self.wallet, blurb=blurb, add_to_contacts_button=True)
 
     def show_master_public_keys(self):
         dialog = WindowModalDialog(self.top_level_window(), _("Wallet Information"))

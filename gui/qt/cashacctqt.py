@@ -163,12 +163,14 @@ class InfoGroupBox(PrintError, QGroupBox):
                  items: List[Tuple[cashacct.Info, str, str]] = [], # list of 2 or 3 tuple : Info, minimal_chash[, formatted_string]
                  title : str = None,
                  button_type : ButtonType = ButtonType.Radio,  # Note that if CheckBox, the buttonGroup will be made non-exclusive and selectedItems() may return more than 1 item.
+                 extra_buttons : List[Callable[[Tuple[cashacct.Info, str, str]], QAbstractButton]] = []  # pass a list of callables that take a 3-tuple for each item and return a button
                  ):
         from .main_window import ElectrumWindow
         assert isinstance(main_window, ElectrumWindow)
         super().__init__(parent)
         self.main_window = main_window
         self.wallet = self.main_window.wallet
+        self.extra_buttons = extra_buttons or []
         assert isinstance(self.wallet, Abstract_Wallet)
         self._setup()
         self.setItems(items=items, title=title, auto_resize_parent=False, button_type=button_type)
@@ -340,16 +342,34 @@ class InfoGroupBox(PrintError, QGroupBox):
             grid.addWidget(view_tx_lbl, row*3, col*5+2, 1, 1)
             view_tx_lbl.setToolTip(_("View Registration Transaction"))
 
+            # misc buttons
+            but_style_sheet = 'QPushButton { border-width: 1px; padding: 0px; margin: 0px; }'
+            if not ColorScheme.dark_scheme:
+                but_style_sheet += ''' QPushButton { border: 1px solid transparent; }
+                QPushButton:hover { border: 1px solid #3daee9; }'''
+            hbox = QHBoxLayout()
+            hbox.setContentsMargins(0,0,0,0)
+            hbox.setSpacing(4)
+            for func in self.extra_buttons:
+                if callable(func):
+                    ab = func(item)
+                    if isinstance(ab, QAbstractButton):
+                        ab.setStyleSheet(but_style_sheet)
+                        ab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                        hbox.addWidget(ab)
             # copy button
             copy_but = QPushButton(QIcon(":icons/copy.png"), "")
-            copy_but.setFlat(True)
-            grid.addWidget(copy_but, row*3, col*5+3, 1, 1)
+            copy_but.setStyleSheet(but_style_sheet)
+            copy_but.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            hbox.addWidget(copy_but)
+            grid.addLayout(hbox, row*3, col*5+3, 1, 1)
+            # end button bar
 
             if isinstance(parent, ElectrumWindow):
                 view_tx_lbl.linkActivated.connect(view_tx_link_activated)
                 copy_but.clicked.connect(lambda ignored=None, ca_string=ca_string, copy_but=copy_but:
                                              parent.copy_to_clipboard(text=ca_string, tooltip=_('Cash Account copied to clipboard'), widget=copy_but) )
-                copy_but.setToolTip(_("Copy Cash Account"))
+                copy_but.setToolTip(_("Copy <b>{cash_account_name}</b>").format(cash_account_name=ca_string))
             else:
                 view_tx_lbl.setHidden(True)
                 copy_but.setHidden(True)
@@ -439,7 +459,8 @@ def lookup_cash_account_dialog(
         title: str = None,  # the title to use, defaults to "Lookup Cash Account" (translated) and is bold and larger. Can be rich text.
         blurb: str = None,  # will appear in the same label, can be rich text, will get concatenated to title.
         title_label_link_activated_slot: Callable[[str], None] = None,  # if you embed links in the blub, pass a callback to handle them
-        button_type: InfoGroupBox.ButtonType = InfoGroupBox.ButtonType.NoButton  #  see InfoGroupBox
+        button_type: InfoGroupBox.ButtonType = InfoGroupBox.ButtonType.NoButton,  #  see InfoGroupBox
+        add_to_contacts_button: bool = False  # if true, the button bar will include an add to contacts button
 ) -> List[Tuple[cashacct.Info, str, str]]:  # Returns a list of tuples
     ''' Shows the generic Cash Account lookup interface. '''
     from .main_window import ElectrumWindow
@@ -451,6 +472,7 @@ def lookup_cash_account_dialog(
     d.setObjectName("WindowModalDialog - " + title)
     finalization_print_error(d)
     destroyed_print_error(d)
+    all_cashacct_contacts = set(v[1] for k,v in wallet.contacts.items() if v[0] == 'cashacct' )
 
     vbox = QVBoxLayout(d)
     hbox = QHBoxLayout()
@@ -489,7 +511,34 @@ def lookup_cash_account_dialog(
     frame = QScrollArea()
     tit_lbl = QLabel()
     vbox.addWidget(tit_lbl)
-    ca = InfoGroupBox(frame, parent, button_type = button_type, title = '')
+    extra_buttons = []
+    if add_to_contacts_button:
+        def create_add_to_contacts_button_callback(item: tuple) -> QPushButton:
+            but = QPushButton()
+            but.setIcon(QIcon(":icons/tab_contacts.png"))
+            if isinstance(item[0].address, Address):
+                if item[2] in all_cashacct_contacts:
+                    but.setDisabled(True)
+                    but.setToolTip(_("<b>{cash_account}</b> already in Contacts").format(cash_account=item[2]))
+                else:
+                    but.setToolTip(_("Add <b>{cash_account}</b> to Contacts").format(cash_account=item[2]))
+                    def add_contact_slot(ign=None, but=but, item=item):
+                        # label, address, typ='address') -> str:
+                        if parent.set_contact(label=item[2], address=item[0].address, typ='cashacct'):
+                            msg = _("<b>{cash_account}</b> added to Contacts").format(cash_account=item[2])
+                            but.setDisabled(True)
+                            but.setToolTip(msg)
+                        else:
+                            msg = _("Error occurred adding to Contacts")
+                        QToolTip.showText(QCursor.pos(), msg, frame, QRect(), 5000)
+                    # /add_contact
+                    but.clicked.connect(add_contact_slot)
+            else:
+                but.setDisabled(True)
+                but.setToolTip("<i>" + _("Unsupported Account Type") + "</i>")
+            return but
+        extra_buttons.append(create_add_to_contacts_button_callback)
+    ca = InfoGroupBox(frame, parent, button_type = button_type, title = '', extra_buttons=extra_buttons)
     ca.refresh()
     frame.setMinimumWidth(765)
     frame.setMinimumHeight(250)
@@ -544,7 +593,7 @@ def lookup_cash_account_dialog(
                 d.reject()
                 return
             if results:
-                ca.setItems(results, auto_resize_parent=False, title='')  # suppress groupbox title
+                ca.setItems(results, auto_resize_parent=False, title='', button_type = button_type)  # suppress groupbox title
             else:
                 ca_msg(_("The specified Cash Account does not appear to be associated with any address"), True)
             nres = len(results or [])
