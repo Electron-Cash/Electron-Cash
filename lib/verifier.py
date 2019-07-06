@@ -172,7 +172,7 @@ class SPV(ThreadJob):
 
     failure_reasons = (
         'inner_node_tx', 'missing_header', 'merkle_mismatch', 'error_response',
-        'misc_failure'
+        'misc_failure', 'tx_not_found'
     )
 
     def verify_merkle(self, response):
@@ -182,16 +182,22 @@ class SPV(ThreadJob):
             params = response.get('params')
             tx_hash = params and params[0]
             if response.get('error'):
+                e = str(response.get('error'))
+                if 'not in block' in e.lower():
+                    raise BadResponse(self.failure_reasons[5], str(response))
                 raise BadResponse('received an error response: ' + str(response))
             merkle = response.get('result')
             if (not isinstance(merkle, dict) or not tx_hash
                     or any(k not in merkle for k in ('block_height', 'merkle', 'pos'))):
                 raise BadResponse(f"missing data in response {response}")
         except BadResponse as e:
+            freason = self.failure_reasons[3]
+            if len(e.args) == 2:
+                freason = e.args[0]
              # FIXME: tx will never verify now until switching blockchains or
              # app restart
             if tx_hash:
-                self.wallet.verification_failed(tx_hash, self.failure_reasons[3])
+                self.wallet.verification_failed(tx_hash, freason)
             self.print_error("verify_merkle:", str(e))
             return
 
