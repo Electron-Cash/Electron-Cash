@@ -151,7 +151,8 @@ class ContactList(PrintError, MyTreeWidget):
                 menu.addAction(_("View on block explorer"), lambda: [URL and webopen(URL) for URL in URLs])
             menu.addSeparator()
 
-        menu.addAction(QIcon(":icons/cashacct-logo.png"), _("New Cash Account Contact"), self.new_cash_account_contact_dialog)
+        menu.addAction(QIcon(":icons/cashacct-logo.png" if not ColorScheme.dark_scheme else ":icons/cashacct-button-darkmode.png"),
+                       _("New Cash Account Contact"), self.new_cash_account_contact_dialog)
         menu.addAction(QIcon(":icons/tab_contacts.png"), _("New Contact"), self.parent.new_contact_dialog)
         menu.addAction(QIcon(":icons/import.svg" if not ColorScheme.dark_scheme else ":icons/import_dark_theme.svg"),
                        _("Import file"), self.import_contacts)
