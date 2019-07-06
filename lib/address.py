@@ -437,7 +437,12 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
     ###########################################
 
     # subclasses of ScriptOutput that handle protocols. Currently this will
-    # contain a cashacct.ScriptOutput instance
+    # contain a cashacct.ScriptOutput instance.
+    #
+    # NOTE: All subclasses of this class must be hashable. Please implement
+    # __hash__ for any subclasses. (This is because our is_mine cache in
+    # wallet.py assumes all possible types that pass through it are hashable).
+    #
     protocol_classes = set()
 
     def make_complete(self, block_height=None, block_hash=None, txid=None):
