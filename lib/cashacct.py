@@ -1136,7 +1136,6 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
         '''
 
-        # This is just scratch code.. TODO: IMPLEMENT
         wat_d, eat_d, vtx_d = dict(), dict(), dict()
         min_enc_l = list()
         with self.lock:
