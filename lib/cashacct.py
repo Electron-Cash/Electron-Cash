@@ -1352,17 +1352,40 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                 return len(set(pb.reg_txs) - set(self.v_tx))
         if verify_txs and pb.reg_txs and num_needed():
             q = queue.Queue()
+            class VFail(RuntimeWarning): pass
             def on_verified(event, *args):
-                if event == 'ca_verified_tx' and args[0] is self:
-                    if not num_needed():
+                if not args or args[0] is not self:
+                    # all the events we care about pass self as arg
+                    return
+                if event == 'ca_verified_tx':
+                    if not num_needed():  # this implcititly checks if the tx's we care about are ready
                         q.put('done')
+                elif event == 'ca_verification_failed' and len(args) >= 3 and args[1] in pb.reg_txs:
+                    q.put(('failed', args[1], args[2]))
+                    if args[2] == 'tx_not_found':
+                        ctr = 0
+                        with self.lock:
+                            for txid in pb.reg_txs:
+                                if txid not in self.v_tx:
+                                    self._wipe_tx(txid, rm_from_verifier=True)
+                                    ctr += 1
+                        if ctr:
+                            self.print_error(f"_verify_block_inner: Block number {number} from server {server} appears to be invalid on this chain: '{args[2]}' undid {ctr} verification requests")
             try:
-                network.register_callback(on_verified, ['ca_verified_tx'])
+                network.register_callback(on_verified, ['ca_verified_tx', 'ca_verification_failed'])
                 for txid, regtx in pb.reg_txs.items():
                     self.add_ext_tx(txid, regtx.script)  # NB: this is a no-op if already verified and/or in wallet_reg_txs
                 if num_needed():
-                    q.get(timeout=timeout)
-            except queue.Empty as e:
+                    thing = q.get(timeout=timeout)
+                    if thing == 'done':
+                        pass  # ok, success!
+                    elif isinstance(thing, tuple) and thing[0] == 'failed':
+
+                        raise VFail(thing[1], thing[2])
+                    else:
+                        self.print_error("INTERNAL ERROR: Got unknown thing from an internal queue in _verify_block_inner. FIXME!")
+                        raise VFail("INTERNAL ERROR", "_verify_block_inner")
+            except (queue.Empty, VFail) as e:
                 if num_needed():
                     exc.append(e)
                     return
@@ -1554,9 +1577,9 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             if verifier:
                 verifier.remove_spv_proof_for_tx(txid)
 
-    def _wipe_tx(self, txid):
+    def _wipe_tx(self, txid, rm_from_verifier=False):
         ''' called to completely forget a tx from all caches '''
-        self._rm_vtx(txid, force=True)
+        self._rm_vtx(txid, force=True, rm_from_verifier=rm_from_verifier)
         self.wallet_reg_tx.pop(txid, None)
         self.ext_reg_tx.pop(txid, None)
         self.ext_incomplete_tx.pop(txid, None)
@@ -1621,6 +1644,17 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         if self.network and script.is_complete():  # paranoia checks
             self.network.trigger_callback('ca_verified_tx', self, Info.from_script(script, txid))
 
+    def verification_failed_hook(self, txid, reason):
+        ''' Called by wallet when it receives a verification_failed callback
+        from its verifier. We must check if the tx is relevant and if so,
+        forwrd the information on with a callback '''
+        with self.lock:
+            script = self._find_script(txid, False, giveto='w', incomplete=True)
+            if not script:
+                # not relevant to us
+                return
+        if self.network:
+            self.network.trigger_callback('ca_verification_failed', self, txid, reason)
 
     def undo_verifications_hook(self, txs: set):
         ''' Called by wallet when it itself got called to undo_verifictions by
@@ -1773,6 +1807,8 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
                     self.print_error("ignoring failure due misc. error response from server.. will try again next session")
         except ValueError:
             self.print_error(f"Cannot find '{reason}' in verifier reason list! FIXME!")
+        if self.network:
+            self.network.trigger_callback('ca_verification_failed', self, tx_hash, reason)
 
     # /SPVDelegate Methods
 

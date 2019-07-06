@@ -526,6 +526,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def verification_failed(self, tx_hash, reason):
         ''' TODO: Notify gui of this if it keeps happening, try a different
         server, rate-limited retries, etc '''
+        self.cashacct.verification_failed_hook(tx_hash, reason)
 
     def get_unverified_txs(self):
         '''Returns a map from tx hash to transaction height'''
