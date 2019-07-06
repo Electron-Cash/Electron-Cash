@@ -1752,16 +1752,25 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
         try:
             with self.lock:
                 script = self._find_script(tx_hash)
-                if self.verifier.failure_reasons.index(reason) < 3 or not script or not script.is_complete():
+                idx = self.verifier.failure_reasons.index(reason)
+                if idx < 3 or not script or not script.is_complete():
                     # actual verification failure.. remove this tx
                     self.print_error("removing tx from ext_reg_tx cache")
                     self.ext_unverif.pop(tx_hash, None)
                     self.ext_reg_tx.pop(tx_hash, None)
+                elif idx == 5:
+                    # tx not found -- might be either we are testnet and lookup
+                    # server was mainnet *OR* some other strangeness. Not sure
+                    # what to do here, so we just wipe the tx from our caches
+                    # because keeping it around will cause the client to DoS
+                    # itself versus the ElectrumX server each time it connects.
+                    self.print_error("tx appears to be completely unknown to server, wiping from cache")
+                    self._wipe_tx(tx_hash)
                 else:
                     # Note that the above ^ branch can also be reached due to a
                     # misbehaving server so .. not really sure what to do here.
                     # TODO: Determine best strategy for verification failures.
-                    self.print_error("ignoring failure due to misbehaving server.. will try again next session")
+                    self.print_error("ignoring failure due misc. error response from server.. will try again next session")
         except ValueError:
             self.print_error(f"Cannot find '{reason}' in verifier reason list! FIXME!")
 
