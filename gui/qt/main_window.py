@@ -1813,8 +1813,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         self.from_list.setCurrentItem(twi)
 
     def get_contact_payto(self, key):
-        _type, label = self.contacts.get(key)
-        return label + '  <' + key + '>' if _type in ('address', 'cashacct') else key
+        tup = self.contacts.get(key)
+        if not tup:
+            return key
+        _type, label = tup
+        emoji_str = ''
+        if _type == 'cashacct':
+            info = self.wallet.cashacct.get_verified(label)
+            if info:
+                emoji_str = f'  {info.emoji}'
+            else:
+                # could not get verified contact, don't offer it as a completion
+                return key
+        return label + emoji_str + '  <' + key + '>' if _type in ('address', 'cashacct') else key
 
     def update_completions(self):
         l = [self.get_contact_payto(key) for key in self.contacts.keys()]
