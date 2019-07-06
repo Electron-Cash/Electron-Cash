@@ -35,7 +35,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from .util import (MyTreeWidget, webopen, WindowModalDialog, Buttons,
                    CancelButton, OkButton, HelpLabel, WWLabel,
-                   destroyed_print_error, webopen, ColorScheme)
+                   destroyed_print_error, webopen, ColorScheme, MONOSPACE_FONT)
 from enum import IntEnum
 from collections import defaultdict
 from . import cashacctqt
@@ -58,6 +58,8 @@ class ContactList(PrintError, MyTreeWidget):
         self.wallet = parent.wallet
         self.setIndentation(0)
         self._edited_item_cur_sel = (None,) * 3
+        self.monospace_font = QFont(MONOSPACE_FONT)
+
 
     def on_permit_edit(self, item, column):
         # openalias items shouldn't be editable
@@ -197,6 +199,7 @@ class ContactList(PrintError, MyTreeWidget):
                     item.setIcon(0, QIcon(":icons/unconfirmed.svg"))
                     tt = _('Warning: This Cash Account is not validated')
                 item.setToolTip(0, tt)
+                item.setFont(2, self.monospace_font)
             self.addTopLevelItem(item)
             if key == current_key or (key == edited[0] and edited[1]):
                 current_item = item  # this key was the current item before and it hasn't gone away

@@ -55,6 +55,7 @@ class AddressList(MyTreeWidget):
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
         self.wallet = self.parent.wallet
+        self.monospace_font = QFont(MONOSPACE_FONT)
         assert self.wallet
         self.cleaned_up = False
 
@@ -202,13 +203,13 @@ class AddressList(MyTreeWidget):
                     # Set Cash Accounts: tool tip.. this will read the minimal_chash attribute we added to this object above
                     self._ca_set_item_tooltip(address_item, ca_info)
                 address_item.setTextAlignment(3, Qt.AlignRight)
-                address_item.setFont(3, QFont(MONOSPACE_FONT))
+                address_item.setFont(3, self.monospace_font)
                 if fx:
                     address_item.setTextAlignment(4, Qt.AlignRight)
-                    address_item.setFont(4, QFont(MONOSPACE_FONT))
+                    address_item.setFont(4, self.monospace_font)
 
                 # Set col0 address font to monospace
-                address_item.setFont(0, QFont(MONOSPACE_FONT))
+                address_item.setFont(0, self.monospace_font)
 
                 # Set UserRole data items:
                 address_item.setData(0, self.DataRoles.address, address)
