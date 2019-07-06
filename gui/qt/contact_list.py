@@ -312,3 +312,4 @@ class ContactList(PrintError, MyTreeWidget):
             if item:
                 info, min_chash, name = item
                 self.parent.set_contact(name, info.address.to_ui_string(), typ='cashacct')
+                self.update()
