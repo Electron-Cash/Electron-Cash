@@ -250,6 +250,15 @@ class ScriptOutput(ScriptOutputBase):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __hash__(self):
+        l = [self.script]
+        for name in __class__.attrs_extra:
+            v = getattr(self, name, None)
+            if isinstance(v, list):
+                v = tuple(v)
+            l.append(v)
+        return hash(tuple(l))
+
     @staticmethod
     def _ensure_script(script):
         '''Returns script or script.script if script is a ScriptOutput instance.
@@ -745,6 +754,20 @@ class ProcessedBlock:
 
     def __neq__(self, other):
         return not self.__eq__(other)
+
+    def __hash__(self):
+        l = []
+        for name in self.__slots__:
+            v = getattr(self, name, None)
+            if isinstance(v, dict):
+                # Python really needs a frozendict type. :)  This dict doesn't
+                # mutate anyway once constructed, so this is safe.
+                v = tuple(v.items())
+            # uncomment below if we add a list to this class
+            #elif isinstance(v, list):
+            #    v = tuple(v)
+            l.append(v)
+        return hash(tuple(l))
 
 
 class CashAcct(util.PrintError, verifier.SPVDelegate):
