@@ -18,6 +18,7 @@
     <file>icons/electron_dark_icon.svg</file>
     <file>icons/file.png</file>
     <file>icons/import.svg</file>
+    <file>icons/import_dark_theme.svg</file>
     <file>icons/keepkey.png</file>
     <file>icons/keepkey_unpaired.png</file>
     <file>icons/key.png</file>
@@ -30,6 +31,7 @@
     <file>icons/qr_finder.svg</file>
     <file>icons/preferences.svg</file>
     <file>icons/save.svg</file>
+    <file>icons/save_dark_theme.svg</file>
     <file>icons/seed.png</file>
     <file>icons/status_connected.svg</file>
     <file>icons/status_connected_fork.svg</file>

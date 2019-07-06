@@ -33,7 +33,9 @@ from electroncash.util import FileImportFailed, PrintError, finalization_print_e
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
-from .util import MyTreeWidget, webopen, WindowModalDialog, Buttons, CancelButton, OkButton, HelpLabel, WWLabel, destroyed_print_error, webopen
+from .util import (MyTreeWidget, webopen, WindowModalDialog, Buttons,
+                   CancelButton, OkButton, HelpLabel, WWLabel,
+                   destroyed_print_error, webopen, ColorScheme)
 from enum import IntEnum
 from collections import defaultdict
 from . import cashacctqt
@@ -151,9 +153,11 @@ class ContactList(PrintError, MyTreeWidget):
 
         menu.addAction(QIcon(":icons/cashacct-logo.png"), _("New Cash Account Contact"), self.new_cash_account_contact_dialog)
         menu.addAction(QIcon(":icons/tab_contacts.png"), _("New Contact"), self.parent.new_contact_dialog)
-        menu.addAction(QIcon(":icons/import.svg"), _("Import file"), self.import_contacts)
+        menu.addAction(QIcon(":icons/import.svg" if not ColorScheme.dark_scheme else ":icons/import_dark_theme.svg"),
+                       _("Import file"), self.import_contacts)
         if len(self.parent.contacts):
-            menu.addAction(QIcon(":icons/save.svg"), _("Export file"), self.export_contacts)
+            menu.addAction(QIcon(":icons/save.svg" if not ColorScheme.dark_scheme else ":icons/save_dark_theme.svg"),
+                           _("Export file"), self.export_contacts)
 
         run_hook('create_contact_menu', menu, selected)
         menu.exec_(self.viewport().mapToGlobal(position))
