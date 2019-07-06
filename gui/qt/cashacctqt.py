@@ -382,11 +382,11 @@ class InfoGroupBox(PrintError, QGroupBox):
 
         if len(items) == 1:
             # just 1 item, put it on the left
-            grid.addItem(QSpacerItem(100,1), 0, 5)
+            grid.addItem(QSpacerItem(2,1), 0, 5)
             grid.setColumnStretch(5, 100)
         if len(items) <= 2:
             # just 1 row, push it up to the top
-            grid.addItem(QSpacerItem(1,100), 3, 0, -1, -1)
+            grid.addItem(QSpacerItem(1,2), 3, 0, -1, -1)
             grid.setRowStretch(3, 100)
 
 
