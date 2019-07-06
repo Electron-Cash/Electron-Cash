@@ -655,7 +655,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From &QR code"), self.read_tx_from_qrcode)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
-        tools_menu.addAction(_("Lookup &Cash Account..."), self.lookup_cash_account_dialog)
+        if ColorScheme.dark_scheme and sys.platform != 'darwin':  # use dark icon in menu except for on macOS where we can't be sure it will look right due to the way menus work on macOS
+            icon = QIcon(":icons/cashacct-button-darkmode.png")
+        else:
+            icon = QIcon(":icons/cashacct-logo.png")
+        tools_menu.addAction(icon, _("Lookup &Cash Account..."), self.lookup_cash_account_dialog)
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))
