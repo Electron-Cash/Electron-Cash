@@ -498,10 +498,12 @@ def lookup_cash_account_dialog(
     vbox.addWidget(frame)
     search.setDefault(True)
     if ok_disables:
+        need_to_fwd_return = True
         ok = OkButton(d)
         ok.setDisabled(ok_disables)
         vbox.addLayout(Buttons(CancelButton(d), ok))
     else:
+        need_to_fwd_return = False
         ok = CloseButton(d)
         ok.setDefault(False)
         vbox.addLayout(Buttons(ok))
@@ -515,7 +517,7 @@ def lookup_cash_account_dialog(
         tit_lbl.setText('')
 
     def on_return_pressed():
-        if search.isEnabled():
+        if need_to_fwd_return and search.isEnabled():
             search.click()
 
     def on_text_changed(txt):
@@ -530,8 +532,17 @@ def lookup_cash_account_dialog(
         tup = wallet.cashacct.parse_string(name)
         if tup:
             ca_msg(_("Searching for <b>{cash_account_name}</b> please wait ...").format(cash_account_name=name), True)
-            qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
-            results = wallet.cashacct.resolve_verify(name)
+            results = None
+            def resolve_verify():
+                nonlocal results
+                results = wallet.cashacct.resolve_verify(name)
+            code = VerifyingDialog(parent.top_level_window(),
+                                   _("Verifying Cash Account {name} please wait ...").format(name=name),
+                                   resolve_verify, auto_show=False).exec_()
+            if code == QDialog.Rejected:
+                # user cancel -- the waiting dialog thread will continue to run in the background but that's ok.. it will be a no-op
+                d.reject()
+                return
             if results:
                 ca.setItems(results, auto_resize_parent=False, title='')  # suppress groupbox title
             else:
