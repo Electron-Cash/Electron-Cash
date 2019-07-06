@@ -288,7 +288,7 @@ class ContactList(PrintError, MyTreeWidget):
             name = acct.text().strip()
             tup = self.wallet.cashacct.parse_string(name)
             if tup:
-                ca_msg(_("Searching, for <b>{name}</b> please wait ...").format(name=name), True)
+                ca_msg(_("Searching for <b>{name}</b> please wait ...").format(name=name), True)
                 qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
                 results = wallet.cashacct.resolve_verify(name)
                 if results:
