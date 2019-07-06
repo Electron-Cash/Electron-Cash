@@ -23,7 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext
 import electroncash.web as web
 from electroncash.address import Address
 from electroncash.plugins import run_hook
@@ -288,11 +288,12 @@ class ContactList(PrintError, MyTreeWidget):
             name = acct.text().strip()
             tup = self.wallet.cashacct.parse_string(name)
             if tup:
-                ca_msg(_("Searching for <b>{name}</b> please wait ...").format(name=name), True)
+                ca_msg(_("Searching for <b>{cash_account_name}</b> please wait ...").format(cash_account_name=name), True)
                 qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
                 results = wallet.cashacct.resolve_verify(name)
                 if results:
-                    title =  name + " - " + _("{number} Cash Account(s)").format(number=len(results))
+                    nres = len(results)
+                    title =  name + " - " + ngettext("{number} Cash Account", "{number} Cash Accounts", nres).format(number=nres)
                     ca.setItems(results, auto_resize_parent=False, title=title)
                 else:
                     ca_msg(_("The specified Cash Account does not appear to be associated with any address"), True)

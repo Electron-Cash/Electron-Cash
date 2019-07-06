@@ -37,7 +37,7 @@ from enum import IntEnum
 from electroncash import cashacct
 from electroncash import util
 from electroncash.address import Address, UnknownAddress
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext
 from electroncash.wallet import Abstract_Wallet
 
 
@@ -184,7 +184,8 @@ class InfoGroupBox(PrintError, QGroupBox):
                  title = None, auto_resize_parent = True, sort=True,
                  button_type : ButtonType = ButtonType.Radio):
         items = items or []
-        title = title or _("{number} Cash Account(s)").format(number=len(items))
+        nitems = len(items)
+        title = title or ngettext("{number} Cash Account", "{number} Cash Accounts", nitems).format(number=nitems)
         wallet = self.wallet
         if items and (sort or len(items[0]) != 3):
             # sort items by formatted cash account string, also adding the string to
@@ -355,12 +356,12 @@ class InfoGroupBox(PrintError, QGroupBox):
             addr_lbl = ButtonAssociatedLabel('', button=rb)
             if is_valid:
                 if is_mine:
-                    addr_lbl.setText(f'<a href="{info.address.to_ui_string()}">{info.address.to_ui_string()}</a>')
+                    addr_lbl.setText(f'<a href="{info.address.to_ui_string()}"><pre>{info.address.to_ui_string()}</pre></a>')
                     addr_lbl.linkActivated.connect(view_addr_link_activated)
                     addr_lbl.setToolTip(_('Wallet') + ' - ' + (_('Change Address') if is_change else _('Receiving Address')))
                     addr_lbl.setButton(None)  # disable click to select
                 else:
-                    addr_lbl.setText(f'{info.address.to_ui_string()}')
+                    addr_lbl.setText(f'<pre>{info.address.to_ui_string()}</pre>')
             else:
                 addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
                 addr_lbl.setToolTip(rb.toolTip())
