@@ -278,13 +278,14 @@ class ContactList(PrintError, MyTreeWidget):
                 search.click()
 
         def on_text_changed(txt):
-            ''' '''
+            txt = txt.strip() if txt else ''
             search.setEnabled(bool(self.wallet.cashacct.parse_string(txt)))
             if not txt and not ca.items():
                 ca_msg(" ")
 
         def on_search():
-            name = acct.text()
+            ok.setDisabled(True)
+            name = acct.text().strip()
             tup = self.wallet.cashacct.parse_string(name)
             if tup:
                 ca_msg(_("Searching, for <b>{name}</b> please wait ...").format(name=name), True)
@@ -301,10 +302,13 @@ class ContactList(PrintError, MyTreeWidget):
         acct.textChanged.connect(on_text_changed)
         search.clicked.connect(on_search)
         acct.returnPressed.connect(on_return_pressed)
+        ca.buttonGroup().buttonClicked.connect(lambda x=None: ok.setEnabled(ca.selectedItem() is not None))
 
         #ca_msg(_("No Results"))
         ca_msg(" ")
 
-        if d.exec_():
-            pass
-            #self.set_contact(line2.text(), line1.text())
+        if d.exec_() == QDialog.Accepted:
+            item = ca.selectedItem()
+            if item:
+                info, min_chash, name = item
+                self.parent.set_contact(name, info.address.to_ui_string(), typ='cashacct')
