@@ -187,7 +187,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                  button_type : ButtonType = ButtonType.Radio):
         items = items or []
         nitems = len(items)
-        title = title or ngettext("{number} Cash Account", "{number} Cash Accounts", nitems).format(number=nitems)
+        title = ngettext("{number} Cash Account", "{number} Cash Accounts", nitems).format(number=nitems) if title is None else title
         wallet = self.wallet
         if items and (sort or len(items[0]) != 3):
             # sort items by formatted cash account string, also adding the string to
@@ -487,18 +487,14 @@ def lookup_cash_account_dialog(
     vbox.addLayout(grid)
     vbox.addItem(QSpacerItem(20,10))
     frame = QScrollArea()
-    #vbox2 = QVBoxLayout(frame)
-    #vbox2.setContentsMargins(2,2,2,2)
-    ca = InfoGroupBox(frame, parent, button_type = button_type)
+    tit_lbl = QLabel()
+    vbox.addWidget(tit_lbl)
+    ca = InfoGroupBox(frame, parent, button_type = button_type, title = '')
     ca.refresh()
-    #frame.setMinimumWidth(760)
-    #ca.setMinimumWidth(760)
-    #ca.setMinimumHeight(350)
     frame.setMinimumWidth(765)
     frame.setMinimumHeight(250)
     frame.setWidget(ca)
     frame.setWidgetResizable(True)
-    #vbox2.addWidget(ca)
     vbox.addWidget(frame)
     search.setDefault(True)
     if ok_disables:
@@ -513,9 +509,10 @@ def lookup_cash_account_dialog(
     def ca_msg(m, clear=False):
         ca.no_items_text = m
         if clear:
-            ca.setItems([], auto_resize_parent=False)
+            ca.setItems([], auto_resize_parent=False, title = '')
         else:
             ca.refresh()
+        tit_lbl.setText('')
 
     def on_return_pressed():
         if search.isEnabled():
@@ -536,11 +533,12 @@ def lookup_cash_account_dialog(
             qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
             results = wallet.cashacct.resolve_verify(name)
             if results:
-                nres = len(results)
-                title =  name + " - " + ngettext("{number} Cash Account", "{number} Cash Accounts", nres).format(number=nres)
-                ca.setItems(results, auto_resize_parent=False, title=title)
+                ca.setItems(results, auto_resize_parent=False, title='')  # suppress groupbox title
             else:
                 ca_msg(_("The specified Cash Account does not appear to be associated with any address"), True)
+            nres = len(results or [])
+            title =  "<b>" + name + "</b> - " + ngettext("{number} Cash Account", "{number} Cash Accounts", nres).format(number=nres)
+            tit_lbl.setText(title)
         else:
             ca_msg(_("Invalid Cash Account name, please try again"), True)
 
@@ -549,7 +547,6 @@ def lookup_cash_account_dialog(
     acct.returnPressed.connect(on_return_pressed)
     ca.buttonGroup().buttonClicked.connect(lambda x=None: ok.setEnabled(ok_disables and ca.selectedItem() is not None))
 
-    #ca_msg(_("No Results"))
     ca_msg(" ")
 
     if d.exec_() == QDialog.Accepted:
