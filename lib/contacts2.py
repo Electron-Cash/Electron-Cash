@@ -167,11 +167,16 @@ class Contacts(util.PrintError):
             pass
         return False
 
-    def add(self, contact : Contact, replace_old : Contact = None):
+    def add(self, contact : Contact, replace_old : Contact = None, unique : bool = False):
         ''' Puts a contact in the contact list, appending it at the end.
         Optionally, if replace_old is specified, will replace the entry
         where replace_old resides.  If replace_old cannot be found, will simply
-        put the contact at the end. '''
+        put the contact at the end.
+
+        If unique is True, will not add if the contact already exists (useful
+        for importing where you don't want multiple imports of the same contact
+        file to keep growing the contact list).
+        '''
         assert isinstance(contact, Contact) and isinstance(replace_old, (Contact, type(None)))
         if replace_old:
             if self.replace(replace_old, contact):
@@ -179,6 +184,8 @@ class Contacts(util.PrintError):
             else:
                 ''' replace_old not found, proceed to just add to end '''
                 self.print_error(f"add: replace_old={replace_old} not found in contacts")
+        if unique and contact in self.data:
+            return  # unique add requested, abort because already exists
         self.data.append(contact)
 
     def remove(self, contact : Contact):
