@@ -474,7 +474,7 @@ def lookup_cash_account_dialog(
     d.setObjectName("WindowModalDialog - " + title)
     finalization_print_error(d)
     destroyed_print_error(d)
-    all_cashacct_contacts = set(contact for contact in wallet.contacts.get_all(nocopy=True) if contact.type == 'cashacct')
+    all_cashacct_contacts = set(contact.name for contact in wallet.contacts.get_all(nocopy=True) if contact.type == 'cashacct')
 
     vbox = QVBoxLayout(d)
     hbox = QHBoxLayout()
