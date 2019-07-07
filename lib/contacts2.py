@@ -74,7 +74,7 @@ class Contacts(util.PrintError):
         for d in in_list:
             if not isinstance(d, dict):
                 continue  # skip obviously bad entries
-            name, address, typ = d.get('name', ''), d.get('address', ''), d.get('type', '')
+            name, address, typ = d.get('name'), d.get('address'), d.get('type')
             if not all(isinstance(a, str) for a in (name, address, typ)):
                 continue # skip invalid-looking data
             if typ in ('address', 'cashacct'):
