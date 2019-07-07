@@ -22,6 +22,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import json
+import os
+import traceback
 from collections import namedtuple
 from typing import List, Dict
 from . import util
@@ -154,6 +157,44 @@ class Contacts(util.PrintError):
         for k,v in d.items():
             self.storage.put(k, v)  # "contacts2", "contacts" are the two expected keys
 
+    ######################
+    # Import/Export File #
+    ######################
+    def import_file(self, path : str) -> int:
+        ''' Import contacts from a file. The file should contain a JSON dict.
+        Old-style pre-4.0.8 contact export .json files are supported and
+        auto-detected, as well as new-style 4.0.8+ files. '''
+        count = 0
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                d = json.loads(f.read())
+                if not isinstance(d, dict):
+                    raise RuntimeError(f"Expected a JSON dict in file {os.path.basename(path)}, instead got {str(type(d))}")
+                if not 'contacts' in d and not 'contacts2' in d:
+                    # was old-style export from pre 4.0.8 EC JSON dict
+                    d = { 'contacts' : d }  # make it look like a dict with 'contacts' in it so that it resembles a wallet file, and next call to _load_from_dict_like_object works
+                contacts = self._load_from_dict_like_object(d)
+                for contact in contacts:
+                    res = self.add(contact, unique=True)  # enforce unique imports in case user imports the same file multiple times
+                    if res:
+                        count += 1
+        except:
+            self.print_error(traceback.format_exc())
+            raise
+        if count:
+            self.save()
+        return count
+
+    def export_file(self, path : str) -> int:
+        ''' Save contacts as JSON to a file. May raise OSError. The contacts
+        are saved in such a format that they are readable by both EC 4.0.8 and
+        prior versions (contains legacy as well as new versions of the data
+        in a large JSON dict).'''
+        d = self._save(self.data, v1_too = True)
+        with open(path, 'w+', encoding='utf-8') as f:
+            json.dump(d, f, indent=4, sort_keys=True)
+        return len(self.data)
+
     ###############
     # Plublic API #
     ###############
@@ -169,6 +210,7 @@ class Contacts(util.PrintError):
         try:
             index = self.data.index(old)
             self.data[index] = new
+            self.save()
             return True
         except ValueError:
             pass
@@ -186,21 +228,26 @@ class Contacts(util.PrintError):
         '''
         assert isinstance(contact, Contact) and isinstance(replace_old, (Contact, type(None)))
         if replace_old:
-            if self.replace(replace_old, contact):
-                return
+            success = self.replace(replace_old, contact)
+            if success:
+                return True
             else:
                 ''' replace_old not found, proceed to just add to end '''
                 self.print_error(f"add: replace_old={replace_old} not found in contacts")
         if unique and contact in self.data:
-            return  # unique add requested, abort because already exists
+            return False  # unique add requested, abort because already exists
         self.data.append(contact)
+        self.save()
+        return True
 
-    def remove(self, contact : Contact):
+    def remove(self, contact : Contact, save : bool = True):
         ''' Removes a contact from the contact list. Returns True if it was
         removed or False otherwise. Note that if multiple entries for the same
         contact exist, only the first one found is removed. '''
         try:
             self.data.remove(contact)
+            if save:
+                self.save()
             return True
         except ValueError:
             return False
@@ -209,6 +256,8 @@ class Contacts(util.PrintError):
         ''' Removes all entries matching contact from the internal contact list.
         Returns the number of entries removed successfully. '''
         ct = 0
-        while self.remove(contact):
+        while self.remove(contact, save=False):
             ct += 1
+        if ct:
+            self.save()
         return ct
