@@ -43,7 +43,12 @@ class Contacts(dict):
             return
         # backward compatibility
         for k, v in self.copy().items():
-            _type, n = v
+            try:
+                _type, n = v
+            except:
+                self.pop(k)
+                # bad/unexpected data from wallet file.. keep going after removing offending item
+                continue
             # Previous format was { name : (type, address) }
             #   -> current format { address : (type, name) }
             if _type == 'address' and Address.is_valid(n) and not Address.is_valid(k):

@@ -60,11 +60,16 @@ class Contacts(util.PrintError):
     def _load_from_dict_like_object(storage) -> List[Contact]:
         assert callable(getattr(storage, 'get', None))
         l = storage.get('contacts2')
-        # Check if v2 available and and if v1 available. If v1 but no v2,
-        # load v1. Otherwise prefer v2.  This allows users to switch EC
-        # versions back and forth.
-        if (not l or not isinstance(l, list)) and isinstance(storage.get('contacts'), dict):
+        v2_was_missing = not isinstance(l, list)
+        # Check if v2 missing but v1 available.  If so, load v1 data.
+        # Next time save() is called, wallet storage will have v2 data
+        # and this branch will be ignored.
+        if v2_was_missing and isinstance(storage.get('contacts'), dict):
             return Contacts._loadv1(storage)
+
+        if v2_was_missing:
+            # if we get here, neither v1 nor v2 was found, return empty list
+            return []
 
         return Contacts._load_v2_list(l)
 
