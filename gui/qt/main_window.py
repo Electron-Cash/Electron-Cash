@@ -31,6 +31,7 @@ from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 import base64
 from functools import partial
 from collections import OrderedDict
+from typing import List
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -41,7 +42,7 @@ from electroncash.address import Address, ScriptOutput
 from electroncash.bitcoin import COIN, TYPE_ADDRESS, TYPE_SCRIPT
 from electroncash import networks
 from electroncash.plugins import run_hook
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext
 from electroncash.util import (format_time, format_satoshis, PrintError,
                                format_satoshis_plain, NotEnoughFunds,
                                ExcessiveFee, UserCancelled, InvalidPassword,
@@ -52,6 +53,7 @@ from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct
 from electroncash import paymentrequest
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
+from electroncash.contacts import Contact
 try:
     from electroncash.plot import plot_history
 except:
@@ -512,6 +514,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
 
     def backup_wallet(self):
+        self.wallet.storage.write()  # make sure file is committed to disk
         path = self.wallet.storage.path
         wallet_folder = os.path.dirname(path)
         filename, __ = QFileDialog.getSaveFileName(self, _('Enter a filename for the copy of your wallet'), wallet_folder)
@@ -1818,11 +1821,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if name(item) == sel:
                         self.from_list.setCurrentItem(twi)
 
-    def get_contact_payto(self, key):
-        tup = self.contacts.get(key)
-        if not tup:
-            return key
-        _type, label = tup
+    def get_contact_payto(self, contact : Contact) -> str:
+        assert isinstance(contact, Contact)
+        _type, label = contact.type, contact.name
         emoji_str = ''
         if _type == 'cashacct':
             info = self.wallet.cashacct.get_verified(label)
@@ -1830,11 +1831,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 emoji_str = f'  {info.emoji}'
             else:
                 # could not get verified contact, don't offer it as a completion
-                return key
-        return label + emoji_str + '  <' + key + '>' if _type in ('address', 'cashacct') else key
+                return None
+        elif _type == 'openalias':
+            return contact.address
+        return label + emoji_str + '  <' + contact.address + '>' if _type in ('address', 'cashacct') else None
 
     def update_completions(self):
-        l = [self.get_contact_payto(key) for key in self.contacts.keys()]
+        l = []
+        for contact in self.contacts.get_all(nocopy=True):
+            s = self.get_contact_payto(contact)
+            if s is not None: l.append(s)
         self.completions.setStringList(l)
 
     def protected(func):
@@ -2463,8 +2469,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         ])
         self.show_message(msg, title=_('Pay to many'))
 
-    def payto_contacts(self, labels):
-        paytos = [self.get_contact_payto(label) for label in labels]
+    def payto_contacts(self, contacts : List[Contact]):
+        paytos = []
+        for contact in contacts:
+            s = self.get_contact_payto(contact)
+            if s is not None: paytos.append(s)
         self.show_send_tab()
         if len(paytos) == 1:
             self.payto_e.setText(paytos[0])
@@ -2494,19 +2503,25 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         On failure throws up an error window and returns None.'''
         return cashacctqt.resolve_cashacct(self, name)
 
-    def set_contact(self, label, address, typ='address') -> str:
+    def set_contact(self, label, address, typ='address', replace=None) -> Contact:
+        ''' Returns a reference to the newly inserted Contact object.
+        replace is optional and if specified, replace an existing contact,
+        otherwise add a new one.
+
+        Note that duplicate contacts will not be added multiple times, but in
+        that case the returned value would still be a valid Contact.
+
+        Returns None on failure.'''
         assert typ in ('address', 'cashacct')
-        ret = None
+        contact = None
         if typ == 'cashacct':
             tup = self.resolve_cashacct(label)  # this displays an error message for us
             if not tup:
                 self.contact_list.update() # Displays original
                 return
             info, label = tup
-            old_entry = self.contacts.pop(address, None)
             address = info.address.to_ui_string()
-            ret = address
-            self.contacts[address] = (typ, label)
+            contact = Contact(name=label, address=address, type=typ)
         elif not Address.is_valid(address):
             # Bad 'address' code path
             self.show_error(_('Invalid Address'))
@@ -2514,35 +2529,41 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return
         else:
             # Good 'address' code path...
-            old_entry = self.contacts.get(address, None)
-            self.contacts[address] = (typ, label)
-            ret = address
+            contact = Contact(name=label, address=address, type=typ)
+        assert contact
+        if replace != contact:
+            if self.contacts.has(contact):
+                self.show_error(_(f"A contact named {contact.name} with the same address and type already exists."))
+                self.contact_list.update()
+                return replace or contact
+            self.contacts.add(contact, replace_old=replace, unique=True)
         self.contact_list.update()
         self.history_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         self.update_completions()
 
         # The contact has changed, update any addresses that are displayed with the old information.
-        run_hook('update_contact', address, self.contacts[address], old_entry)
-        return ret
+        run_hook('update_contact2', contact, replace)
+        return contact
 
-    def delete_contacts(self, addresses):
-        contact_str = " + ".join(addresses) if len(addresses) <= 3 else _("{} contacts").format(len(addresses))
-        if not self.question(_("Remove {} from your list of contacts?")
-                             .format(contact_str)):
+    def delete_contacts(self, contacts):
+        names = [f"{contact.name} <{contact.address[:8]}{'…' if len(contact.address) > 8 else ''}>" for contact in contacts]
+        n = len(names)
+        contact_str = " + ".join(names) if n <= 3 else ngettext("{number_of_contacts} contact", "{number_of_contacts} contacts", n).format(number_of_contacts=n)
+        if not self.question(_("Remove {list_of_contacts_OR_count_of_contacts_plus_the_word_count} from your list of contacts?")
+                             .format(list_of_contacts_OR_count_of_contacts_plus_the_word_count=contact_str)):
             return
         removed_entries = []
-        for address in addresses:
-            if address in self.contacts.keys():
-                removed_entries.append((address, self.contacts[address]))
-            self.contacts.pop(address)
+        for contact in contacts:
+            if self.contacts.remove(contact):
+                removed_entries.append(contact)
 
         self.history_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         self.contact_list.update()
         self.update_completions()
 
-        run_hook('delete_contacts', removed_entries)
+        run_hook('delete_contacts2', removed_entries)
 
     def show_invoice(self, key):
         pr = self.invoices.get(key)
@@ -2764,17 +2785,22 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox.addWidget(QLabel(_('New Contact') + ':'))
         grid = QGridLayout()
         line1 = QLineEdit()
-        line1.setFixedWidth(280)
+        line1.setFixedWidth(350)
         line2 = QLineEdit()
-        line2.setFixedWidth(280)
-        grid.addWidget(QLabel(_("Address")), 1, 0)
+        line2.setFixedWidth(350)
+        grid.addWidget(QLabel(_("Name")), 1, 0)
         grid.addWidget(line1, 1, 1)
-        grid.addWidget(QLabel(_("Name")), 2, 0)
+        grid.addWidget(QLabel(_("Address")), 2, 0)
         grid.addWidget(line2, 2, 1)
         vbox.addLayout(grid)
         vbox.addLayout(Buttons(CancelButton(d), OkButton(d)))
         if d.exec_():
-            self.set_contact(line2.text(), line1.text())
+            name = line1.text().strip()
+            address = line2.text().strip()
+            prefix = networks.net.CASHADDR_PREFIX.lower() + ':'
+            if address.lower().startswith(prefix):
+                address = address[len(prefix):]
+            self.set_contact(name, address)
 
     def lookup_cash_account_dialog(self):
         blurb = "<br><br>" + _('Enter a string of the form <b>name#<i>number</i></b>')
@@ -4271,7 +4297,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.wallet.thread.stop()
         self.wallet.thread.wait() # Join the thread to make sure it's really dead.
 
-        for w in [self.address_list, self.history_list, self.utxo_list, self.cash_account_e]:
+        for w in [self.address_list, self.history_list, self.utxo_list, self.cash_account_e, self.contact_list]:
             if w: w.clean_up()  # tell relevant widget to clean itself up, unregister callbacks, etc
 
         # We catch these errors with the understanding that there is no recovery at
@@ -4625,9 +4651,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         while True:
             lh = self.wallet.get_local_height()
             name = line_dialog(self, _("Register A New Cash Account"),
-                               (_("You are registering a new <a href='ca'>Cash Account</a> for address <b>{address}</b>.").format(address=addr.to_ui_string())
-                                + "<br><br>" + _("How it works: <a href='ca'>Cash Accounts</a> registrations work by issuing an <b>OP_RETURN</b> transaction to yourself, costing fractions of a penny. "
-                                                 "You will be offered the opportunity to review the generated transaction before broadcasting it to the blockchain.")
+                               (_("You are registering a new <a href='ca'>Cash Account</a> for your address <b><pre>{address}</pre></b>").format(address=addr.to_ui_string())
+                                + "<<br>" + _("How it works: <a href='ca'>Cash Accounts</a> registrations work by issuing an <b>OP_RETURN</b> transaction to yourself, costing fractions of a penny. "
+                                              "You will be offered the opportunity to review the generated transaction before broadcasting it to the blockchain.")
                                 + "<br><br>" + _("The current block height is <b><i>{block_height}</i></b>, so the new cash account will likely look like: <b><u><i>AccountName<i>#{number}</u></b>.")
                                 .format(block_height=lh or '???', number=max(cashacct.bh2num(lh or 0)+1, 0) or '???')
                                 + "<br><br>" + _("Specify the <b>account name</b> below (limited to 99 characters):") ),
@@ -4822,6 +4848,12 @@ class TxUpdateMgr(QObject, PrintError):
                         # their cash accounts now that they have them --
                         # and part of the UI is *IN* the Addresses tab.
                         parent.toggle_tab(parent.addresses_tab)
+                    # Do same for console tab
+                    if parent.config.get("show_contacts_tab") is None:
+                        # We unhide it because presumably they want to SEE
+                        # their cash accounts now that they have them --
+                        # and part of the UI is *IN* the Console tab.
+                        parent.toggle_tab(parent.contacts_tab)
                 if parent.wallet.storage.get('gui_notify_tx', True):
                     ca_text = ''
                     if n_cashacct > 1:
