@@ -25,6 +25,7 @@
 from collections import namedtuple
 from typing import List, Dict
 from . import util
+from . import cashacct
 from .storage import WalletStorage
 from .address import Address
 
@@ -76,8 +77,9 @@ class Contacts(util.PrintError):
             name, address, typ = d.get('name', ''), d.get('address', ''), d.get('type', '')
             if not all(isinstance(a, str) for a in (name, address, typ)):
                 continue # skip invalid-looking data
-            if typ in ('address', 'cashacct') and not Address.is_valid(address):
-                continue # skip if address is not valid for these types
+            if typ in ('address', 'cashacct'):
+                if not Address.is_valid(address) or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name)):
+                    continue # skip if if does not appear to be valid for these types
             out.append( Contact(name, address, typ) )
         return out
 
