@@ -468,6 +468,8 @@ def lookup_cash_account_dialog(
     title = title or _("Lookup Cash Account")
     blurb = blurb or ''
     assert isinstance(parent, ElectrumWindow) and isinstance(wallet, Abstract_Wallet)
+    if parent.gui_object.warn_if_no_network(parent):
+        return None
     d = WindowModalDialog(parent.top_level_window(), title)
     d.setObjectName("WindowModalDialog - " + title)
     finalization_print_error(d)
