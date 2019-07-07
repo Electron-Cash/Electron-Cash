@@ -35,6 +35,7 @@ from electroncash import bitcoin
 from electroncash.address import Address, ScriptOutput
 from electroncash import networks
 from electroncash.util import PrintError
+from electroncash.contacts import Contact
 
 from . import util
 
@@ -347,8 +348,7 @@ class PayToEdit(PrintError, ScanQRTextEdit):
         self.setText(new_url)
         self.previous_payto = new_url
 
-        #if self.win.config.get('openalias_autoadd') == 'checked':
-        self.win.contacts[key] = ('openalias', name)
+        self.win.contacts.add(Contact(name=name, address=key, type='openalias'), unique=True)
         self.win.contact_list.on_update()
 
         self.setFrozen(True)
