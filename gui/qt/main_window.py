@@ -4641,7 +4641,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def register_new_cash_account(self, addr = None):
         ''' Initiates the "Register a new cash account" dialog.
         If addr is none, will use self.receive_address. '''
-        addr = addr or self.receive_address
+        addr = addr or self.receive_address or self.wallet.get_receiving_address()
         if not addr:
             self.print_error("register_new_cash_account: no receive address specified")
             return
