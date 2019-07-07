@@ -517,7 +517,7 @@ def lookup_cash_account_dialog(
             but = QPushButton()
             but.setIcon(QIcon(":icons/tab_contacts.png"))
             if isinstance(item[0].address, Address):
-                if item[2] in all_cashacct_contacts:
+                if item[2] in all_cashacct_contacts or wallet.is_mine(item[0].address):
                     but.setDisabled(True)
                     but.setToolTip(_("<b>{cash_account}</b> already in Contacts").format(cash_account=item[2]))
                 else:
