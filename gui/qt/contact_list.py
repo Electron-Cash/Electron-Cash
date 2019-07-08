@@ -188,8 +188,33 @@ class ContactList(PrintError, MyTreeWidget):
             menu.addAction(QIcon(":icons/save.svg" if not ColorScheme.dark_scheme else ":icons/save_dark_theme.svg"),
                            _("Export file"), self.export_contacts)
 
+        menu.addSeparator()
+        a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
+        a.setCheckable(True); a.setChecked(self.show_my_cashaccts)
+
         run_hook('create_contact_menu', menu, selected)
         menu.exec_(self.viewport().mapToGlobal(position))
+
+    @property
+    def show_my_cashaccts(self) -> bool:
+        ''' Returns the current setting from wallet storage. '''
+        return bool(self.wallet.storage.get('contact_list_show_cash_accounts', True))
+
+    @show_my_cashaccts.setter
+    def show_my_cashaccts(self, b : bool):
+        ''' Saves the flag to wallet storage. Does not update GUI. '''
+        self.wallet.storage.put('contact_list_show_cash_accounts', bool(b))
+
+    def toggle_show_my_cashaccts(self):
+        ''' Toggles the flag in wallet storage, also updates GUI. '''
+        b = not self.show_my_cashaccts
+        self.show_my_cashaccts = b
+        self.update()
+        if b:
+            tip = _("Your own Cash Accounts are now shown")
+        else:
+            tip = _("Your own Cash Accounts are now hidden")
+        QToolTip.showText(QCursor.pos(), tip, self)
 
     def _make_wallet_cashacct_fake_contacts(self, real_contacts) -> List[Contact]:
         ''' Returns a list of 'fake' contacts that come from the wallet's
@@ -244,7 +269,7 @@ class ContactList(PrintError, MyTreeWidget):
         selected_items, current_item = [], None
         edited = self._edited_item_cur_sel
         real_contacts = self.parent.contacts.get_all(nocopy=True)
-        wallet_cashaccts = self._make_wallet_cashacct_fake_contacts(real_contacts)
+        wallet_cashaccts = self._make_wallet_cashacct_fake_contacts(real_contacts) if self.show_my_cashaccts else []
         for contact in real_contacts + wallet_cashaccts:
             _type, name, address = contact.type, contact.name, contact.address
             item = QTreeWidgetItem(["", name, address, type_names[_type]])
