@@ -157,8 +157,6 @@ class ContactList(PrintError, MyTreeWidget):
         menu = QMenu()
         selected = self.selectedItems()
         i2c = self._i2c
-        has_cashaccts = any(bool(i2c(item).type.startswith('cashacct'))
-                                 for item in self.get_leaves())
         ca_unverified = self._get_ca_unverified()
         if selected:
             names = [item.text(1) for item in selected]
@@ -212,11 +210,10 @@ class ContactList(PrintError, MyTreeWidget):
             menu.addAction(QIcon(":icons/save.svg" if not ColorScheme.dark_scheme else ":icons/save_dark_theme.svg"),
                            _("Export file"), self.export_contacts)
 
-        if has_cashaccts:
-            menu.addSeparator()
-            a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
-            a.setCheckable(True)
-            a.setChecked(self.show_my_cashaccts)
+        menu.addSeparator()
+        a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
+        a.setCheckable(True)
+        a.setChecked(self.show_my_cashaccts)
 
         if ca_unverified:
             def kick_off_verify():
