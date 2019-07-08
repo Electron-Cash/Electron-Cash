@@ -355,7 +355,7 @@ class WaitingDialog(WindowModalDialog):
 
 
 
-def line_dialog(parent, title, label, ok_label, default=None, *, linkActivated=None):
+def line_dialog(parent, title, label, ok_label, default=None, *, linkActivated=None, placeholder=None, disallow_empty=False):
     dialog = WindowModalDialog(parent, title)
     dialog.setMinimumWidth(500)
     l = QVBoxLayout()
@@ -368,8 +368,16 @@ def line_dialog(parent, title, label, ok_label, default=None, *, linkActivated=N
     txt = QLineEdit()
     if default:
         txt.setText(default)
+    if placeholder:
+        txt.setPlaceholderText(placeholder)
     l.addWidget(txt)
-    l.addLayout(Buttons(CancelButton(dialog), OkButton(dialog, ok_label)))
+    okbut = OkButton(dialog, ok_label)
+    l.addLayout(Buttons(CancelButton(dialog), okbut))
+    if disallow_empty:
+        def on_text_changed():
+            okbut.setEnabled(bool(txt.text()))
+        txt.textChanged.connect(on_text_changed)
+        on_text_changed() # initially enable/disable it.
     if dialog.exec_():
         return txt.text()
 

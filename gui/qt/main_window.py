@@ -4658,7 +4658,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return
         def on_link(ignored):
             webopen('https://www.cashaccount.info/')
-        name = 'Satoshi_Nakamoto'
+        name, placeholder = '', 'Satoshi_Nakamoto'
         while True:
             lh = self.wallet.get_local_height()
             name = line_dialog(self, _("Register A New Cash Account"),
@@ -4668,7 +4668,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                 + "<br><br>" + _("The current block height is <b><i>{block_height}</i></b>, so the new cash account will likely look like: <b><u><i>AccountName<i>#{number}</u></b>.")
                                 .format(block_height=lh or '???', number=max(cashacct.bh2num(lh or 0)+1, 0) or '???')
                                 + "<br><br>" + _("Specify the <b>account name</b> below (limited to 99 characters):") ),
-                               _("Proceed to Send Tab"), default=name, linkActivated=on_link)
+                               _("Proceed to Send Tab"), default=name, linkActivated=on_link, placeholder=placeholder, disallow_empty=True)
             if name is None:
                 # user cancel
                 return
