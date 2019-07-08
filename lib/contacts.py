@@ -280,7 +280,11 @@ class Contacts(util.PrintError):
 
     @property
     def empty(self) -> bool:
-        return len(self.data) == 0
+        return not self.data  # True if [] or None, although data shouldn't ever be None
+
+    @property
+    def num(self) -> int:
+        return len(self.data)
 
     def get_all(self, nocopy : bool = False) -> List[Contact]:
         ''' Returns a copy of the internal Contact list. '''
