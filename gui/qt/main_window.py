@@ -1039,7 +1039,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     f = slf.font(); f.setItalic(False); f.setPointSize(slf.font_default_size); slf.setFont(f)
                     slf.setText(info.emoji + "  " + self.wallet.cashacct.fmt_info(info, minimal_chash=minimal_chash))
                 else:
-                    slf.setText(_("This address does not have a Cash Account"))
+                    slf.setText(_("None"))
                     f = slf.font(); f.setItalic(True); f.setPointSize(slf.font_default_size-1); slf.setFont(f)
                     slf.ca_copy_b.setDisabled(True)
                 slf.info = info
@@ -1825,22 +1825,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         assert isinstance(contact, Contact)
         _type, label = contact.type, contact.name
         emoji_str = ''
-        if _type == 'cashacct':
+        mod_type = _type
+        mine_str = ''
+        if _type.startswith('cashacct'):  # picks up cashacct and the cashacct_W pseudo-contacts
+            mod_type = 'cashacct'
             info = self.wallet.cashacct.get_verified(label)
             if info:
                 emoji_str = f'  {info.emoji}'
+                if _type == 'cashacct_W':
+                    mine_str = ' [' + _('Mine') + '] '
             else:
+                self.print_error(label, "not found")
                 # could not get verified contact, don't offer it as a completion
                 return None
         elif _type == 'openalias':
             return contact.address
-        return label + emoji_str + '  <' + contact.address + '>' if _type in ('address', 'cashacct') else None
+        return label + emoji_str + '  ' + mine_str + '<' + contact.address + '>' if mod_type in ('address', 'cashacct') else None
 
     def update_completions(self):
         l = []
-        for contact in self.contacts.get_all(nocopy=True):
+        for contact in self.contact_list.get_full_contacts(include_pseudo=True):
             s = self.get_contact_payto(contact)
             if s is not None: l.append(s)
+        l.sort(key=lambda x: x.lower())  # case-insensitive sort
         self.completions.setStringList(l)
 
     def protected(func):
@@ -4668,7 +4675,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                 + "<br><br>" + _("The current block height is <b><i>{block_height}</i></b>, so the new cash account will likely look like: <b><u><i>AccountName<i>#{number}</u></b>.")
                                 .format(block_height=lh or '???', number=max(cashacct.bh2num(lh or 0)+1, 0) or '???')
                                 + "<br><br>" + _("Specify the <b>account name</b> below (limited to 99 characters):") ),
-                               _("Proceed to Send Tab"), default=name, linkActivated=on_link, placeholder=placeholder, disallow_empty=True)
+                               _("Proceed to Send Tab"), default=name, linkActivated=on_link,
+                               placeholder=placeholder, disallow_empty=True,
+                               icon=QIcon(":icons/cashacct-logo.png"))
             if name is None:
                 # user cancel
                 return

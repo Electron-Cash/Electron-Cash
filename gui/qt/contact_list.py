@@ -267,27 +267,46 @@ class ContactList(PrintError, MyTreeWidget):
             tip = _("Your own Cash Accounts are now hidden")
         QToolTip.showText(QCursor.pos(), tip, self)
 
-    def _make_wallet_cashacct_fake_contacts(self, real_contacts) -> List[Contact]:
+    def get_full_contacts(self, include_pseudo: bool = True) -> List[Contact]:
+        ''' Returns all the contacts, with the "My CashAcct" pseudo-contacts
+        clobbering dupes of the same type that were manually added.
+        Client code should scan for type == 'cashacct' and type == 'cashacct_W' '''
+        if include_pseudo:
+            # filter out cachaccts that are "Wallet", as they will be added
+            # at the end as pseudo contacts if they also appear in real contacts
+            real_contacts = [contact for contact in
+                             self.parent.contacts.get_all(nocopy=True)
+                             if contact.type != 'cashacct'  # accept anything that's not cashacct
+                                or not Address.is_valid(contact.address)  # or if it is, it can have invalid address as it's clearly 'not mine"
+                                or not self.wallet.is_mine(  # or if it's not mine
+                                    Address.from_string(contact.address))
+                            ]
+            return real_contacts + self._make_wallet_cashacct_pseudo_contacts()
+        else:
+            return self.parent.contacts.get_all(nocopy=True)
+
+    def _make_wallet_cashacct_pseudo_contacts(self, exclude_contacts = []) -> List[Contact]:
         ''' Returns a list of 'fake' contacts that come from the wallet's
         own registered Cash Accounts.  These contacts do not exist in the
         wallet.contacts object but are created on-the-fly from the
         wallet.cashacct list of registered & verified Cash Accounts.
+
+        The creation of this list is relatively cheap and scales as the lookups
+        are O(logN) in the cashaccts caches.
 
         This is a convenience so that the Contacts tab shows "my" cash accounts
         after registration as well as external Cash Accounts. Note that the
         "mine" entries won't be shown if the user explicitly added his own as
         "external"... '''
         try:
-            dupe_chk = set((c.name, Address.from_string(c.address)) for c in real_contacts if c.type == 'cashacct')
+            excl_chk = set((c.name, Address.from_string(c.address)) for c in exclude_contacts if c.type == 'cashacct')
         except:
             # Hmm.. invalid address?
-            dupe_chk = set()
+            excl_chk = set()
         wallet_cashaccts = []
         for ca_info in self.wallet.cashacct.get_wallet_cashaccounts():
             name = self.wallet.cashacct.fmt_info(ca_info, emoji=False)
-            if (name, ca_info.address) in dupe_chk:
-                # if they happened to manually add the same contact that is
-                # also a wallet contact, don't display the same contact twice.
+            if (name, ca_info.address) in excl_chk:
                 continue
             wallet_cashaccts.append(Contact(
                 name = name,
@@ -309,7 +328,7 @@ class ContactList(PrintError, MyTreeWidget):
         type_names.update({
             'openalias'  : _('OpenAlias'),
             'cashacct'   : _('Cash Account'),
-            'cashacct_W' : _('Cash Account [Mine]'),
+            'cashacct_W' : _('Cash Account') + ' [' + _('Mine') + ']',
             'address'    : _('Address'),
         })
         type_icons = {
@@ -319,9 +338,7 @@ class ContactList(PrintError, MyTreeWidget):
         }
         selected_items, current_item = [], None
         edited = self._edited_item_cur_sel
-        real_contacts = self.parent.contacts.get_all(nocopy=True)
-        wallet_cashaccts = self._make_wallet_cashacct_fake_contacts(real_contacts) if self.show_my_cashaccts else []
-        for contact in real_contacts + wallet_cashaccts:
+        for contact in self.get_full_contacts(include_pseudo=self.show_my_cashaccts):
             _type, name, address = contact.type, contact.name, contact.address
             item = QTreeWidgetItem(["", name, address, type_names[_type]])
             item.setData(0, self.DataRoles.Contact, contact)
@@ -330,6 +347,11 @@ class ContactList(PrintError, MyTreeWidget):
                 ca_info = self.wallet.cashacct.get_verified(name)
                 tt_warn = None
                 if ca_info:
+                    if self.wallet.is_mine(ca_info.address) and not self.show_my_cashaccts:
+                        # user may have added the contact to "self" manually
+                        # but since they asked to not see their own cashaccts,
+                        # we must do this to suppress it from being shown regardless
+                        continue
                     item.setText(0, ca_info.emoji)
                     tt = _('Validated Cash Account: <b><pre>{emoji} {account_string}</pre></b>').format(
                         emoji = ca_info.emoji,
