@@ -355,11 +355,24 @@ class WaitingDialog(WindowModalDialog):
 
 
 
-def line_dialog(parent, title, label, ok_label, default=None, *, linkActivated=None, placeholder=None, disallow_empty=False):
+def line_dialog(parent, title, label, ok_label, default=None,
+                *, linkActivated=None, placeholder=None, disallow_empty=False,
+                icon=None):
     dialog = WindowModalDialog(parent, title)
     dialog.setMinimumWidth(500)
     l = QVBoxLayout()
     dialog.setLayout(l)
+    if isinstance(icon, QIcon):
+        hbox = QHBoxLayout()
+        hbox.setContentsMargins(0,0,0,0)
+        ic_lbl = QLabel()
+        ic_lbl.setPixmap(icon.pixmap(50))
+        hbox.addWidget(ic_lbl)
+        hbox.addItem(QSpacerItem(10, 1))
+        t_lbl = QLabel("<font size=+1><b>" + title + "</b></font>")
+        hbox.addWidget(t_lbl, 0, Qt.AlignLeft)
+        hbox.addStretch(1)
+        l.addLayout(hbox)
     lbl = WWLabel(label)
     l.addWidget(lbl)
     if linkActivated:
