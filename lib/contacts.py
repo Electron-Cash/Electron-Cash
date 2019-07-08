@@ -28,7 +28,7 @@ import os
 import re
 import traceback
 from collections import namedtuple
-from typing import List, Dict
+from typing import List, Dict, Generator
 from . import dnssec
 from . import cashacct
 from . import util
@@ -360,3 +360,23 @@ class Contacts(util.PrintError):
         if ct:
             self.save()
         return ct
+
+    def find(self, *, address: str = None, name: str = None, type: str = None,
+             case_sensitive: bool = True) -> Generator[Contact, None, None]:
+        ''' Returns a generator. Searches the contact list for contacts matching
+        the specs given. Note that specifying no args will simply return all
+        contacts via a generator '''
+        if not case_sensitive and name is not None:
+            name = name.lower()
+        for c in self.data:
+            if address is not None and c.address != address:
+                continue
+            if not case_sensitive:
+                if name is not None and c.name.lower() != name:
+                    continue
+            else:
+                if name is not None and c.name != name:
+                    continue
+            if type is not None and c.type != type:
+                continue
+            yield c
