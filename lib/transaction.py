@@ -1076,7 +1076,7 @@ class Transaction:
                     def get_bh():
                         if eph.get('block_height'):
                             return False
-                        lh = wallet.get_local_height()
+                        lh = wallet.network.get_server_height() or wallet.get_local_height()
                         def got_tx_info(r):
                             q.put('block_height')  # indicate to other thread we got the block_height reply from network
                             try:
