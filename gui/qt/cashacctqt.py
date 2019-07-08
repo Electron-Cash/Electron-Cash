@@ -32,6 +32,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from .util import *
 
+import queue
 from typing import Tuple, List, Callable
 from enum import IntEnum
 from electroncash import cashacct
@@ -64,6 +65,45 @@ class VerifyingDialog(WaitingDialog):
             self.open()
         elif auto_exec:
             self.exec_()
+
+
+def verify_multiple_blocks(blocks : List[int], parent : MessageBoxMixin, wallet : Abstract_Wallet, timeout=10.0) -> int:
+    ''' Pass a list of blocks and will attempt to verify them all in 1 pass.
+    This is used by the Contacts tab to verify unverified Cash Accounts that
+    may have been imported. Returns the number of successfully verified blocks
+    or None on user cancel. '''
+    if not len(blocks):
+        return 0
+    blocks = set(blocks)
+    nblocks = len(blocks)
+    q = queue.Queue()
+    def done_cb(thing):
+        if isinstance(thing, cashacct.ProcessedBlock) and thing.reg_txs:
+            q.put(thing)
+        else:
+            q.put(None)
+    ctr = 0
+    def thread_func():
+        nonlocal ctr
+        for number in blocks:
+            wallet.cashacct.verify_block_asynch(number, success_cb=done_cb, error_cb=done_cb, timeout=timeout)
+        errs = 0
+        while ctr + errs < nblocks:
+            try:
+                thing = q.get(timeout=timeout)
+                if thing is None:
+                    errs += 1
+                else:
+                    ctr += 1
+            except queue.Empty:
+                return
+    code = VerifyingDialog(parent.top_level_window(),
+                           ngettext("Verifying {count} block please wait ...",
+                                    "Verifying {count} blocks please wait ...", nblocks).format(count=nblocks),
+                                    thread_func, auto_show=False, on_error=lambda e: parent.show_error(str(e))).exec_()
+    if code != QDialog.Accepted:
+        return None
+    return ctr
 
 
 def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet : Abstract_Wallet = None) -> Tuple[cashacct.Info, str]:
@@ -101,7 +141,7 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet : Abstract_Wal
             results = wallet.cashacct.resolve_verify(name)
         code = VerifyingDialog(parent.top_level_window(),
                                _("Verifying Cash Account {name} please wait ...").format(name=name),
-                               resolve_verify, auto_show=False).exec_()
+                               resolve_verify, on_error=lambda e: parent.show_error(str(e)), auto_show=False).exec_()
         if code == QDialog.Rejected:
             # user cancel operation
             return

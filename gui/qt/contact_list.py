@@ -39,7 +39,7 @@ from .util import (MyTreeWidget, webopen, WindowModalDialog, Buttons,
                    destroyed_print_error, webopen, ColorScheme, MONOSPACE_FONT)
 from enum import IntEnum
 from collections import defaultdict
-from typing import List
+from typing import List, Set
 from . import cashacctqt
 
 class ContactList(PrintError, MyTreeWidget):
@@ -141,21 +141,41 @@ class ContactList(PrintError, MyTreeWidget):
         if item:
             self.editItem(item, column)
 
+    @staticmethod
+    def _i2c(item : QTreeWidgetItem) -> Contact:
+        return item.data(0, ContactList.DataRoles.Contact)
+
+    def _get_ca_unverified(self) -> Set[Contact]:
+        i2c = self._i2c
+        return set(
+            i2c(item)
+            for item in self.get_leaves()
+            if i2c(item).type.startswith('cashacct') and not self.wallet.cashacct.get_verified(i2c(item).name)
+        )
+
     def create_menu(self, position):
         menu = QMenu()
         selected = self.selectedItems()
+        i2c = self._i2c
+        has_cashaccts = any(bool(i2c(item).type.startswith('cashacct'))
+                                 for item in self.get_leaves())
+        ca_unverified = self._get_ca_unverified()
         if selected:
             names = [item.text(1) for item in selected]
-            keys = [item.data(0, self.DataRoles.Contact) for item in selected]
+            keys = [i2c(item) for item in selected]
             deletable_keys = [k for k in keys if k.type in contact_types]
+            needs_verif_keys = [k for k in keys if k in ca_unverified]
             column = self.currentColumn()
             column_title = self.headerItem().text(column)
             column_data = '\n'.join([item.text(column) for item in selected])
             item = self.currentItem()
-            typ = item.data(0, self.DataRoles.Contact).type if item else 'unknown'
-            if item and typ in ('cashacct', 'cashacct_W') and column == 1 and len(selected) == 1:
-                # hack .. for non-addresses say "Copy OpenAlias" or "Copy Cash Account", etc
-                column_title = _('Cash Account')
+            typ = i2c(item).type if item else 'unknown'
+            ca_info = None
+            if item and typ in ('cashacct', 'cashacct_W'):
+                if column == 1 and len(selected) == 1:
+                    # hack .. for Cash Accounts just say "Copy Cash Account"
+                    column_title = _('Cash Account')
+                ca_info = self.wallet.cashacct.get_verified(i2c(item).name)
             menu.addAction(_("Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data))
             if item and column in self.editable_columns and self.on_permit_edit(item, column):
                 key = item.data(0, self.DataRoles.Contact)
@@ -165,7 +185,9 @@ class ContactList(PrintError, MyTreeWidget):
                 # means the item is deleted and you get a C++ object deleted
                 # runtime error.
                 menu.addAction(_("Edit {}").format(column_title), lambda: self._on_edit_item(key, column))
-            menu.addAction(_("Pay to"), lambda: self.parent.payto_contacts(keys))
+            a = menu.addAction(_("Pay to"), lambda: self.parent.payto_contacts(keys))
+            if needs_verif_keys:
+                a.setDisabled(True)
             a = menu.addAction(_("Delete"), lambda: self.parent.delete_contacts(deletable_keys))
             if not deletable_keys:
                 a.setEnabled(False)
@@ -173,6 +195,8 @@ class ContactList(PrintError, MyTreeWidget):
                     for key in keys if Address.is_valid(key)]
             if any(URLs):
                 menu.addAction(_("View on block explorer"), lambda: [URL and webopen(URL) for URL in URLs])
+            if ca_info:
+                menu.addAction(_("View registration tx..."), lambda: self.parent.do_process_from_txid(txid=ca_info.txid, tx_desc=self.wallet.get_label(ca_info.txid)))
             menu.addSeparator()
 
         menu.addAction(self.icon_cashacct,
@@ -188,9 +212,36 @@ class ContactList(PrintError, MyTreeWidget):
             menu.addAction(QIcon(":icons/save.svg" if not ColorScheme.dark_scheme else ":icons/save_dark_theme.svg"),
                            _("Export file"), self.export_contacts)
 
-        menu.addSeparator()
-        a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
-        a.setCheckable(True); a.setChecked(self.show_my_cashaccts)
+        if has_cashaccts:
+            menu.addSeparator()
+            a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
+            a.setCheckable(True)
+            a.setChecked(self.show_my_cashaccts)
+
+        if ca_unverified:
+            def kick_off_verify():
+                bnums = set()
+                for contact in ca_unverified:
+                    tup = self.wallet.cashacct.parse_string(contact.name)
+                    if not tup:
+                        continue
+                    bnums.add(tup[1])  # number
+                ret = cashacctqt.verify_multiple_blocks(bnums, self.parent, self.wallet)
+                if ret is None:
+                    # user cancel
+                    return
+                verified = ca_unverified - self._get_ca_unverified()
+                if not verified:
+                    self.parent.show_error(_("Cash Account verification failure"))
+
+            menu.addSeparator()
+            num = len(ca_unverified)
+            a = menu.addAction(QIcon(":/icons/unconfirmed.svg"),
+                               ngettext("Verify {count} Cash Account",
+                                        "Verify {count} Cash Accounts",
+                                        num).format(count=num), kick_off_verify)
+            if not self.wallet.network:
+                a.setDisabled(True)
 
         run_hook('create_contact_menu', menu, selected)
         menu.exec_(self.viewport().mapToGlobal(position))
@@ -277,6 +328,7 @@ class ContactList(PrintError, MyTreeWidget):
             item.DataRole = self.DataRoles.Contact
             if _type in ('cashacct', 'cashacct_W'):
                 ca_info = self.wallet.cashacct.get_verified(name)
+                tt_warn = None
                 if ca_info:
                     item.setText(0, ca_info.emoji)
                     tt = _('Validated Cash Account: <b><pre>{emoji} {account_string}</pre></b>').format(
@@ -285,8 +337,9 @@ class ContactList(PrintError, MyTreeWidget):
                     )
                 else:
                     item.setIcon(0, QIcon(":icons/unconfirmed.svg"))
-                    tt = _('Warning: This Cash Account is not validated')
+                    tt_warn = tt = _('Warning: This Cash Account is not verified')
                 item.setToolTip(0, tt)
+                if tt_warn: item.setToolTip(1, tt_warn)
                 item.setFont(2, self.monospace_font)
             if _type in type_icons:
                 item.setIcon(3, type_icons[_type])

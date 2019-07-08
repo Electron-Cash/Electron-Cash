@@ -670,7 +670,10 @@ class MyTreeWidget(QTreeWidget):
             root = self.invisibleRootItem()
         child_count = root.childCount()
         if child_count == 0:
-            yield root
+            if root is not self.invisibleRootItem():
+                yield root
+            else:
+                return
         for i in range(child_count):
             item = root.child(i)
             for x in self.get_leaves(item):
