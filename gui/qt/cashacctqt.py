@@ -203,7 +203,9 @@ class InfoGroupBox(PrintError, QGroupBox):
                  items: List[Tuple[cashacct.Info, str, str]] = [], # list of 2 or 3 tuple : Info, minimal_chash[, formatted_string]
                  title : str = None,
                  button_type : ButtonType = ButtonType.Radio,  # Note that if CheckBox, the buttonGroup will be made non-exclusive and selectedItems() may return more than 1 item.
-                 extra_buttons : List[Callable[[Tuple[cashacct.Info, str, str]], QAbstractButton]] = []  # pass a list of callables that take a 3-tuple for each item and return a button
+                 extra_buttons : List[Callable[[Tuple[cashacct.Info, str, str]], QAbstractButton]] = [],  # pass a list of callables that take a 3-tuple for each item and return a button
+                 show_addresses : bool = True,  # if False, the address label remains hidden
+                 custom_contents_margins : Tuple[int] = None,  # if specified, use this as the contents margins for the internal layout widget
                  ):
         from .main_window import ElectrumWindow
         assert isinstance(main_window, ElectrumWindow)
@@ -211,6 +213,11 @@ class InfoGroupBox(PrintError, QGroupBox):
         self.main_window = main_window
         self.wallet = self.main_window.wallet
         self.extra_buttons = extra_buttons or []
+        self.show_addresses = bool(show_addresses)
+        if isinstance(custom_contents_margins, (tuple, list)) and len(custom_contents_margins) == 4 and all(isinstance(x, (int, float)) for x in custom_contents_margins):
+            self.custom_contents_margins = custom_contents_margins
+        else:
+            self.custom_contents_margins = None
         assert isinstance(self.wallet, Abstract_Wallet)
         self._setup()
         self.setItems(items=items, title=title, auto_resize_parent=False, button_type=button_type)
@@ -315,6 +322,9 @@ class InfoGroupBox(PrintError, QGroupBox):
 
         grid = QGridLayout(w)
 
+        if self.custom_contents_margins:
+            grid.setContentsMargins(*self.custom_contents_margins)
+
         def view_tx_link_activated(txid):
             if isinstance(parent, ElectrumWindow):
                 parent.do_process_from_txid(txid=txid, tx_desc=wallet.get_label(txid))
@@ -414,19 +424,20 @@ class InfoGroupBox(PrintError, QGroupBox):
                 view_tx_lbl.setHidden(True)
                 copy_but.setHidden(True)
 
-            addr_lbl = ButtonAssociatedLabel('', button=rb)
-            if is_valid:
-                if is_mine:
-                    addr_lbl.setText(f'<a href="{info.address.to_ui_string()}"><pre>{info.address.to_ui_string()}</pre></a>')
-                    addr_lbl.linkActivated.connect(view_addr_link_activated)
-                    addr_lbl.setToolTip(_('Wallet') + ' - ' + (_('Change Address') if is_change else _('Receiving Address')))
-                    addr_lbl.setButton(None)  # disable click to select
+            if self.show_addresses:
+                addr_lbl = ButtonAssociatedLabel('', button=rb)
+                if is_valid:
+                    if is_mine:
+                        addr_lbl.setText(f'<a href="{info.address.to_ui_string()}"><pre>{info.address.to_ui_string()}</pre></a>')
+                        addr_lbl.linkActivated.connect(view_addr_link_activated)
+                        addr_lbl.setToolTip(_('Wallet') + ' - ' + (_('Change Address') if is_change else _('Receiving Address')))
+                        addr_lbl.setButton(None)  # disable click to select
+                    else:
+                        addr_lbl.setText(f'<pre>{info.address.to_ui_string()}</pre>')
                 else:
-                    addr_lbl.setText(f'<pre>{info.address.to_ui_string()}</pre>')
-            else:
-                addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
-                addr_lbl.setToolTip(rb.toolTip())
-            grid.addWidget(addr_lbl, row*3+1, col*5+1, 1, 3)
+                    addr_lbl.setText('<i>' + _('Unsupported Account Type') + '</i>')
+                    addr_lbl.setToolTip(rb.toolTip())
+                grid.addWidget(addr_lbl, row*3+1, col*5+1, 1, 3)
 
             if (col % cols) == 0:
                 # insert stretch in between the two columns
@@ -434,8 +445,11 @@ class InfoGroupBox(PrintError, QGroupBox):
                 grid.addItem(spacer, row, col*5+4, 1, 1)
                 grid.setColumnStretch(col*5+4, 10)
 
-            spacer = QSpacerItem(1, 8)
-            grid.addItem(spacer, row*3+2, col*5, 1, 4)
+            if self.show_addresses:
+                # in-between row spaer. Only added if showing addresses
+                # to make the address line visually closer to the line above it
+                spacer = QSpacerItem(1, 8)
+                grid.addItem(spacer, row*3+2, col*5, 1, 4)
 
             col += 1
 
