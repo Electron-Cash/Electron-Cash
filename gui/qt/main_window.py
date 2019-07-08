@@ -2547,11 +2547,22 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return contact
 
     def delete_contacts(self, contacts):
-        names = [f"{contact.name} <{contact.address[:8]}{'…' if len(contact.address) > 8 else ''}>" for contact in contacts]
-        n = len(names)
-        contact_str = " + ".join(names) if n <= 3 else ngettext("{number_of_contacts} contact", "{number_of_contacts} contacts", n).format(number_of_contacts=n)
-        if not self.question(_("Remove {list_of_contacts_OR_count_of_contacts_plus_the_word_count} from your list of contacts?")
-                             .format(list_of_contacts_OR_count_of_contacts_plus_the_word_count=contact_str)):
+        n = len(contacts)
+        qtext = ''
+        if n <= 3:
+            def fmt(contact):
+                if len(contact.address) > 20:
+                    addy = contact.address[:10] + '…' + contact.address[-10:]
+                else:
+                    addy = contact.address
+                return f"{contact.name} <{addy}>"
+            names = [fmt(contact) for contact in contacts]
+            contact_str = ", ".join(names)
+            qtext = _("Remove {list_of_contacts} from your contact list?").format(list_of_contacts = contact_str)
+        else:
+            # Note: we didn't use ngettext here for plural check because n > 1 in this branch
+            qtext = _("Remove {number_of_contacts} contacts from your contact list?").format(number_of_contacts=n)
+        if not self.question(qtext):
             return
         removed_entries = []
         for contact in contacts:

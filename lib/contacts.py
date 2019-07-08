@@ -32,6 +32,7 @@ from typing import List, Dict
 from . import dnssec
 from . import cashacct
 from . import util
+from . import networks
 from .storage import WalletStorage
 from .address import Address
 
@@ -88,6 +89,7 @@ class Contacts(util.PrintError):
             name, address, typ = d.get('name'), d.get('address'), d.get('type')
             if not all(isinstance(a, str) for a in (name, address, typ)):
                 continue # skip invalid-looking data
+            address = __class__._cleanup_address(address, typ)
             if typ in ('address', 'cashacct'):
                 if not Address.is_valid(address) or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name)):
                     continue # skip if if does not appear to be valid for these types
@@ -128,10 +130,18 @@ class Contacts(util.PrintError):
             if _type not in contact_types:
                 # not a known type we care about
                 continue
+            address = __class__._cleanup_address(address, _type)
             data.append(
                 Contact(str(name), str(address), str(_type))
             )
         return data
+
+    @staticmethod
+    def _cleanup_address(address : str, _type : str) -> str:
+        rm_prefix = (networks.net.CASHADDR_PREFIX + ":").lower()
+        if _type in ('address', 'cashacct') and address.lower().startswith(rm_prefix):
+            address = address[len(rm_prefix):]  # chop off bitcoincash: prefix
+        return address
 
     @staticmethod
     def _save(data : List[Contact], v1_too : bool = False) -> dict:
