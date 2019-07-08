@@ -515,8 +515,8 @@ class BackgroundShufflingThread(threading.Thread, PrintError):
             self._last_delayed_unreserve_check = now
             ct = 0
             with self.wallet.lock:
-                # We use the above 2 locks to ensure GUI or other threads don't
-                # touch the addresses_cashshuffle_reserved set while we mutate it.
+                # We use the lock to ensure GUI or other threads don't touch
+                # the addresses_cashshuffle_reserved set while we mutate it.
                 # This code path is executed very infrequently so it's not really
                 # a huge hit.
                 for addr, ts in self._delayed_unreserve_addresses.copy().items():
