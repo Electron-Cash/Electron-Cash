@@ -1820,8 +1820,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def rebuild_history(self):
         ''' This is an advanced function for use in the GUI when the user
         wants to resynch the whole wallet from scratch, preserving labels
-        and contacts.  Right now this implementation is beta-quality but
-        appears to work great for the most part. '''
+        and contacts.  '''
         if not self.network or not self.network.is_connected():
             raise RuntimeError('Refusing to rebuild wallet without a valid server connection!')
         if not self.synchronizer or not self.verifier:
