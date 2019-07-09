@@ -167,7 +167,7 @@ class SPV(ThreadJob):
         tx = Transaction(raw_tx)
         try:
             tx.deserialize()
-        except SerializationError:
+        except:
             return
 
         # Besides deserializing, we perfom additional checks to reduce the
@@ -186,8 +186,8 @@ class SPV(ThreadJob):
         if 111111 < txin['prevout_n'] < 0xff_ff_ff_ff:
             return
 
-        # Output amount can't possibly be more than 21 million bitcoin.
-        if txout['value'] > 21_000_000_0000_0000:
+        # Output amount can't possibly be more than 21 million bitcoin, ie 21e14.
+        if txout['value'] > 2_100_000_000_000_000:
             return
 
         # The chance of reaching this point with a random 64-byte node is 3e-18.
