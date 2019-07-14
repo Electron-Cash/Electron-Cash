@@ -34,27 +34,34 @@ fi
 here=$(dirname $($realpath "$0"))
 . "$here"/../base.sh # functions we use below (fail, et al)
 
-SRCURL="https://noto-website-2.storage.googleapis.com/pkgs/NotoColorEmoji-unhinted.zip"
+TTFURL="https://noto-website-2.storage.googleapis.com/pkgs/NotoColorEmoji-unhinted.zip"
+TTFHASH="d7983299f53742592f61539607c5d9528bcc83639f9a99df94a22c0df4890355"
+TTFNAME=$(basename $TTFURL)
+TTFPATH="$here/$TTFNAME"
+
+SRCURL="https://github.com/googlefonts/noto-emoji/archive/v2018-08-10-unicode11.tar.gz"
+SRCHASH="1275143ca462e773515b9a76bb3a0d072fe4359e66707f8f7d337c772afab9d7"
 SRCNAME=$(basename $SRCURL)
 SRCPATH="$here/$SRCNAME"
 
-if ! [ -e "$SRCPATH" ] ; then
-    info "Downloading source file"
-    wget -O "$SRCPATH" "$SRCURL"
-fi
+download_if_not_exist "$TTFPATH" "$TTFURL"
+verify_hash "$TTFPATH" "$TTFHASH"
+
+download_if_not_exist "$SRCPATH" "$SRCURL"
+verify_hash "$SRCPATH" "$SRCHASH"
 
 (
-    info "Unzipping source file"
+    info "Extracting TrueType file"
     rm -rf "$here"/unzipped
     mkdir "$here"/unzipped
     cd "$here"/unzipped
-    unzip "$SRCPATH"
+    unzip "$TTFPATH"
 )
 
-SRCTTF="$here"/unzipped/NotoColorEmoji.ttf
+TTF="$here"/unzipped/NotoColorEmoji.ttf
 
-info "Building subset of the souce file"
-pyftsubset "$SRCTTF" --unicodes-file="$here"/emojis.txt --output-file="$here"/emojis.ttf
+info "Building subset of the TrueType file"
+pyftsubset "$TTF" --unicodes-file="$here"/emojis.txt --output-file="$here"/emojis.ttf
 
 rm -rf "$here"/unzipped
 
@@ -75,3 +82,21 @@ rm "$here"/emojis.ttx
 
 info "Copying font to the GUI data directory"
 mv "$here"/emojis.ttf "$here"/../../gui/qt/data/emojis.ttf
+
+(
+    info "Extracting source file"
+    rm -rf "$here"/source
+    mkdir "$here"/source
+    cd "$here"/source
+    tar xzf "$SRCPATH" -C "$here"/source --strip-components=1
+)
+
+info "Copying SVG files to the GUI data directory"
+grep -v -e '^$' -e '^#.*$' "$here"/emojis_svg.txt | \
+    sed -e 's/[Uu]+*//' | \
+    tr '[:upper:]' '[:lower:]' | \
+    while read glyph ; do
+    cp "$here"/source/svg/emoji_u$glyph.svg "$here"/../../gui/qt/data/emojis || true
+done
+
+rm -rf "$here"/source
