@@ -90,9 +90,15 @@ def is_any_tx_output_on_change_branch(tx: Transaction) -> bool:
 
 def validate_op_return_output_and_get_data(output: tuple,        # tuple(typ, 'address', amount)
                                            max_size: int = 220,  # in bytes
-                                           max_pushes: int = 1   # number of pushes supported after the OP_RETURN, most HW wallets support only 1 push, some more than 1.
+                                           max_pushes: int = 1   # number of pushes supported after the OP_RETURN, most HW wallets support only 1 push, some more than 1.  Specify None to omit the number-of-pushes check.
                                            ) -> bytes:  # will return address.script[2:] (everyting after the first OP_RETURN & PUSH bytes)
     _type, address, _amount = output
+
+    if max_pushes is None:
+        # Caller says "no limit", so just to keep the below code simple, we
+        # do this and effectively sets the limit on pushes to "unlimited",
+        # since there can never be more pushes than bytes in the payload!
+        max_pushes = max_size
 
     assert max_pushes >= 1
 
