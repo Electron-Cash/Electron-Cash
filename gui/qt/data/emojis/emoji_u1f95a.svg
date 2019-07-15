@@ -1,1 +1,64 @@
-<svg enable-background="new 0 0 128 128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg"><radialGradient id="a" cx="46.333" cy="39.667" r="77.333" gradientUnits="userSpaceOnUse"><stop stop-color="#FFDCB5" offset="0"/><stop stop-color="#F3CA9C" offset=".2414"/><stop stop-color="#E4B37D" offset=".6022"/><stop stop-color="#DEAA71" offset=".803"/><stop stop-color="#E0AB7B" offset=".9901"/></radialGradient><path d="m107.3 66.42c-1.62-21.91-16.43-59.83-44.09-59.83-25.36 0-42.69 37.93-44.09 59.82-2.81 44 23.67 57.27 44.09 57.27 19.9 0.01 47.23-14.57 44.09-57.26z" fill="url(#a)"/><g opacity=".2"><path d="m63.21 9.59c14.09 0 23.68 11.01 29.24 20.24 7.68 12.74 11.16 27.37 11.85 36.8 1.29 17.49-2.74 31.8-11.64 41.38-7.37 7.94-18.39 12.68-29.46 12.68-11.5 0-22.24-4.41-29.45-12.1-8.9-9.49-12.82-23.62-11.65-41.98 0.72-11.26 5.67-25.67 12.61-36.72 4.78-7.58 14.81-20.3 28.5-20.3m0-3c-25.36 0-42.69 37.93-44.09 59.82-2.81 44 23.67 57.27 44.09 57.27 19.9 0 47.23-14.57 44.09-57.27-1.62-21.9-16.43-59.82-44.09-59.82z" fill="#424242"/></g></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   id="svg19"
+   version="1.1"
+   viewBox="0 0 128 128"
+   enable-background="new 0 0 128 128">
+  <metadata
+     id="metadata25">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs23" />
+  <radialGradient
+     gradientUnits="userSpaceOnUse"
+     r="77.333"
+     cy="39.667"
+     cx="46.333"
+     id="a">
+    <stop
+       id="stop2"
+       offset="0"
+       stop-color="#FFDCB5" />
+    <stop
+       id="stop4"
+       offset=".2414"
+       stop-color="#F3CA9C" />
+    <stop
+       id="stop6"
+       offset=".6022"
+       stop-color="#E4B37D" />
+    <stop
+       id="stop8"
+       offset=".803"
+       stop-color="#DEAA71" />
+    <stop
+       id="stop10"
+       offset=".9901"
+       stop-color="#E0AB7B" />
+  </radialGradient>
+  <path
+     id="path13"
+     fill="url(#a)"
+     d="m107.3 66.42c-1.62-21.91-16.43-59.83-44.09-59.83-25.36 0-42.69 37.93-44.09 59.82-2.81 44 23.67 57.27 44.09 57.27 19.9 0.01 47.23-14.57 44.09-57.26z" />
+  <g
+     id="g17"
+     opacity=".2">
+    <path
+       id="path15"
+       fill="#424242"
+       d="m63.21 9.59c14.09 0 23.68 11.01 29.24 20.24 7.68 12.74 11.16 27.37 11.85 36.8 1.29 17.49-2.74 31.8-11.64 41.38-7.37 7.94-18.39 12.68-29.46 12.68-11.5 0-22.24-4.41-29.45-12.1-8.9-9.49-12.82-23.62-11.65-41.98 0.72-11.26 5.67-25.67 12.61-36.72 4.78-7.58 14.81-20.3 28.5-20.3m0-3c-25.36 0-42.69 37.93-44.09 59.82-2.81 44 23.67 57.27 44.09 57.27 19.9 0 47.23-14.57 44.09-57.27-1.62-21.9-16.43-59.82-44.09-59.82z" />
+  </g>
+</svg>
