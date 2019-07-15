@@ -96,7 +96,7 @@ grep -v -e '^$' -e '^#.*$' "$here"/emojis_svg.txt | \
     sed -e 's/[Uu]+*//' | \
     tr '[:upper:]' '[:lower:]' | \
     while read glyph ; do
-    cp "$here"/source/svg/emoji_u$glyph.svg "$here"/../../gui/qt/data/emojis || true
+    inkscape --export-plain-svg="$here"/../../gui/qt/data/emojis/emoji_u$glyph.svg "$here"/source/svg/emoji_u$glyph.svg || true
 done
 
 rm -rf "$here"/source
