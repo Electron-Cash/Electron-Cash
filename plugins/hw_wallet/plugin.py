@@ -112,7 +112,7 @@ def validate_op_return_output_and_get_data(output: tuple,        # tuple(typ, 'a
     if len(ops) < 1 or ops[0][0] != OpCodes.OP_RETURN:
         raise RuntimeError(_("Only OP_RETURN scripts are supported."))
 
-    if num_pushes > max_pushes or any(ops[i+1][1] is None for i in range(num_pushes)):
+    if num_pushes < 1 or num_pushes > max_pushes or any(ops[i+1][1] is None for i in range(num_pushes)):
         raise RuntimeError(ngettext("OP_RETURN is limited to {max_pushes} data push.",
                                     "OP_RETURN is limited to {max_pushes} data pushes.",
                                     max_pushes).format(max_pushes=max_pushes))
