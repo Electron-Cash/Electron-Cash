@@ -352,7 +352,8 @@ class SimpleConfig(PrintError):
         ''' Returns True iff we are windows and we are set to use freetype as
         the font engine.  This will always return false on platforms where the
         question doesn't apply. This config setting defaults to True for
-        Windows < Win10 and False otherwise. '''
+        Windows < Win10 and False otherwise. It is only relevant when
+        using the Qt GUI, however. '''
         return bool(sys.platform in ('win32', 'cygwin')
                     # We default windows_qt_use_freetype to True for Windows
                     # < Windows 10. This setting can be specified in the
@@ -365,6 +366,19 @@ class SimpleConfig(PrintError):
     def windows_qt_use_freetype(self, b):
         if self.is_modifiable('windows_qt_use_freetype') and sys.platform in ('win32', 'cygwin'):
             self.set_key('windows_qt_use_freetype', bool(b))
+
+    @property
+    def linux_qt_use_custom_fontconfig(self):
+        ''' Returns True iff we are Linux and we are set to use the fonts.xml
+        fontconfig override, False otherwise.  This config setting defaults to
+        True for all Linux, but only is relevant to Qt GUI. '''
+        return sys.platform in ('linux',) and self.get('linux_qt_use_custom_fontconfig', True)
+
+    @linux_qt_use_custom_fontconfig.setter
+    def linux_qt_use_custom_fontconfig(self, b):
+        if self.is_modifiable('linux_qt_use_custom_fontconfig') and sys.platform in ('linux',):
+            self.set_key('linux_qt_use_custom_fontconfig', bool(b))
+
 
 def read_user_config(path):
     """Parse and store the user config settings in electron-cash.conf into user_config[]."""

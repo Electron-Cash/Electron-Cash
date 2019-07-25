@@ -310,6 +310,7 @@ class ElectrumGui(QObject, PrintError):
         did_set_custom_fontconfig = False
 
         if (sys.platform == 'linux'
+                and self.config.linux_qt_use_custom_fontconfig  # method-backed property, checks config settings
                 and not os.environ.get('FONTCONFIG_FILE')
                 and os.path.exists('/etc/fonts/fonts.conf')
                 and os.path.exists(linux_font_config_file)
