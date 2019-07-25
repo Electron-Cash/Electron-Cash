@@ -358,7 +358,7 @@ class SimpleConfig(PrintError):
         if sys.platform not in ('win32', 'cygwin'):
             return False
         try:
-            winver = int(platform.win32_ver()[0])
+            winver = float(platform.win32_ver()[0])  # '7', '8', '8.1', '10', etc
         except (AttributeError, ValueError, IndexError):
             # We can get here if cygwin, which has an empty win32_ver tuple
             # in some cases.
