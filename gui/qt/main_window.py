@@ -72,9 +72,9 @@ from .util import *
 try:
     # pre-load QtMultimedia at app start, if possible
     # this is because lazy-loading it from within Python
-    # callbacks led to crashes on Linux (likely due to)
+    # callbacks led to crashes on Linux, likely due to
     # bugs in PyQt5 (crashes wouldn't happen when testing
-    # with PySide2)
+    # with PySide2!).
     from PyQt5.QtMultimedia import QCameraInfo
     del QCameraInfo  # defensive programming: not always available so don't keep name around
 except ImportError as e:
@@ -4074,7 +4074,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             video_device = self.config.get("video_device")
             video_device_index = 0
             if video_device:
-                video_device_index = qr_combo.findData(video_device)
+                video_device_index = max(0, qr_combo.findData(video_device))  # if not found, default to 0 (the default item)
             qr_combo.setCurrentIndex(video_device_index)
             qr_combo.setEnabled(True)
         def on_video_device(x):
