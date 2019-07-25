@@ -168,6 +168,11 @@ def parse_URI(uri, on_pr=None, *, net=None):
     out = {k: v[0] for k, v in pq.items()}
     if address:
         if is_cashacct:
+            if '%' in address:
+                # on macOS and perhaps other platforms the '#' character may
+                # get passed-in as a '%23' if opened from a link or from
+                # some other source.  The below call is safe and won't raise.
+                address = urldecode(address)
             if not cashacct.CashAcct.parse_string(address):
                 raise ValueError("{} is not a valid cashacct string".format(address))
             address = _strip_cashacct_str(address)
