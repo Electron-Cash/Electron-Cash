@@ -3,6 +3,7 @@ import threading
 import time
 import os
 import stat
+import sys
 
 from . import util
 from copy import deepcopy
@@ -346,6 +347,24 @@ class SimpleConfig(PrintError):
             device = ''
         return device
 
+    @property
+    def windows_qt_use_freetype(self):
+        ''' Returns True iff we are windows and we are set to use freetype as
+        the font engine.  This will always return false on platforms where the
+        question doesn't apply. This config setting defaults to True for
+        Windows < Win10 and False otherwise. '''
+        return bool(sys.platform in ('win32', 'cygwin')
+                    # We default windows_qt_use_freetype to True for Windows
+                    # < Windows 10. This setting can be specified in the
+                    # Preferences dialog.
+                    and self.get('windows_qt_use_freetype',
+                                 bool(hasattr(sys, 'getwindowsversion')
+                                      and sys.getwindowsversion() < (10, 0))))
+
+    @windows_qt_use_freetype.setter
+    def windows_qt_use_freetype(self, b):
+        if self.is_modifiable('windows_qt_use_freetype') and sys.platform in ('win32', 'cygwin'):
+            self.set_key('windows_qt_use_freetype', bool(b))
 
 def read_user_config(path):
     """Parse and store the user config settings in electron-cash.conf into user_config[]."""
