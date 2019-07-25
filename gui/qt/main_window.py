@@ -69,6 +69,18 @@ from .popup_widget import ShowPopupLabel, KillPopupLabel, PopupWidget
 from . import cashacctqt
 from .util import *
 
+try:
+    # pre-load QtMultimedia at app start, if possible
+    # this is because lazy-loading it from within Python
+    # callbacks led to crashes on Linux (likely due to)
+    # bugs in PyQt5 (crashes wouldn't happen when testing
+    # with PySide2)
+    from PyQt5.QtMultimedia import QCameraInfo
+    del QCameraInfo  # defensive programming: not always available so don't keep name around
+except ImportError as e:
+    pass  # we tried to pre-load it, failure is ok; camera just won't be available
+
+
 class StatusBarButton(QPushButton):
     def __init__(self, icon, tooltip, func):
         QPushButton.__init__(self, icon, '')
