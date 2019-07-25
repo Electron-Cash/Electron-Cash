@@ -86,6 +86,11 @@ class ElectrumGui(QObject, PrintError):
         __class__.instance = self
         set_language(config.get('language'))
 
+        self.config = config
+        self.daemon = daemon
+        self.plugins = plugins
+        self.windows = []
+
         if self.windows_qt_use_freetype:
             # Use FreeType for font rendering on Windows. This fixes rendering
             # of the Schnorr sigil and allows us to load the Noto Color Emoji
@@ -126,10 +131,6 @@ class ElectrumGui(QObject, PrintError):
             QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
         if hasattr(QGuiApplication, 'setDesktopFileName'):
             QGuiApplication.setDesktopFileName('electron-cash.desktop')
-        self.config = config
-        self.daemon = daemon
-        self.plugins = plugins
-        self.windows = []
         self.app = QApplication(sys.argv)
         self._load_fonts()  # this needs to be done very early, before the font engine loads fonts.. out of paranoia
         self._exit_if_required_pyqt_is_missing()  # This may immediately exit the app if missing required PyQt5 modules, so it should also be done early.
