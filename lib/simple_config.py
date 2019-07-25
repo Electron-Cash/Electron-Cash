@@ -4,6 +4,7 @@ import time
 import os
 import stat
 import sys
+import platform
 
 from . import util
 from copy import deepcopy
@@ -354,13 +355,18 @@ class SimpleConfig(PrintError):
         question doesn't apply. This config setting defaults to True for
         Windows < Win10 and False otherwise. It is only relevant when
         using the Qt GUI, however. '''
-        return bool(sys.platform in ('win32', 'cygwin')
-                    # We default windows_qt_use_freetype to True for Windows
-                    # < Windows 10. This setting can be specified in the
-                    # Preferences dialog.
-                    and self.get('windows_qt_use_freetype',
-                                 bool(hasattr(sys, 'getwindowsversion')
-                                      and sys.getwindowsversion() < (10, 0))))
+        if sys.platform not in ('win32', 'cygwin'):
+            return False
+        try:
+            winver = int(platform.win32_ver()[0])
+        except (AttributeError, ValueError, IndexError):
+            # We can get here if cygwin, which has an empty win32_ver tuple
+            # in some cases.
+            # In that case "assume windows 10" and just proceed.  Cygwin users
+            # can always manually override this setting from GUI prefs.
+            winver = 10
+        # setting defaults to on for Windows < Win10
+        return bool(self.get('windows_qt_use_freetype', winver < 10))
 
     @windows_qt_use_freetype.setter
     def windows_qt_use_freetype(self, b):
