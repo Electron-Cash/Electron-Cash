@@ -372,7 +372,7 @@ class SimpleConfig(PrintError):
         ''' Returns True iff we are Linux and we are set to use the fonts.xml
         fontconfig override, False otherwise.  This config setting defaults to
         True for all Linux, but only is relevant to Qt GUI. '''
-        return sys.platform in ('linux',) and self.get('linux_qt_use_custom_fontconfig', True)
+        return bool(sys.platform in ('linux',) and self.get('linux_qt_use_custom_fontconfig', True))
 
     @linux_qt_use_custom_fontconfig.setter
     def linux_qt_use_custom_fontconfig(self, b):
