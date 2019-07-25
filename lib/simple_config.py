@@ -3,8 +3,6 @@ import threading
 import time
 import os
 import stat
-import sys
-import platform
 
 from . import util
 from copy import deepcopy
@@ -347,43 +345,6 @@ class SimpleConfig(PrintError):
         if device == 'default':
             device = ''
         return device
-
-    @property
-    def windows_qt_use_freetype(self):
-        ''' Returns True iff we are windows and we are set to use freetype as
-        the font engine.  This will always return false on platforms where the
-        question doesn't apply. This config setting defaults to True for
-        Windows < Win10 and False otherwise. It is only relevant when
-        using the Qt GUI, however. '''
-        if sys.platform not in ('win32', 'cygwin'):
-            return False
-        try:
-            winver = float(platform.win32_ver()[0])  # '7', '8', '8.1', '10', etc
-        except (AttributeError, ValueError, IndexError):
-            # We can get here if cygwin, which has an empty win32_ver tuple
-            # in some cases.
-            # In that case "assume windows 10" and just proceed.  Cygwin users
-            # can always manually override this setting from GUI prefs.
-            winver = 10
-        # setting defaults to on for Windows < Win10
-        return bool(self.get('windows_qt_use_freetype', winver < 10))
-
-    @windows_qt_use_freetype.setter
-    def windows_qt_use_freetype(self, b):
-        if self.is_modifiable('windows_qt_use_freetype') and sys.platform in ('win32', 'cygwin'):
-            self.set_key('windows_qt_use_freetype', bool(b))
-
-    @property
-    def linux_qt_use_custom_fontconfig(self):
-        ''' Returns True iff we are Linux and we are set to use the fonts.xml
-        fontconfig override, False otherwise.  This config setting defaults to
-        True for all Linux, but only is relevant to Qt GUI. '''
-        return bool(sys.platform in ('linux',) and self.get('linux_qt_use_custom_fontconfig', True))
-
-    @linux_qt_use_custom_fontconfig.setter
-    def linux_qt_use_custom_fontconfig(self, b):
-        if self.is_modifiable('linux_qt_use_custom_fontconfig') and sys.platform in ('linux',):
-            self.set_key('linux_qt_use_custom_fontconfig', bool(b))
 
 
 def read_user_config(path):

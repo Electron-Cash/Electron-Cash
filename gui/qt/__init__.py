@@ -24,7 +24,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import signal, sys, traceback, gc, os, shutil
+import gc, os, platform, shutil, signal, sys, traceback
 
 try:
     import PyQt5
@@ -86,7 +86,7 @@ class ElectrumGui(QObject, PrintError):
         __class__.instance = self
         set_language(config.get('language'))
 
-        if config.windows_qt_use_freetype:
+        if self.windows_qt_use_freetype:
             # Use FreeType for font rendering on Windows. This fixes rendering
             # of the Schnorr sigil and allows us to load the Noto Color Emoji
             # font if needed.
@@ -310,7 +310,7 @@ class ElectrumGui(QObject, PrintError):
         did_set_custom_fontconfig = False
 
         if (sys.platform == 'linux'
-                and self.config.linux_qt_use_custom_fontconfig  # method-backed property, checks config settings
+                and self.linux_qt_use_custom_fontconfig  # method-backed property, checks config settings
                 and not os.environ.get('FONTCONFIG_FILE')
                 and os.path.exists('/etc/fonts/fonts.conf')
                 and os.path.exists(linux_font_config_file)
@@ -799,6 +799,44 @@ class ElectrumGui(QObject, PrintError):
         if was != b:
             self.config.set_key('hide_cashaddr_button', bool(b))
             self.cashaddr_status_button_hidden_signal.emit(b)
+
+    @property
+    def windows_qt_use_freetype(self):
+        ''' Returns True iff we are windows and we are set to use freetype as
+        the font engine.  This will always return false on platforms where the
+        question doesn't apply. This config setting defaults to True for
+        Windows < Win10 and False otherwise. It is only relevant when
+        using the Qt GUI, however. '''
+        if sys.platform not in ('win32', 'cygwin'):
+            return False
+        try:
+            winver = float(platform.win32_ver()[0])  # '7', '8', '8.1', '10', etc
+        except (AttributeError, ValueError, IndexError):
+            # We can get here if cygwin, which has an empty win32_ver tuple
+            # in some cases.
+            # In that case "assume windows 10" and just proceed.  Cygwin users
+            # can always manually override this setting from GUI prefs.
+            winver = 10
+        # setting defaults to on for Windows < Win10
+        return bool(self.config.get('windows_qt_use_freetype', winver < 10))
+
+    @windows_qt_use_freetype.setter
+    def windows_qt_use_freetype(self, b):
+        if self.config.is_modifiable('windows_qt_use_freetype') and sys.platform in ('win32', 'cygwin'):
+            self.config.set_key('windows_qt_use_freetype', bool(b))
+
+    @property
+    def linux_qt_use_custom_fontconfig(self):
+        ''' Returns True iff we are Linux and we are set to use the fonts.xml
+        fontconfig override, False otherwise.  This config setting defaults to
+        True for all Linux, but only is relevant to Qt GUI. '''
+        return bool(sys.platform in ('linux',) and self.config.get('linux_qt_use_custom_fontconfig', True))
+
+    @linux_qt_use_custom_fontconfig.setter
+    def linux_qt_use_custom_fontconfig(self, b):
+        if self.config.is_modifiable('linux_qt_use_custom_fontconfig') and sys.platform in ('linux',):
+            self.config.set_key('linux_qt_use_custom_fontconfig', bool(b))
+
 
     def main(self):
         try:
