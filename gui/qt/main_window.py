@@ -3853,6 +3853,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 super().showEvent(e)
                 self.shown_signal.emit()
         self.need_restart = False
+        dialog_finished = False
         d = SettingsModalDialog(self.top_level_window(), _('Preferences'))
         d.setObjectName('WindowModalDialog - Preferences')
         destroyed_print_error(d)
@@ -4052,8 +4053,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             qr_label.setToolTip(qr_combo.toolTip())
         def scan_cameras():
             nonlocal qr_did_scan
-            if qr_did_scan:
-                # already scanned
+            if qr_did_scan or dialog_finished:  # dialog_finished guard needed because QueuedConnection
+                # already scanned or dialog finished quickly
                 return
             qr_did_scan = True
             system_cameras = []
@@ -4420,9 +4421,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox.addLayout(Buttons(CloseButton(d)))
         d.setLayout(vbox)
 
-        # run the dialog
-        d.exec_()
-        d.setParent(None) # for Python GC
+        try:
+            # run the dialog
+            d.exec_()
+        finally:
+            dialog_finished = True  # paranoia for scan_cameras
+            d.setParent(None) # for Python GC
 
         if self.fx:
             self.fx.timeout = 0
