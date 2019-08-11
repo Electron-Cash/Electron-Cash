@@ -1,4 +1,4 @@
-PyQt5<5.13
+PyQt5<5.14
 pycryptodomex<3.7
 websocket-client
 PyQt5-sip==4.19.17

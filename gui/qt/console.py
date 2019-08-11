@@ -205,7 +205,10 @@ class Console(QtWidgets.QWidget):
         self.editor.resize(self.size())
         self.editor.setWordWrapMode(QtGui.QTextOption.WrapAnywhere)
         self.editor.setUndoRedoEnabled(False)
-        self.editor.setFont(QtGui.QFont(MONOSPACE_FONT, 10, QtGui.QFont.Normal))
+        font = QtGui.QFont()
+        font.setFamilies(['EC Supplemental', MONOSPACE_FONT])
+        font.setPointSize(10)
+        self.editor.setFont(font)
 
         self.showMessage(startup_message)
 
