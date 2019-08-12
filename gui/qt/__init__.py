@@ -210,22 +210,27 @@ class ElectrumGui(QObject, PrintError):
         # .dmg).  We apply the workaround and also warn the user to not use
         # the El Capitan compatibility .dmg.
         if sys.platform in ('darwin',) and self.qt_version() < (5, 12):
-            from electroncash.utils import macos
             # macOS hacks. On Mojave with PyQt <5.12 the font rendering is terrible.
             # As a workaround we need to temporarily set this 'defaults' keys
             # which we immediately disable after the QApplication is started.
-            if platform.mac_ver()[0].startswith('10.14.'):
-                self.print_error("Mojave with PyQt<5.12 detected; applying CGFontRenderingFontSmoothingDisabled workaround...")
+            try:
+                ver = tuple(int(a) for a in platform.mac_ver()[0].split('.'))
+            except (TypeError, ValueError):
+                self.print_error("WARNING: Cannot parse platform.mac_ver", f"'{platform.mac_ver()[0]}'")
+                ver = None
+            if ver and ver >= (10, 14):
+                from electroncash.utils import macos
+                self.print_error("Mojave+ with PyQt<5.12 detected; applying CGFontRenderingFontSmoothingDisabled workaround...")
                 bundle = macos.get_bundle_identifier()
                 os.system(f'defaults write {bundle} CGFontRenderingFontSmoothingDisabled -bool NO')
                 def undo_hack():
                     os.system(f'defaults delete {bundle} CGFontRenderingFontSmoothingDisabled')
-                    self.print_error("Mojave font rendering workaround applied.")
-                    msg = _("Mojave system detected, however you are running the "
+                    self.print_error("Mojave+ font rendering workaround applied.")
+                    msg = _("Mojave or newer system detected, however you are running the "
                             "El Capitan compatibility release of Electron Cash. "
                             "Font and graphics rendering may be affected."
                             "\n\nPlease obtain the latest non-compatibility version "
-                            "of Electron Cash of MacOS.")
+                            "of Electron Cash for MacOS.")
                     QMessageBox.warning(None, _("Warning"), msg)  # this works even if app is not exec_() yet.
 
                 callables.append(undo_hack)
