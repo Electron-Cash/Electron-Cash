@@ -68,7 +68,7 @@ fi
 
 have_brew=`which brew`
 if [ -n "$have_brew" ]; then
-    info "Ensuring Python prerequisites are installed via brew"
+    info "Ensuring build prerequisites are installed via brew"
     for a in autoconf automake coreutils gettext libtool openssl@1.1 readline sqlite3 xz zlib ; do
         brew list $a > /dev/null 2>&1
         if [ "$?" != "0" ]; then
