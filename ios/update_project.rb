@@ -23,6 +23,14 @@ project.targets.each do |target|
   framework_group = project.frameworks_group
   file_ref = framework_group.new_reference(lib)
   build_file = build_phase.add_file_reference(file_ref)
+  target.build_configurations.each do |config|
+    config.build_settings["COPY_PHASE_STRIP"] =  "NO"
+    config.build_settings["ENABLE_BITCODE"] =  "NO"
+    config.build_settings["STRIP_INSTALLED_PRODUCT"] = "NO";
+    config.build_settings["STRIP_STYLE"] = "debugging";
+    config.build_settings["GCC_SYMBOLS_PRIVATE_EXTERN"] = "NO";
+    config.build_settings["VALID_ARCHS"] = "arm64";
+  end
 end
 
 # Save the project
