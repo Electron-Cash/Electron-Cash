@@ -264,7 +264,7 @@ echo '**************************************************************************
 echo '  IMPORTANT!'
 echo '        Now you either need to manually add the library libxml2.tbd to the '
 echo '        project under "General -> Linked Frameworks and Libraries" or successfully '
-echo '        run the update_project.rb script to do it for you '
+echo '        run the update_project.rb script to do it for you.'
 echo '        Either of those are needed to prevent build errors! '
 echo ''
 
