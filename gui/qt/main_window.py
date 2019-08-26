@@ -3034,9 +3034,54 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox = QVBoxLayout()
         vbox.addWidget(QLabel('{}: {}'.format(_("Address"), address)))
         vbox.addWidget(QLabel(_("Script type") + ': ' + xtype))
-        vbox.addWidget(QLabel(_("Private key") + ':'))
+        pk_lbl = QLabel(_("Private key") + ':')
+        vbox.addWidget(pk_lbl)
         keys_e = ShowQRTextEdit(text=pk)
         keys_e.addCopyButton()
+        # BIP38 Encrypt Button
+        def setup_encrypt_button():
+            encrypt_but = QPushButton(_("Encrypt BIP38") + "...")
+            f = encrypt_but.font(); f.setPointSize(f.pointSize()-1); encrypt_but.setFont(f)  # make font -= 1
+            encrypt_but.setEnabled(bool(bitcoin.Bip38Key.canEncrypt()))
+            encrypt_but.setToolTip(_("Encrypt this private key using BIP38 encryption")
+                                   if encrypt_but.isEnabled() else
+                                   _("BIP38 encryption unavailable: install pycryptodomex to enable"))
+            border_color = ColorScheme.DEFAULT.as_color(False)
+            border_color.setAlphaF(0.65)
+            encrypt_but_ss_en = (
+                keys_e.styleSheet() + (("QPushButton { border: 1px solid %s; border-radius: 6px; padding: 2px; margin: 2px; } "
+                                        "QPushButton:hover { border: 1px solid #3daee9; } "
+                                        "QPushButton:disabled { border: 1px solid transparent; ") % (border_color.name(QColor.HexArgb)))
+            )
+            encrypt_but_ss_dis = ( keys_e.styleSheet() )
+            encrypt_but.setStyleSheet(encrypt_but_ss_en if encrypt_but.isEnabled() else encrypt_but_ss_dis)
+            def on_encrypt():
+                passphrase = self.get_passphrase_dialog(
+                    msg = (
+                            _("Specify a passphrase to use for BIP38 encryption.") + "\n" +
+                            _("Save this passphrase if you save the generated key so you may decrypt it later.")
+                    )
+                )
+                if not passphrase:
+                    return
+                try:
+                    bip38 = str(bitcoin.Bip38Key.encrypt(pk, passphrase))
+                    keys_e.setText(bip38)
+                    encrypt_but.setEnabled(False)
+                    encrypt_but.setStyleSheet(encrypt_but_ss_dis)
+                    pk_lbl.setText( _("BIP38 Key") + ":" )
+                    self.show_message(_("WIF key has been encrypted using BIP38.\n\n"
+                                        "You may save this encrypted key to a file or print out its QR code and/or text.\n\n"
+                                        "It is strongly encrypted with the passphrase you specified and safe to store electronically. "
+                                        "However, the passphrase should be stored securely and not shared with anyone."))
+                except Exception as e:
+                    if util.is_verbose:
+                        traceback.print_exc(file=sys.stderr)
+                    self.show_error(str(e))
+            encrypt_but.clicked.connect(on_encrypt)
+            keys_e.addWidget(encrypt_but, 0)
+        setup_encrypt_button()
+        # /BIP38 Encrypt Button
         vbox.addWidget(keys_e)
         vbox.addWidget(QLabel(_("Redeem Script") + ':'))
         rds_e = ShowQRTextEdit(text=address.to_script().hex())
@@ -3044,6 +3089,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox.addWidget(rds_e)
         vbox.addLayout(Buttons(CloseButton(d)))
         d.setLayout(vbox)
+
         d.exec_()
 
     @protected
