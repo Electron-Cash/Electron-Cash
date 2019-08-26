@@ -3046,12 +3046,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d.setLayout(vbox)
         d.exec_()
 
-    msg_sign = _("Signing with an address actually means signing with the corresponding "
-                "private key, and verifying with the corresponding public key. The "
-                "address you have entered does not have a unique public key, so these "
-                "operations cannot be performed.") + '\n\n' + \
-               _('The operation is undefined. Not just in Electron Cash, but in general.')
-
     @protected
     def do_sign(self, address, message, signature, password):
         address  = address.text().strip()
@@ -3062,7 +3056,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.show_message(_('Invalid Bitcoin Cash address.'))
             return
         if addr.kind != addr.ADDR_P2PKH:
-            self.show_message(_('Cannot sign messages with this type of address.') + '\n\n' + self.msg_sign)
+            msg_sign = ( _("Signing with an address actually means signing with the corresponding "
+                           "private key, and verifying with the corresponding public key. The "
+                           "address you have entered does not have a unique public key, so these "
+                           "operations cannot be performed.") + '\n\n' +
+                         _('The operation is undefined. Not just in Electron Cash, but in general.') )
+            self.show_message(_('Cannot sign messages with this type of address.') + '\n\n' + msg_sign)
+            return
         if self.wallet.is_watching_only():
             self.show_message(_('This is a watching-only wallet.'))
             return
