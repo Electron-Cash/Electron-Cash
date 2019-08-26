@@ -1321,10 +1321,11 @@ class Bip38Key:
         encrypted with passphrase. May raise on bad/garbage WIF or other bad
         arguments. '''
         assert cls.canEncrypt(), "scrypt function missing. Cannot encrypt."
+        assert isinstance(passphrase, str), "Passphrase must be a string!"
         if net is None: net = networks.net
         _type, key_bytes, compressed = deserialize_privkey(wif, net=net)  # may raise
         if _type != 'p2pkh':
-            raise ValueError('Only p2pkh WIF keys may be compressed using BIP38 at this time.')
+            raise ValueError('Only p2pkh WIF keys may be encrypted using BIP38 at this time.')
         public_key = public_key_from_private_key(key_bytes, compressed)
         addr_str = pubkey_to_address(_type, public_key, net=net)
         addr_hash = Hash(addr_str)[0:4]
@@ -1369,6 +1370,7 @@ class Bip38Key:
         bitcoin pub/priv key pair. Older wallets do not support compressed keys
         but all new wallets do.'''
         assert cls.canEncrypt(), "scrypt function missing. Cannot encrypt."
+        assert isinstance(passphrase, str), "Passphrase must be a string!"
         if net is None: net = networks.net
         passphrase = cls._normalizeNFC(passphrase)
 
@@ -1481,24 +1483,3 @@ class Bip38Key:
     def __str__(self):
         return self.enc
 
-if __name__ == '__main__':
-    from .address import Address
-    from .util import set_verbosity
-    set_verbosity(True)
-    Address.FMT_UI = Address.FMT_LEGACY
-    b38 = '6PnV3J7jNC7iRazwtqhBz8bi162YvpGqyYQgRSXjKRrbUjkzHu9DBJfAgJ'
-    pw = 'foobar'
-    isbip38 = Bip38Key.isBip38(b38)
-    print("IsBip38:", isbip38)
-    if isbip38:
-        if not Bip38Key.canDecrypt():
-            print("scrypt not found: You need either hashlib.scrypt (python 3.6 + openssl 1.1) or the python library 'pyscrypt'!")
-            import sys
-            sys.exit(1)
-        bip = Bip38Key(b38)
-        print("Type:", bip.typeString())
-        print("Repr:",repr(bip))
-        print("Decrypting {} with pw={}...".format(str(bip), pw))
-        print(bip.decrypt(pw))
-    else:
-        print("'{}' is not a BIP38 encrypted key. Nothing to do. :)".format(b38))
