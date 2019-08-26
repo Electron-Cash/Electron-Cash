@@ -56,7 +56,7 @@ def check_password_strength(password):
 PW_NEW, PW_CHANGE, PW_PASSPHRASE = range(0, 3)
 
 
-class PasswordLayout(object):
+class PasswordLayout:
 
     titles = [_("Enter Password"), _("Change Password"), _("Enter Passphrase")]
 
@@ -65,13 +65,15 @@ class PasswordLayout(object):
 
         self.permit_empty = bool(permit_empty)
         self.pw = QLineEdit()
-        self.pw.setEchoMode(2)
+        self.pw.setEchoMode(QLineEdit.Password)
         self.new_pw = QLineEdit()
-        self.new_pw.setEchoMode(2)
+        self.new_pw.setEchoMode(QLineEdit.Password)
         self.conf_pw = QLineEdit()
-        self.conf_pw.setEchoMode(2)
+        self.conf_pw.setEchoMode(QLineEdit.Password)
         self.kind = kind
         self.OK_button = OK_button
+        self.all_lineedits = ( self.pw, self.new_pw, self.conf_pw )
+        self.pw_strength = None  # Will be a QLabel if kind != PW_PASSPHRASE
 
         vbox = QVBoxLayout()
         label = QLabel(msg + "\n")
@@ -79,9 +81,7 @@ class PasswordLayout(object):
 
         grid = QGridLayout()
         grid.setSpacing(8)
-        grid.setColumnMinimumWidth(0, 150)
-        grid.setColumnMinimumWidth(1, 100)
-        grid.setColumnStretch(1,1)
+        grid.setColumnStretch(1, 1)
 
         if kind == PW_PASSPHRASE:
             vbox.addWidget(label)
@@ -103,17 +103,17 @@ class PasswordLayout(object):
             msgs = [m1, _('Confirm Password:')]
             if wallet and wallet.has_password():
                 grid.addWidget(QLabel(_('Current Password:')), 0, 0)
-                grid.addWidget(self.pw, 0, 1)
+                grid.addWidget(self.pw, 0, 1, 1, -1)
                 lockfile = ":icons/lock.svg"
             else:
                 lockfile = ":icons/unlock.svg"
             logo.setPixmap(QIcon(lockfile).pixmap(36))
 
         grid.addWidget(QLabel(msgs[0]), 1, 0)
-        grid.addWidget(self.new_pw, 1, 1)
+        grid.addWidget(self.new_pw, 1, 1, 1, -1)
 
         grid.addWidget(QLabel(msgs[1]), 2, 0)
-        grid.addWidget(self.conf_pw, 2, 1)
+        grid.addWidget(self.conf_pw, 2, 1, 1, -1)
         vbox.addLayout(grid)
 
         # Password Strength Label
@@ -122,9 +122,18 @@ class PasswordLayout(object):
             grid.addWidget(self.pw_strength, 3, 0, 1, 2)
             self.new_pw.textChanged.connect(self.pw_changed)
 
+        self.show_cb = QCheckBox(_('Show'))
+        f = self.show_cb.font(); f.setPointSize(f.pointSize()-1); self.show_cb.setFont(f)  # make font -1
+        grid.addWidget(self.show_cb, 3, 2, Qt.AlignRight)
+        def toggle_show_pws():
+            show = self.show_cb.isChecked()
+            for le in self.all_lineedits:
+                le.setEchoMode(QLineEdit.Password if not show else QLineEdit.Normal)
+        self.show_cb.toggled.connect(toggle_show_pws)
+
         self.encrypt_cb = QCheckBox(_('Encrypt wallet file'))
         self.encrypt_cb.setEnabled(False)
-        grid.addWidget(self.encrypt_cb, 4, 0, 1, 2)
+        grid.addWidget(self.encrypt_cb, 4, 0, 1, -1)
         self.encrypt_cb.setVisible(kind != PW_PASSPHRASE)
 
         def enable_OK():
@@ -147,6 +156,8 @@ class PasswordLayout(object):
         return self.vbox
 
     def pw_changed(self):
+        if not self.pw_strength:
+            return
         password = self.new_pw.text()
         if password:
             colors = {"Weak":"Red", "Medium":"Blue", "Strong":"Green",
