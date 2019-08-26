@@ -1401,11 +1401,11 @@ class Bip38Key:
 
         enc = EncodeBase58Check(intermediate_passphrase_string)
         print_error("[{}] Intermediate passphrase string:".format(cls.__name__), enc)
-        return cls._ec_mult_from_intermediate_passphrase_string(enc, compressed)
+        return cls.ec_mult_from_intermediate_passphrase_string(enc, compressed)
 
     @classmethod
-    def _ec_mult_from_intermediate_passphrase_string(cls, enc_ips : bytes,
-                                                     compressed = True) -> object:
+    def ec_mult_from_intermediate_passphrase_string(cls, enc_ips : bytes,
+                                                    compressed = True) -> object:
         ''' Takes a Bip38 intermediate passphrase string as specified in the
         bip38 spec and generates a random and encrypted key, returning a newly
         constructed Bip38Key instance. '''
