@@ -108,7 +108,7 @@ class UTXOList(MyTreeWidget):
         ca_by_addr = defaultdict(list)
         if self.show_cash_accounts:
             addr_set = set()
-            self.utxos = self.wallet.get_utxos(addr_set_out=addr_set)
+            self.utxos = self.wallet.get_utxos(addr_set_out=addr_set, exclude_slp=False)
             # grab all cash accounts so that we may add the emoji char
             for info in self.wallet.cashacct.get_cashaccounts(addr_set):
                 ca_by_addr[info.address].append(info)
@@ -118,7 +118,7 @@ class UTXOList(MyTreeWidget):
                 del ca_list  # reference still exists inside ca_by_addr dict, this is just deleted here because we re-use this name below.
             del addr_set  # clean-up. We don't want the below code to ever depend on the existence of this cell.
         else:
-            self.utxos = self.wallet.get_utxos()
+            self.utxos = self.wallet.get_utxos(exclude_slp=False)
         for x in self.utxos:
             address = x['address']
             address_text = address.to_ui_string()
@@ -182,6 +182,17 @@ class UTXOList(MyTreeWidget):
         return { x.data(0, self.DataRoles.name) : x.data(0, self.DataRoles.frozen_flags) # dict of "name" -> frozen flags string (eg: "ac")
                 for x in self.selectedItems() }
 
+    def are_any_slp_coins(self, coins):
+        for coin in coins:
+            addrdict = self.wallet._slp_txo.get(coin['address'], {})
+            try:
+                addrdict[coin['prevout_hash']][int(coin['prevout_n'])]
+            except KeyError:
+                pass
+            else:
+                return True
+        return False
+
     @if_not_dead
     def create_menu(self, position):
         menu = QMenu()
@@ -194,7 +205,7 @@ class UTXOList(MyTreeWidget):
                 return
             spendable_coins = list(filter(lambda x: not selected.get(self.get_name(x), ''), coins))
             # Unconditionally add the "Spend" option but leave it disabled if there are no spendable_coins
-            menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins)).setEnabled(bool(spendable_coins))
+            menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins)).setEnabled(bool(spendable_coins) and not self.are_any_slp_coins(spendable_coins))
             if len(selected) == 1:
                 # "Copy ..."
                 item = self.itemAt(position)
