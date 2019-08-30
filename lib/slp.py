@@ -1,6 +1,7 @@
 from . import bitcoin
 from . import address  # for ScriptOutput, OpCodes, ScriptError, Script
 from . import caches
+from .transaction import Transaction
 from typing import List, Tuple
 
 lokad_id = b"SLP\x00"  # aka protocol code (prefix) -- this appears after the 'OP_RETURN + OP_PUSH(4)' bytes in the ScriptOutput for *ALL* SLP scripts
@@ -643,18 +644,65 @@ class WalletData:
 
     This thing seems contorted and inefficient.
     FIXME: Redo this. '''
-    __slots__ = ('storage', # the wallet.storage object
+    __slots__ = ('wallet',      # the wallet object we belong to. we access some of its private attributes
                  'validity',    # dict of txid -> int
                  'token_types', # dict of token_id -> dict { 'class' : str, 'decimals' : str_or_int, 'name' : str, 'group_id' : str }
                  'tx_tokinfo',  # dict of txid -> dict { 'type': str, 'transaction_type' : int, 'token_id': hex_str, 'validity' : int }
                  'txo',         # defaultdict-of-defaultdict-of-dicts [addr] -> [txid] -> [idx] -> { 'type' : str, 'token_id' : hex_str, 'qty' : int_or_str }
                  )
-    def __init__(self, storage):
+    def __init__(self, wallet):
         #TODO...
-        self.storage = storage
+        self.wallet = wallet
         self.load()
 
     def load(self):
         '''TODO'''
     def save(self):
         '''TODO'''
+    def _clear(self):
+        '''TODO'''
+
+    def rebuild(self):
+        with self.wallet.lock:
+            self._clear()
+            for txid, tx in self.wallet.transactions.items():
+                self.add_tx(txid, Transaction(tx.raw))  # we take a copy of the transaction so prevent storing deserialized tx in wallet.transactions dict
+
+    def add_tx(self, txid, tx):
+        ''' Caller should hold wallet.lock.
+        This is (usually) called by wallet.add_transaction in the network thread
+        with locks held.'''
+        outputs = tx.outputs()
+        so = outputs and outputs[0][1]
+        if not isinstance(so, ScriptOutput):  # Note: ScriptOutput here is the subclass defined in this file, not address.ScriptOutput
+            return
+        transaction_type = so.message.transaction_type
+        if transaction_type == 'GENESIS':
+            self._add_genesis_tx(so, outputs, txid, tx)
+        elif transaction_type == 'MINT':
+            self._add_mint_tx(so, outputs, txid, tx)
+        elif transaction_type == 'SEND':
+            self._add_send_tx(so, outputs, txid, tx)
+        elif transaction_type == 'COMMIT':
+            return  # ignore COMMIT, they don't produce any tokens
+        else:
+            raise InvalidOutputMessage('Bad transaction type')
+
+    def _add_genesis_tx(self, so, outputs, txid, tx):
+        ''' TODO '''
+        token_type = so.message.token_type
+        raise NotImplementedError()
+    def _add_mint_tx(self, so, outputs, txid, tx):
+        ''' TODO '''
+        token_type = so.message.token_type
+        raise NotImplementedError()
+    def _add_send_tx(self, so, outputs, txid, tx):
+        ''' TODO '''
+        token_type = so.message.token_type
+        raise NotImplementedError()
+
+    def rm_tx(self, txid):
+        ''' Caller should hold wallet.lock
+        This is (usually) called by wallet.remove_transaction in the network
+        thread with locks held.'''
+        raise NotImplementedError()
