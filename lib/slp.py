@@ -1,5 +1,6 @@
 from . import bitcoin
 from . import address  # for ScriptOutput, OpCodes, ScriptError, Script
+from . import caches
 from collections import namedtuple
 from typing import List, Tuple
 
@@ -51,16 +52,24 @@ class ScriptOutput(address.ScriptOutput):
 
     attrs_extra = ('message',)
 
+    # Optimization. In a normal call path cls.protocol_match parses a message and
+    # returns a bool.  We save the parsed message in this cache because __new__
+    # will be called very soon after on a True return to re-parse the Script,
+    # due to the way the protocol_match system works in Electron Cash.
+    _script_message_cache = caches.ExpiringCache(maxlen=25, name="SLP Script Message Cache", timeout=60.0)
+
     def __new__(cls, script):
         '''Instantiate from a script (or address.ScriptOutput) you wish to parse.'''
         script = script if isinstance(script, (bytes, bytearray)) else script.to_script()
         script = bytes(script) if isinstance(script, bytearray) else script
         self = super(__class__, cls).__new__(cls, script)
-        self.message = Message.parse(self)
+        self.message = cls._script_message_cache.get(self.script)  # will return a valid object or None
+        if self.message is None:
+            self.message = Message.parse(self)  # raises on parse error
         return self
 
     @classmethod
-    def protocol_match(cls, script_bytes):
+    def protocol_match(cls, script_bytes: bytes) -> bool:
         ''' Returns True if the passed-in bytes are a valid OP_RETURN script
         for SLP. '''
         # fast test -- most ScriptOutputs that aren't SLP will fail here quickly
@@ -69,8 +78,10 @@ class ScriptOutput(address.ScriptOutput):
         # fast test passed -- next try the slow test -- attempt to parse and
         # validate OP_RETURN message
         try:
-            slf = cls(script_bytes)
-            return slf.message.is_valid
+            slf = cls(script_bytes)  # raises on parse error
+            if slf.message is not None:  # should always be not None
+                cls._script_message_cache.put(slf.script, slf.message)  # save parsed message since likely it will be needed again very soon by class c'tor
+                return True
         except Error:
             pass
         except Exception:
@@ -87,8 +98,8 @@ class Message:
     ''' This class represents a parsed and valid SLP OP_RETURN message that can
     be used by the validator to examine SLP messages.
 
-    The self.is_valid attribute will always be True if this class was
-    successfully constructed.
+    If this class was successfully constructed, then the message is valid
+    with valid properties.
 
     This class raises an Exception subclass if parsing fails and should not
     normally be constructible for invalid SLP OP_RETURN messages.
@@ -107,8 +118,7 @@ class Message:
     due to the guarded __init__ which validates the chunks and raises upon
     parse errors.'''
 
-    __slots__ = ('is_valid',  # bool
-                 'chunks',)   # Tuple[bytes]
+    __slots__ = ('chunks',)   # Tuple[bytes]
 
 
     # -- FACTORY METHOD(s) and CONSTRUCTOR --
@@ -134,7 +144,8 @@ class Message:
             chunks = tuple(bytes(b) for b in chunks)
         assert chunks, "No Chunks!"
         self.chunks = chunks
-        self.is_valid = self._is_valid_or_raise()
+        if not self._is_valid_or_raise():
+            raise RuntimeError("FIXME -- Should not be reached")
 
     @classmethod
     def parse(cls, script : object) -> object:
