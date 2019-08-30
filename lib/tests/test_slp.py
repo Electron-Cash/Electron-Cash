@@ -1,8 +1,5 @@
-import os
 import json
 import unittest
-from pprint import pprint
-from queue import Queue, Empty
 
 
 from .. import address
