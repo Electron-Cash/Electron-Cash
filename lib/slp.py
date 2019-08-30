@@ -37,7 +37,15 @@ class NoMintingBatonFound(Error):
 def _i2b(val): return bytes((val,))
 
 class ScriptOutput(address.ScriptOutput):
-    ''' Encapsulates a parsed, valid SLP OP_RETURN output script. '''
+    ''' Encapsulates a parsed, valid SLP OP_RETURN output script.
+
+    NB: hash(self) just calls superclass hash -- which hashes the script bytes..
+    the .message object is ignored from the hash (it is always derived
+    from the script bytes anyway in a well formed instance).
+
+    self.message should *NOT* be written-to by outside code! It should
+    remain immutable after instance construction. While not enforced, it is
+    a required invariant of this class. '''
 
     _protocol_prefix = _i2b(address.OpCodes.OP_RETURN) + _i2b(4) + lokad_id
 
@@ -50,9 +58,6 @@ class ScriptOutput(address.ScriptOutput):
         self = super(__class__, cls).__new__(cls, script)
         self.message = Message.parse(self)
         return self
-
-    def __hash__(self):
-        return super().__hash__()
 
     @classmethod
     def protocol_match(cls, script_bytes):
