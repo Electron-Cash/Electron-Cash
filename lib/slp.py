@@ -1,7 +1,6 @@
 from . import bitcoin
 from . import address  # for ScriptOutput, OpCodes, ScriptError, Script
 from . import caches
-from collections import namedtuple
 from typing import List, Tuple
 
 lokad_id = b"SLP\x00"  # aka protocol code (prefix) -- this appears after the 'OP_RETURN + OP_PUSH(4)' bytes in the ScriptOutput for *ALL* SLP scripts
