@@ -181,10 +181,11 @@ class Message:
                     'decimals', 'mint_baton_vout', 'initial_token_mint_quantity',)
         elif tt == 'MINT':
             return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
-                    'token_id_hex', 'mint_baton_vout', 'additional_token_quantity')
+                    'token_id', 'token_id_hex', 'mint_baton_vout',
+                    'additional_token_quantity')
         elif tt == 'SEND':
             return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
-                    'token_id_hex', 'token_output', )
+                    'token_id', 'token_id_hex', 'token_output', )
         elif tt == 'COMMIT':
             return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
                     'info',)
@@ -216,7 +217,7 @@ class Message:
     # PROPERTIES -- returns values derived from parsing the bytes in self.chunks
     # Note: ALL properties below are only valid if self.chunks is valid and not
     # None!  Not all properties are 'valid' in all contexts: some depend on
-    # transation_type!  No validation is done in the property methods
+    # transaction_type!  No validation is done in the property methods
     # themselves thus they may raise various Exceptions.
     @property
     def lokad_id(self) -> bytes:
@@ -273,11 +274,11 @@ class Message:
         return self._parseChunkToInt(self.chunks[9], 8, 8, True)
     # -- SEND properties
     @property
-    def token_id(self) -> bytes:
+    def token_id(self) -> bytes:  # this is *ALSO* a MINT property
         return self.chunks[3]
     @property
     def token_id_hex(self) -> str:  # this is *ALSO* a MINT property
-        ''' Returns the self.ticker bytes as a hex-encoded string. '''
+        ''' Returns the self.token_id bytes as a hex-encoded string. '''
         return self.token_id.hex()
     @property
     def token_output(self) -> Tuple[int]:  # ret[0] is always 0
@@ -291,6 +292,7 @@ class Message:
                              for field in self.chunks[4:] )
     # -- MINT properties
     # NOTE:
+    # - token_id is also a MINT property here (as well as a SEND property)
     # - token_id_hex is also MINT property here (as well as a SEND property)
     # - mint_baton_vout is also MINT propety here (as well as a GENESIS property)
     @property
