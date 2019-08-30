@@ -142,7 +142,6 @@ class Message:
         if any(not isinstance(b, bytes) for b in chunks):
             # ensure bytes and not bytearray
             chunks = tuple(bytes(b) for b in chunks)
-        assert chunks, "No Chunks!"
         self.chunks = chunks
         if not self._is_valid_or_raise():
             raise RuntimeError("FIXME -- Should not be reached")
@@ -434,7 +433,7 @@ class Message:
             if v is not None and v < 2:
                 raise InvalidOutputMessage('Mint baton cannot be on vout=0 or 1')
             dummy = self.additional_token_quantity  # ensure parse
-        elif slpMsg.transaction_type == 'COMMIT':
+        elif transaction_type == 'COMMIT':
             # We don't know how to handle this right now, just return slpMsg of 'COMMIT' type
             dummy = self.info  # ensure parse
         else:

@@ -9,7 +9,7 @@ from .. import address
 from .. import slp
 
 
-script_tests_json = '''
+script_tests_json = r'''
 [
  {
   "msg": "OK: minimal GENESIS",
@@ -129,7 +129,7 @@ script_tests_json = '''
  {
     "msg": "(unsupported token type, must be token_type=1): 2 bytes for token_type=2",
     "script": "6a04534c50000200020747454e455349534c004c004c004c0001004c00080000000000000064",
-    "code": 11
+    "code": 255
  },
  {
   "msg": "(must be invalid: wrong size): 3 bytes for token_type",
