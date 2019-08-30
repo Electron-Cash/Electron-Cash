@@ -92,7 +92,7 @@ class ScriptOutput(address.ScriptOutput):
         return False
 # /ScriptOutput
 
-#address.ScriptOutput.protocol_classes.add(ScriptOutput)  # register class with Electron Cash script 'protocol factory' system
+address.ScriptOutput.protocol_classes.add(ScriptOutput)  # register class with Electron Cash script 'protocol factory' system
 
 class Message:
     ''' This class represents a parsed and valid SLP OP_RETURN message that can
