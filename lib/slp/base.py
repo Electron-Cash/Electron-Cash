@@ -1,39 +1,12 @@
-from . import bitcoin
-from . import address  # for ScriptOutput, OpCodes, ScriptError, Script
-from . import caches
-from .transaction import Transaction
+from .. import bitcoin
+from .. import address  # for ScriptOutput, OpCodes, ScriptError, Script
+from .. import caches
+from ..transaction import Transaction
 from typing import List, Tuple
 
+from .exceptions import *
+
 lokad_id = b"SLP\x00"  # aka protocol code (prefix) -- this appears after the 'OP_RETURN + OP_PUSH(4)' bytes in the ScriptOutput for *ALL* SLP scripts
-
-# ---- EXCEPTIONS ----
-class Error(Exception):
-    ''' Base class for all SLP-related errors '''
-
-class OpreturnError(Error):
-    pass
-
-class ParsingError(Error):
-    ''' Exceptions caused by malformed or unexpected data found in parsing. '''
-
-class UnsupportedSlpTokenType(ParsingError):
-    ''' Cannot parse OP_RETURN due to unrecognized version
-        (may or may not be valid) '''
-
-class InvalidOutputMessage(ParsingError):
-    ''' This exception (and subclasses) marks a message as definitely invalid
-        under SLP consensus rules. (either malformed SLP or just not SLP) '''
-
-class SerializingError(Error):
-    ''' Exceptions during creation of SLP message. '''
-
-class OPReturnTooLarge(SerializingError):
-    ''' The OPReturn field ended up being > 223 bytes '''
-
-# Other exceptions
-class NoMintingBatonFound(Error):
-    pass
-# /EXCEPTIONS
 
 def _i2b(val): return bytes((val,))
 
