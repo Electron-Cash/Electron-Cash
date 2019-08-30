@@ -3,7 +3,7 @@ from . import address  # for ScriptOutput, OpCodes, ScriptError, Script
 from collections import namedtuple
 from typing import List, Tuple
 
-lokad_id = b"SLP\x00"  # aka protocol code -- this appears after the 'OP_RETURN + OP_PUSH(4)' bytes in the ScriptOutput
+lokad_id = b"SLP\x00"  # aka protocol code (prefix) -- this appears after the 'OP_RETURN + OP_PUSH(4)' bytes in the ScriptOutput for *ALL* SLP scripts
 
 # ---- EXCEPTIONS ----
 class Error(Exception):
@@ -55,7 +55,7 @@ class ScriptOutput(address.ScriptOutput):
         script = script if isinstance(script, (bytes, bytearray)) else script.to_script()
         script = bytes(script) if isinstance(script, bytearray) else script
         self = super(__class__, cls).__new__(cls, script)
-        self.message = Message.parseOutputScript(self)
+        self.message = Message.parse(self)
         return self
 
     def __hash__(self):
@@ -83,27 +83,78 @@ class ScriptOutput(address.ScriptOutput):
         return False
 # /ScriptOutput
 
-#address.ScriptOutput.protocol_classes.add(ScriptOutput)  # register self with electron-cash script protocol system
+#address.ScriptOutput.protocol_classes.add(ScriptOutput)  # register class with Electron Cash script 'protocol factory' system
 
-class Chunks:
-    ''' SLP OP_RETURN 'fields' object.
+class Message:
+    ''' This class represents a parsed and valid SLP OP_RETURN message that can
+    be used by the validator to examine SLP messages.
 
-    Encapsulates the "chunks" in the SLP OP_RETURN message. self.chunks stores
-    the tuple of parsed chunks (bytes objects) in the message.
+    The self.is_valid attribute will always be True if this class was
+    successfully constructed.
 
-    This class is intended to be accessed via its .property accessors.
+    This class raises an Exception subclass if parsing fails and should not
+    normally be constructible for invalid SLP OP_RETURN messages.
+
+    The .chunks attribute is a tuple of bytes which are the various OP_RETURN
+    fields in an SLP message. .chunks[0] lokad_id prefix, .chunks[1] is the
+    token_type, etc.
+
+    However: This class is intended to be accessed via its @property accessors!
 
     Accesses are parsed upon access and may raise various Exceptions
-    if the OP_RETURN message and/or chunks are malformed.  No real validation
-    is done, since this is a low-level class.
+    if the OP_RETURN message and/or chunks are malformed.  (No real validation
+    is done unpon access, for performance).
 
-    Use the `Message` class which validates the chunks, defined later in this
-    file. '''
-    def __init__(self, chunks : Tuple[bytes] = None):
-        if chunks is not None and (not isinstance(chunks, tuple)
-                                   or any(not isinstance(b, bytes) for b in chunks)):
-            chunks = tuple(bytes(b) for b in chunks)  # ensure tuple of bytes
+    However valid instances of Message appearing at Runtime are all valid
+    due to the guarded __init__ which validates the chunks and raises upon
+    parse errors.'''
+
+    __slots__ = ('is_valid',  # bool
+                 'chunks',)   # Tuple[bytes]
+
+
+    # -- FACTORY METHOD(s) and CONSTRUCTOR --
+    def __init__(self, chunks: object):
+        ''' `chunks` is expected to be a Tuple of parsed chunks *or* a bytes
+        *or* ScriptOutput object.
+
+        Iff bytes object and/or a ScriptOutput base, `chunks` will get parsed
+        to chunks and then the message will be validated as normal.
+
+        Will raise on bad SLP OP_RETURN script.'''
+        if isinstance(chunks, (bytearray, bytes, address.ScriptOutput)):
+            script = chunks
+            try:
+                script = script if isinstance(script, (bytes, bytearray)) else script.to_script()
+                chunks = self._parseOpreturnToChunks(script, allow_op_0 = False, allow_op_number = False)
+            except OpreturnError as e:
+                raise InvalidOutputMessage('Bad OP_RETURN', *e.args) from e
+        if isinstance(chunks, list):
+            chunks = tuple(chunks)
+        if any(not isinstance(b, bytes) for b in chunks):
+            # ensure bytes and not bytearray
+            chunks = tuple(bytes(b) for b in chunks)
+        assert chunks, "No Chunks!"
         self.chunks = chunks
+        self.is_valid = self._is_valid_or_raise()
+
+    @classmethod
+    def parse(cls, script : object) -> object:
+        ''' This method attempts to parse a ScriptOutput or bytes object as an
+            SLP message.
+
+            Parameter `script`: may be a ScriptOutput base or a bytes object.
+
+            Bad scripts will throw a subclass of Error; any other exception indicates a bug in this code.
+            - Unrecognized SLP versions will throw UnsupportedSlpTokenType.
+            - It is a STRICT parser -- consensus-invalid messages will throw InvalidOutputMessage.
+            - Non-SLP scripts will also throw InvalidOutputMessage.
+
+            returns a valid Message object on success.
+            '''
+        return cls(script)  # implicitly calls _is_valid_or_raise
+
+    # -- /FACTORY METHOD(s) & C'TOR --
 
     def __len__(self):
         return len(self.chunks) if self.chunks is not None else 0
@@ -236,7 +287,7 @@ class Chunks:
     @property
     def info(self) -> str:
         ''' Not really implemented. Returns the same thing each time. '''
-        return 'slp.py not parsing yet \xaf\\_(\u30c4)_/\xaf'
+        return r'slp.py not parsing yet ¯\_(ツ)_/¯'
     # /End PROPERTIES
 
     # --- HELPERS ---
@@ -252,40 +303,6 @@ class Chunks:
         if len(intBytes) == 0 and not raise_on_Null:
             return None
         raise InvalidOutputMessage('Field has wrong length')
-
-class Message:
-    ''' This class represents a parsed and valid op_return message that can be
-    used by the validator to examine SLP messages. '''
-
-
-    __slots__ = ('is_valid',  # bool
-                 'chunks',)   # Chunks object
-
-    def __init__(self, chunks: Chunks):
-        assert isinstance(chunks, Chunks)
-        self.is_valid = self.is_valid_or_raise(chunks)
-        self.chunks = chunks
-
-    def __hash__(self):
-        return hash((self.is_valid, self.chunks))
-
-    def __repr__(self):
-        return "<%s token_type=%d transaction_type=%r %r>"%(type(self).__qualname__, self.chunks.token_type, self.chunks.transaction_type, self.chunks)
-
-    @classmethod
-    def parseOutputScript(cls, outputScript) -> object:
-        ''' This method attempts to parse a ScriptOutput object as an SLP message.
-            Bad scripts will throw a subclass of ParsingError; any other exception indicates a bug in this code.
-            - Unrecognized SLP versions will throw UnsupportedSlpTokenType.
-            - It is a STRICT parser -- consensus-invalid messages will throw InvalidOutputMessage.
-            - Non-SLP scripts will also throw InvalidOutputMessage. '''
-        try:
-            script_bytes = outputScript if isinstance(outputScript, (bytes, bytearray)) else outputScript.to_script()
-            chunks = Chunks( cls._parseOpreturnToChunks(script_bytes, allow_op_0 = False, allow_op_number = False) )
-        except OpreturnError as e:
-            raise InvalidOutputMessage('Bad OP_RETURN', *e.args) from e
-
-        return cls(chunks)  # implicitly calls is_valid_or_raise
 
     @staticmethod
     def _parseOpreturnToChunks(script: bytes, *,  allow_op_0: bool, allow_op_number: bool) -> List[bytes]:
@@ -319,69 +336,69 @@ class Message:
                 raise OpreturnError('OP_0 not allowed')
             chunks.append(b'' if data is None else bytes(data))
         return chunks
+    # --- /HELPERS
 
-    @classmethod
-    def is_valid_or_raise(cls, chunks : Chunks) -> bool:
+    def _is_valid_or_raise(self) -> bool:
         ''' Checks if chunks is a valid SLP OP_RETURN message.
 
         Returns True or raises if not valid. '''
-        if not chunks:
+        if not self.chunks:
             raise InvalidOutputMessage('Empty OP_RETURN')
 
-        if chunks.lokad_id != lokad_id:
+        if self.lokad_id != lokad_id:
             raise InvalidOutputMessage('Not SLP')
 
-        if len(chunks) <= 1:
+        if len(self) <= 1:
             raise InvalidOutputMessage('Missing token_type')
 
         # check if the token version is supported
         # 1   = type 1
         # 65  = type 1 as NFT child
         # 129 = type 1 as NFT parent
-        token_type = chunks.token_type
+        token_type = self.token_type
         if token_type not in (1, 65, 129):
             raise UnsupportedSlpTokenType(token_type)
 
-        if len(chunks) <= 2:
+        if len(self) <= 2:
             raise InvalidOutputMessage('Missing SLP command')
 
         # (the following logic is all for version 1)
         try:
-            transaction_type = chunks.transaction_type
+            transaction_type = self.transaction_type
         except UnicodeDecodeError:
             # This can occur if non-ascii bytes present (byte > 127)
             raise InvalidOutputMessage('Bad transaction type')
 
         # switch statement to handle different on transaction type
         if transaction_type == 'GENESIS':
-            if len(chunks) != 10:
+            if len(self) != 10:
                 raise InvalidOutputMessage('GENESIS with incorrect number of parameters')
             # keep ticker, token name, document url, document hash as bytes
             # (their textual encoding is not relevant for SLP consensus)
             # but do enforce consensus length limits
-            dummy = chunks.ticker  # ensure this parses
-            dummy = chunks.token_name  # ensure parses
-            dummy = chunks.token_doc_url  # ensure parses
-            if len(chunks.token_doc_hash) not in (0, 32):
+            dummy = self.ticker  # ensure this parses
+            dummy = self.token_name  # ensure parses
+            dummy = self.token_doc_url  # ensure parses
+            if len(self.token_doc_hash) not in (0, 32):
                 raise InvalidOutputMessage('Token document hash is incorrect length')
 
             # decimals -- one byte in range 0-9
-            if chunks.decimals > 9:
+            if self.decimals > 9:
                 raise InvalidOutputMessage('Too many decimals')
 
             ## handle baton for additional minting, but may be empty
-            v = chunks.mint_baton_vout
+            v = self.mint_baton_vout
             if v is not None and v < 2:
                 raise InvalidOutputMessage('Mint baton cannot be on vout=0 or 1')
-            elif v is not None and chunks.nft_flag == 'NFT_CHILD':
+            elif v is not None and self.nft_flag == 'NFT_CHILD':
                 raise InvalidOutputMessage('Cannot have a minting baton in a NFT_CHILD token.')
 
             # handle initial token quantity issuance
-            dummy = chunks.initial_token_mint_quantity  # ensure parses
+            dummy = self.initial_token_mint_quantity  # ensure parses
         elif transaction_type == 'SEND':
-            if len(chunks) < 4:
+            if len(self) < 4:
                 raise InvalidOutputMessage('SEND with too few parameters')
-            if len(chunks.token_id) != 32:
+            if len(self.token_id) != 32:
                 raise InvalidOutputMessage('token_id is wrong length')
             #dummy = chunks.token_id_hex  # ensure parses
 
@@ -390,27 +407,27 @@ class Message:
             # token_output[1] is the first token output given by the SLP
             # message, i.e., the number listed as `token_output_quantity1` in the
             # spec, which goes to tx output vout=1.
-            token_output = chunks.token_output  # ensure parses
+            token_output = self.token_output  # ensure parses
             # maximum 19 allowed token outputs, plus 1 for the explicit [0] we inserted.
             if len(token_output) < 2:
                 raise InvalidOutputMessage('Missing output amounts')
             if len(token_output) > 20:
                 raise InvalidOutputMessage('More than 19 output amounts')
         elif transaction_type == 'MINT':
-            if chunks.nft_flag == 'NFT_CHILD':
+            if self.nft_flag == 'NFT_CHILD':
                 raise InvalidOutputMessage('Cannot have MINT with NFT_CHILD')
-            if len(chunks) != 6:
+            if len(self) != 6:
                 raise InvalidOutputMessage('MINT with incorrect number of parameters')
-            if len(chunks.token_id) != 32:
+            if len(self.token_id) != 32:
                 raise InvalidOutputMessage('token_id is wrong length')
             #dummy = chunks.token_id_hex  # ensure parse
-            v = chunks.mint_baton_vout
+            v = self.mint_baton_vout
             if v is not None and v < 2:
                 raise InvalidOutputMessage('Mint baton cannot be on vout=0 or 1')
-            dummy = chunks.additional_token_quantity  # ensure parse
+            dummy = self.additional_token_quantity  # ensure parse
         elif slpMsg.transaction_type == 'COMMIT':
             # We don't know how to handle this right now, just return slpMsg of 'COMMIT' type
-            dummy = chunks.info  # ensure parse
+            dummy = self.info  # ensure parse
         else:
             raise InvalidOutputMessage('Bad transaction type')
         return True
@@ -527,68 +544,6 @@ class Build:
         return Build.chunksToOpreturnOutput(chunks)
 
     @staticmethod
-    def GenesisOpReturnOutput_V2(ticker: str, token_name: str, token_document_url: str, token_document_hash_hex: str, decimals: int, baton_vout: int, initial_token_mint_quantity: int) -> tuple:
-        ''' Type 1 Token GENESIS Message '''
-        chunks = []
-
-        # lokad id
-        chunks.append(lokad_id)
-
-        # token version/type
-        chunks.append(b'\x02')
-
-        # transaction type
-        chunks.append(b'GENESIS')
-
-        # ticker (can be None)
-        if not ticker:
-            tickerb = b''
-        else:
-            tickerb = ticker.encode('utf-8')
-        chunks.append(tickerb)
-
-        # name (can be None)
-        if not token_name:
-            chunks.append(b'')
-        else:
-            chunks.append(token_name.encode('utf-8'))
-
-        # doc_url (can be None)
-        if not token_document_url:
-            chunks.append(b'')
-        else:
-            chunks.append(token_document_url.encode('ascii'))
-
-        # doc_hash (can be None)
-        if not token_document_hash_hex:
-            chunks.append(b'')
-        else:
-            dochash = bytes.fromhex(token_document_hash_hex)
-            if len(dochash) not in (0, 32):
-                raise SerializingError()
-            chunks.append(dochash)
-
-        # decimals
-        decimals = int(decimals)
-        if decimals > 9 or decimals < 0:
-            raise SerializingError()
-        chunks.append(bytes((decimals,)))
-
-        # baton vout
-        if baton_vout is None:
-            chunks.append(b'')
-        else:
-            if baton_vout < 2:
-                raise SerializingError()
-            chunks.append(bytes((baton_vout,)))
-
-        # init quantity
-        qb = int(initial_token_mint_quantity).to_bytes(8,'big')
-        chunks.append(qb)
-
-        return Build.chunksToOpreturnOutput(chunks)
-
-    @staticmethod
     def MintOpReturnOutput_V1(token_id_hex: str, baton_vout: int, token_mint_quantity: int, token_type: int = 1) -> tuple:
         ''' Type 1 Token MINT Message '''
         chunks = []
@@ -603,40 +558,6 @@ class Build:
             chunks.append(b'\x81')
         else:
             raise Error('Unsupported token type')
-
-        # transaction type
-        chunks.append(b'MINT')
-
-        # token id
-        tokenId = bytes.fromhex(token_id_hex)
-        if len(tokenId) != 32:
-            raise SerializingError()
-        chunks.append(tokenId)
-
-        # baton vout
-        if baton_vout is None:
-            chunks.append(b'')
-        else:
-            if baton_vout < 2:
-                raise SerializingError()
-            chunks.append(bytes((baton_vout,)))
-
-        # init quantity
-        qb = int(token_mint_quantity).to_bytes(8,'big')
-        chunks.append(qb)
-
-        return Build.chunksToOpreturnOutput(chunks)
-
-    @staticmethod
-    def MintOpReturnOutput_V2(token_id_hex: str, baton_vout: int, token_mint_quantity: int) -> tuple:
-        '''  Type 2 Token MINT Message '''
-        chunks = []
-
-        # lokad id
-        chunks.append(lokad_id)
-
-        # token version/type
-        chunks.append(b'\x02')
 
         # transaction type
         chunks.append(b'MINT')
@@ -678,37 +599,6 @@ class Build:
             chunks.append(b'\x81')
         else:
             raise Error('Unsupported token type')
-
-        # transaction type
-        chunks.append(b'SEND')
-
-        # token id
-        tokenId = bytes.fromhex(token_id_hex)
-        if len(tokenId) != 32:
-            raise SerializingError()
-        chunks.append(tokenId)
-
-        # output quantities
-        if len(output_qty_array) < 1:
-            raise SerializingError("Cannot have less than 1 SLP Token output.")
-        if len(output_qty_array) > 19:
-            raise SerializingError("Cannot have more than 19 SLP Token outputs.")
-        for qty in output_qty_array:
-            qb = int(qty).to_bytes(8,'big')
-            chunks.append(qb)
-
-        return Build.chunksToOpreturnOutput(chunks)
-
-    @staticmethod
-    def SendOpReturnOutput_V2(token_id_hex: str, output_qty_array: [int]) -> tuple:
-        '''' Type 2 Token SEND Message '''
-        chunks = []
-
-        # lokad id
-        chunks.append(lokad_id)
-
-        # token version/type
-        chunks.append(b'\x02')
 
         # transaction type
         chunks.append(b'SEND')
