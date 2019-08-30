@@ -632,3 +632,27 @@ class Build:
             chunks.append(qb)
 
         return Build.chunksToOpreturnOutput(chunks)
+
+#------------------------------------------------------------------------------
+#| WALLET DATA STRUCTURES                                                     |
+#------------------------------------------------------------------------------
+class WalletData:
+    ''' This lives in wallet instances as the .slp attribute
+
+    This thing seems contorted and inefficient.
+    FIXME: Redo this. '''
+    __slots__ = ('storage', # the wallet.storage object
+                 'validity',    # dict of txid -> int
+                 'token_types', # dict of token_id -> dict { 'class' : str, 'decimals' : str_or_int, 'name' : str, 'group_id' : str }
+                 'tx_tokinfo',  # dict of txid -> dict { 'type': str, 'transaction_type' : int, 'token_id': hex_str, 'validity' : int }
+                 'txo',         # defaultdict-of-defaultdict-of-dicts [addr] -> [txid] -> txo_dict
+                 )
+    def __init__(self, storage):
+        #TODO...
+        self.storage = storage
+        self.load()
+
+    def load(self):
+        '''TODO'''
+    def save(self):
+        '''TODO'''
