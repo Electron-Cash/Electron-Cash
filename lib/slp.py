@@ -12,33 +12,26 @@ class Error(Exception):
 class OpreturnError(Error):
     pass
 
-
-# Exceptions caused by malformed or unexpected data found in parsing.
 class ParsingError(Error):
-    pass
+    ''' Exceptions caused by malformed or unexpected data found in parsing. '''
 
 class UnsupportedSlpTokenType(ParsingError):
-    # Cannot parse OP_RETURN due to unrecognized version
-    # (may or may not be valid)
-    pass
+    ''' Cannot parse OP_RETURN due to unrecognized version
+        (may or may not be valid) '''
 
 class InvalidOutputMessage(ParsingError):
-    # This exception (and subclasses) marks a message as definitely invalid
-    # under SLP consensus rules. (either malformed SLP or just not SLP)
-    pass
+    ''' This exception (and subclasses) marks a message as definitely invalid
+        under SLP consensus rules. (either malformed SLP or just not SLP) '''
 
-
-# Exceptions during creation of SLP message.
 class SerializingError(Error):
-    pass
+    ''' Exceptions during creation of SLP message. '''
 
 class OPReturnTooLarge(SerializingError):
-    pass
+    ''' The OPReturn field ended up being > 223 bytes '''
 
 # Other exceptions
 class NoMintingBatonFound(Error):
     pass
-
 # /EXCEPTIONS
 
 def _i2b(val): return bytes((val,))
