@@ -170,9 +170,30 @@ class Message:
     def __hash__(self):
         return hash(self.chunks)
 
+    @property
+    def valid_properties(self) -> Tuple[str]:
+        ''' Returns the expected valid properties for this instance
+        based on self.transaction_type. Raises Error if unknown
+        transaction_type. '''
+        tt = self.transaction_type
+        if tt == 'GENESIS':
+            return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
+                    'ticker', 'token_name', 'token_doc_url', 'token_doc_hash',
+                    'decimals', 'mint_baton_vout', 'initial_token_mint_quantity',)
+        elif tt == 'MINT':
+            return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
+                    'token_id_hex', 'mint_baton_vout', 'additional_token_quantity')
+        elif tt == 'SEND':
+            return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
+                    'token_id_hex', 'token_output', )
+        elif tt == 'COMMIT':
+            return ('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
+                    'info',)
+        raise InvalidOutputMessage("Unknown transaction_type", tt)
+
     def __repr__(self):
         d = {}
-        def generic(keys):
+        def read(keys):
             for k in keys:
                 if k.startswith('_') or k == 'chunks':
                     continue
@@ -182,25 +203,10 @@ class Message:
                     continue
                 if v is not None and not callable(v):
                     d[k] = v
-        def genesis():
-            generic(('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
-                     'ticker', 'token_name', 'token_doc_url', 'token_doc_hash',
-                     'decimals', 'mint_baton_vout', 'initial_token_mint_quantity',))
-        def send():
-            generic(('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
-                     'token_id_hex', 'token_output', ))
-        def mint():
-            generic(('token_type', 'transaction_type', 'lokad_id', 'nft_flag',
-                     'token_id_hex', 'mint_baton_vout', 'additional_token_quantity'))
-        tt = self.transaction_type
-        if tt == "GENESIS":
-            genesis()
-        elif tt == "SEND":
-            send()
-        elif tt == "MINT":
-            mint()
-        else:
-            generic(dir(self))
+        try:
+            read(self.valid_properties)
+        except InvalidOutputMessage:
+            read(dir(self))
         return "<{name} object at 0x{loc:0x} fields: {fields}>".format(
             name = type(self).__qualname__,
             loc = id(self),
@@ -257,7 +263,7 @@ class Message:
         return self._parseChunkToInt(self.chunks[7], 1, 1, True)
     @property
     def mint_baton_vout(self) -> int:
-        ''' May return None. '''
+        ''' May return None. Valid for MINT and GENESIS. '''
         if self.transaction_type == 'GENESIS':
             return self._parseChunkToInt(self.chunks[8], 1, 1)
         else:

@@ -517,3 +517,100 @@ class SLPTests(unittest.TestCase):
                     if None not in expected_codes:
                         raise AssertionError("Script was found valid but should have been invalid, for a reason code in %r."%(expected_codes,))
 
+    def test_opreturn_build(self):
+        testlist = json.loads(script_tests_json)
+
+        print("Starting %d tests on SLP's OP_RETURN builder"%len(testlist))
+        ctr = 0
+        for d in testlist:
+            description = d['msg']
+            scripthex = d['script']
+            code = d['code']
+            if code is not None:
+                # we are only interested in "None" tests, that is, ones
+                # that are expected to parse as valid
+                continue
+            if scripthex is None:
+                continue
+            if hasattr(code, '__iter__'):
+                expected_codes = tuple(code)
+            else:
+                expected_codes = (code, )
+
+            def check_is_equal_message(msg1, msg2):
+                print("ScriptHex = ", scripthex)
+                print("Testing ", msg1.chunks, "vs", msg2.chunks)
+                seen = {'chunks'}
+                for k in msg1.valid_properties:
+                    if k.startswith('_') or k in seen:
+                        continue
+                    try:
+                        v = getattr(msg1, k, None)
+                    except:
+                        continue
+                    if v is not None and not callable(v):
+                        #print("kw=",k)
+                        self.assertEqual(v, getattr(msg2, k, None))
+                        seen.add(k)
+                for k in msg2.valid_properties:
+                    if k.startswith('_') or k in seen:
+                        continue
+                    try:
+                        v = getattr(msg2, k, None)
+                    except:
+                        continue
+                    if v is not None and not callable(v):
+                        #print("kw=",k)
+                        self.assertEqual(v, getattr(msg1, k, None))
+                        seen.add(k)
+
+            with self.subTest(description=description, script=scripthex):
+                sco = address.ScriptOutput(bytes.fromhex(scripthex))
+                slp_sco = slp.ScriptOutput(sco.script)  # should not raise
+                _type = slp_sco.message.transaction_type
+                if _type == 'GENESIS':
+                    try:
+                        outp = slp.Build.GenesisOpReturnOutput_V1(
+                            ticker = slp_sco.message.ticker.decode('utf-8'),
+                            token_name = slp_sco.message.token_name.decode('utf-8'),
+                            token_document_url = slp_sco.message.token_doc_url and slp_sco.message.token_doc_url.decode('utf-8'),
+                            token_document_hash_hex = slp_sco.message.token_doc_hash and slp_sco.message.token_doc_hash.decode('utf-8'),
+                            decimals = slp_sco.message.decimals,
+                            baton_vout = slp_sco.message.mint_baton_vout,
+                            initial_token_mint_quantity = slp_sco.message.initial_token_mint_quantity,
+                            token_type = slp_sco.message.token_type,
+                        )
+                    except (UnicodeError, slp.OPReturnTooLarge):
+                        # some of the test data doesn't decode to utf8 because it contains 0xff
+                        # some of the test data has too-big op_return
+                        continue
+                    check_is_equal_message(slp_sco.message, outp[1].message)
+                elif _type == 'MINT':
+                    try:
+                        outp = slp.Build.MintOpReturnOutput_V1(
+                            token_id_hex = slp_sco.message.token_id_hex,
+                            baton_vout = slp_sco.message.mint_baton_vout,
+                            token_mint_quantity = slp_sco.message.additional_token_quantity,
+                            token_type = slp_sco.message.token_type
+                        )
+                    except (UnicodeError, slp.OPReturnTooLarge):
+                        continue
+                    check_is_equal_message(slp_sco.message, outp[1].message)
+                elif _type == 'SEND':
+                    try:
+                        outp = slp.Build.SendOpReturnOutput_V1(
+                            token_id_hex = slp_sco.message.token_id_hex,
+                            output_qty_array = slp_sco.message.token_output[1:],
+                            token_type = slp_sco.message.token_type
+                        )
+                    except (UnicodeError, slp.OPReturnTooLarge):
+                        continue
+                    check_is_equal_message(slp_sco.message, outp[1].message)
+                elif _type == 'COMMIT':
+                    continue
+                else:
+                    raise RuntimeError('Unexpected transation_type')
+                ctr += 1
+
+        print("Completed %d OP_RETURN *build* tests"%ctr)
+
