@@ -620,7 +620,6 @@ class WalletData:
     more information once we add validation.  See the ._clear() method
     which describes each data item. '''
     def __init__(self, wallet):
-        #TODO...
         self.wallet = wallet
         self._clear()
 
