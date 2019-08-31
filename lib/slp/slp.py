@@ -1,8 +1,9 @@
 from .. import bitcoin
 from .. import address  # for ScriptOutput, OpCodes, ScriptError, Script
 from .. import caches
+from .. import util
 from ..transaction import Transaction
-from typing import List, Tuple
+from typing import List, Tuple, Set
 
 from .exceptions import *
 
@@ -613,15 +614,19 @@ class Build:
 #------------------------------------------------------------------------------
 #| WALLET DATA STRUCTURES                                                     |
 #------------------------------------------------------------------------------
-class WalletData:
+class WalletData(util.PrintError):
     ''' This lives in wallet instances as the .slp attribute
 
     This data layout is provisional for now. We will redo it to contain
-    more information once we add validation.  See the ._clear() method
+    more information once we add validation.  See the .clear() method
     which describes each data item. '''
     def __init__(self, wallet):
+        assert wallet
         self.wallet = wallet
-        self._clear()
+        self.clear()
+
+    def diagnostic_name(self):
+        return self.wallet.diagnostic_name() + ".SLP"
 
     def load(self) -> bool:
         ''' This takes no locks. If calling in multithreaded environment,
@@ -629,29 +634,29 @@ class WalletData:
         code so locking is not relevant). '''
         ver = self.wallet.storage.get('slp_data_version')
         if ver != 3.9:
-            self.wallet.print_error(f"incompatible or missing slp_data_version '{ver}'; will rebuild slp data from wallet transaction history")
-            self._clear()
+            self.print_error(f"incompatible or missing slp_data_version '{ver}'; will rebuild slp data from wallet transaction history")
+            self.clear()
             self.need_rebuild = True
         else:
             try:
                 # dict of txid -> int
                 self.validity = {k.lower():int(v) for k,v in self.wallet.storage.get("slp_validity").items()}
-                # dict of token_id_hex -> set of tuples(txo_name, qty)
-                self.token_quantities = {k.lower() : { (vv0.lower(), int(vv1)) for vv0,vv1 in v} for k,v in self.wallet.storage.get("slp_token_quantities").items()}
+                # dict of "token_id_hex" -> dict of ["txo_name"] -> qty (int)
+                self.token_quantities = {k.lower() : { vv0.lower() : int(vv1) for vv0,vv1 in v} for k,v in self.wallet.storage.get("slp_token_quantities").items()}
+                # build the mapping of prevouthash:n (str) -> token_id_hex (str) from self.token_quantities
+                self.txo_token_id = dict()
+                for token_id_hex, txo_dict in self.token_quantities.items():
+                    for txo, qty in txo_dict.items():
+                        self.txo_token_id[txo] = token_id_hex
                 # dict of Address -> set of txo_name
                 self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in self.wallet.storage.get("slp_txo_byaddr").items()}
-                # full set of all txo names that got tokens sent to them ever
-                self.txo_set = set()
-                for k,v in self.txo_byaddr.items():
-                    # build txo_set from all sets in txo_byaddr
-                    self.txo_set.update(v)
                 self.need_rebuild = False
             except (ValueError, TypeError, AttributeError, address.AddressError, AssertionError) as e:
                 # Note we wanted the TypeError/AttributeError above on missing
                 # keys since that indicates data inconsistency, hence why
                 # the storage.get()'s above were given no defaults, so None.method() above should raise.
-                self.wallet.print_error("Error loading slp data; will flag for rebuild:", repr(e))
-                self._clear()
+                self.print_error("Error loading slp data; will flag for rebuild:", repr(e))
+                self.clear()
                 self.need_rebuild = True
         return not self.need_rebuild
 
@@ -659,25 +664,55 @@ class WalletData:
         '''Caller should hold locks'''
         self.wallet.storage.put('slp_data_version', None)  # clear key in case we crash
         self.wallet.storage.put('slp_validity', self.validity)
-        self.wallet.storage.put('slp_token_quantities', {k:list([v0,v1] for v0,v1 in v) for k,v in self.token_quantities.items()})
+        self.wallet.storage.put('slp_token_quantities', {k:list([v0,v1] for v0,v1 in v.items()) for k,v in self.token_quantities.items()})
         self.wallet.storage.put('slp_txo_byaddr', { k.to_storage_string() : list(v) for k,v in self.txo_byaddr.items() } )
         self.wallet.storage.put('slp_data_version', 3.9)  # indicate success -- this key's value should match what's read in .load() above.
 
-    def _clear(self):
+    def clear(self):
         '''Caller should hold locks'''
         self.need_rebuild = False
         self.validity = dict()  # txid -> int
-        self.txo_set = set()    # all "prevouthash:n" txo's that had tokens sent to them (spent or unspent)
         self.txo_byaddr = dict()  # [address] -> set of "prevouthash:n" for that address
-        self.token_quantities = dict() # [token_id_hex] -> set of ("prevouthash:n", qty) tuples
+        self.token_quantities = dict() # [token_id_hex] -> dict of ["prevouthash:n"] -> qty (-1 for qty indicates minting baton)
+        self.txo_token_id = dict() # ["prevouthash:n"] -> "token_id_hex"
 
     def rebuild(self):
         '''This takes wallet.lock'''
         with self.wallet.lock:
-            self._clear()
+            self.clear()
             for txid, tx in self.wallet.transactions.items():
                 self.add_tx(txid, Transaction(tx.raw))  # we take a copy of the transaction so prevent storing deserialized tx in wallet.transactions dict
 
+    #--- GETTERS / SETTERS from wallet
+    def token_info_for_txo(self, txo) -> Tuple[str, int]:
+        ''' Returns the (token_id_hex, quantity) tuple for a particular
+        txo if it has a token sitting on it.  Returns None if there is no
+        token for a particular txo. Takes no locks.
+
+        Note that quantity == -1 indicates a "token baton"
+        '''
+        token_id_hex = self.txo_token_id.get(txo)
+        if token_id_hex is not None:
+            return token_id_hex, self.token_quantities[token_id_hex][txo]  # we want this to raise KeyError here if missing as it indicates a programming error
+    def txo_has_token(self, txo) -> bool:
+        ''' Takes no locks. '''
+        return txo in self.txo_token_id
+    def get_addr_txo(self, addr) -> Set[str]:
+        ''' Note this returns the actual reference to the set.  Returns all
+        txos (spend and/or unspent) that have ever received tokens for a
+        particular address.
+        Call this with locks held and/or copy the set if you want to be thread-safe. '''
+        return self.txo_byaddr.get(addr, set())
+    def get_batons(self, token_id_hex) -> List[str]:
+        ''' Returns the list of txo's containing a token baton for a particular
+        token_id_hex, or the empty list if no batons in wallet for said token.
+        Takes no locks. Wrap in wallet.lock to make this thread-safe.'''
+        return [txo for txo, qty in
+                    self.token_quantities.get(token_id_hex, {}).items()
+                    if qty <= -1]
+    #--- /GETTERS/SETTERS
+
+    #-- Wallet hooks (rm_tx, add_tx)
     def rm_tx(self, txid):
         ''' Caller should hold wallet.lock
         This is (usually) called by wallet.remove_transaction in the network
@@ -688,22 +723,24 @@ class WalletData:
 
         TODO: characterize whether a speedup here is warranted. '''
         self.validity = { k:v for k,v in self.validity.items() if k != txid }
-        for txo in list(self.txo_set):
+        for txo in list(self.txo_token_id.keys()):
             if txo.rsplit(':', 1)[0] == txid:
-                self.txo_set.discard(txo)
+                self.txo_token_id.pop(txo, None)
         for addr, txo_set in self.txo_byaddr.copy().items():
             for txo in list(txo_set):
                 if txo.rsplit(':', 1)[0] == txid:
                     txo_set.discard(txo)  # this actually points to the real txo_set instance in the dict
             if not txo_set:
                 self.txo_byaddr.pop(addr, None)
-        for tok_id, txo_set in self.token_quantities.copy().items():
-            for item in list(txo_set):
-                txo, qty = item
+        for tok_id, txo_dict in self.token_quantities.copy().items():
+            for txo, qty in txo_dict.copy().items():
                 if txo.rsplit(':', 1)[0] == txid:
-                    txo_set.discard(item)  # this actually points to the real txo_set instance in the dict
-            if not txo_set:
+                    txo_dict.pop(txo, None)  # this actually points to the real txo_dict instance in the token_quantities[tok_id] dict
+            if not txo_dict:
                 self.token_quantities.pop(tok_id, None)
+                # this token has no more relevant tx's -- pop it from
+                # the validity dict as well
+                self.validity.pop(tok_id, None)
 
     def add_tx(self, txid, tx):
         ''' Caller should hold wallet.lock.
@@ -726,15 +763,16 @@ class WalletData:
             else:
                 raise InvalidOutputMessage('Bad transaction type')
         except (AssertionError, ValueError, KeyError, TypeError, IndexError) as e:
-            self.wallet.print_error(f"ERROR: tx {txid}; exc =", repr(e))
+            self.print_error(f"ERROR: tx {txid}; exc =", repr(e))
+    #-- /Wallet hooks (rm_tx, add_tx)
 
     def _add_token_qty(self, token_id_hex, txo_name, qty):
         ''' No checks are done for address, etc. qty is just faithfully added
         for a given token/txo_name combo. '''
-        s = self.token_quantities.get(token_id_hex, set())
-        need_insert = not s
-        s.add((txo_name, qty))  # NB: negative quantity indicates mint baton
-        if need_insert: self.token_quantities[token_id_hex] = s
+        d = self.token_quantities.get(token_id_hex, dict())
+        need_insert = not d
+        d[txo_name] = qty  # NB: negative quantity indicates mint baton
+        if need_insert: self.token_quantities[token_id_hex] = d
 
     def _add_txo(self, token_id_hex, txid, n, addr, token_qty):
         ''' Adds txid:n to requisite data structures, registering
@@ -751,7 +789,7 @@ class WalletData:
         need_insert = not s
         s.add(name)
         if need_insert: self.txo_byaddr[addr] = s
-        self.txo_set.add(name)
+        self.txo_token_id[name] = token_id_hex
         self._add_token_qty(token_id_hex, name, token_qty)
 
     def _add_mint_baton(self, token_id_hex, txid, n, addr):
@@ -796,4 +834,3 @@ class WalletData:
                 continue
             _type, addr, _dummy = outputs[n]  # shouldn't raise since we truncated list above
             self._add_txo(token_id_hex, txid, n, addr, qty)
-
