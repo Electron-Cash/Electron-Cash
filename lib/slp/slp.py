@@ -620,6 +620,9 @@ class WalletData(util.PrintError):
     This data layout is provisional for now. We will redo it to contain
     more information once we add validation.  See the .clear() method
     which describes each data item. '''
+
+    DATA_VERSION = 0.1  # used by load/save for data storage versioning
+
     def __init__(self, wallet):
         assert wallet
         self.wallet = wallet
@@ -632,24 +635,25 @@ class WalletData(util.PrintError):
         ''' This takes no locks. If calling in multithreaded environment,
         guard with locks. (Currently this is only called in wallet.py setup
         code so locking is not relevant). '''
-        ver = self.wallet.storage.get('slp_data_version')
-        if ver != 3.9:
+        data = self.wallet.storage.get('slp', {})
+        ver = (isinstance(data, dict) and data.get('version')) or None
+        if ver != self.DATA_VERSION:
             self.print_error(f"incompatible or missing slp_data_version '{ver}'; will rebuild slp data from wallet transaction history")
             self.clear()
             self.need_rebuild = True
         else:
             try:
                 # dict of txid -> int
-                self.validity = {k.lower():int(v) for k,v in self.wallet.storage.get("slp_validity").items()}
+                self.validity = {k.lower():int(v) for k,v in data.get("validity").items()}
                 # dict of "token_id_hex" -> dict of ["txo_name"] -> qty (int)
-                self.token_quantities = {k.lower() : { vv0.lower() : int(vv1) for vv0,vv1 in v} for k,v in self.wallet.storage.get("slp_token_quantities").items()}
+                self.token_quantities = {k.lower() : { vv0.lower() : int(vv1) for vv0,vv1 in v} for k,v in data.get("token_quantities").items()}
                 # build the mapping of prevouthash:n (str) -> token_id_hex (str) from self.token_quantities
                 self.txo_token_id = dict()
                 for token_id_hex, txo_dict in self.token_quantities.items():
                     for txo, qty in txo_dict.items():
                         self.txo_token_id[txo] = token_id_hex
                 # dict of Address -> set of txo_name
-                self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in self.wallet.storage.get("slp_txo_byaddr").items()}
+                self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in data.get("txo_byaddr").items()}
                 self.need_rebuild = False
             except (ValueError, TypeError, AttributeError, address.AddressError, AssertionError) as e:
                 # Note we wanted the TypeError/AttributeError above on missing
@@ -662,11 +666,14 @@ class WalletData(util.PrintError):
 
     def save(self):
         '''Caller should hold locks'''
-        self.wallet.storage.put('slp_data_version', None)  # clear key in case we crash
-        self.wallet.storage.put('slp_validity', self.validity)
-        self.wallet.storage.put('slp_token_quantities', {k:list([v0,v1] for v0,v1 in v.items()) for k,v in self.token_quantities.items()})
-        self.wallet.storage.put('slp_txo_byaddr', { k.to_storage_string() : list(v) for k,v in self.txo_byaddr.items() } )
-        self.wallet.storage.put('slp_data_version', 3.9)  # indicate success -- this key's value should match what's read in .load() above.
+        self.wallet.storage.put('slp_data_version', None)  # clear key of other older formats.
+        data = {
+            'validity' : self.validity,
+            'token_quantities' : {k:list([v0,v1] for v0,v1 in v.items()) for k,v in self.token_quantities.items()},
+            'txo_byaddr' : { k.to_storage_string() : list(v) for k,v in self.txo_byaddr.items() },
+            'version' : self.DATA_VERSION,
+        }
+        self.wallet.storage.put('slp', data)
 
     def clear(self):
         '''Caller should hold locks'''
