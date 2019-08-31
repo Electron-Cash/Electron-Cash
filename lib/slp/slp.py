@@ -259,7 +259,7 @@ class Message:
     @property
     def token_output(self) -> Tuple[int]:  # ret[0] is always 0
         ''' Returns the token output as a list of ints.
-            Note that we put an explicit 0 for  self.token_output[0] since it
+            Note that we put an explicit 0 for self.token_output[0] since it
             corresponds to vout=0, which is the OP_RETURN tx output.
             token_output[1] is the first token output given by the SLP
             message, i.e., the number listed as `token_output_quantity1` in the
