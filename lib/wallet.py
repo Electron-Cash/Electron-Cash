@@ -277,6 +277,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if self.slp.need_rebuild:
             # load failed, must rebuild from self.transactions
             self.slp.rebuild()
+            self.slp.save()  # commit changes to self.storage
 
         # Print debug message on finalization
         finalization_print_error(self, "[{}/{}] finalized".format(type(self).__name__, self.diagnostic_name()))
