@@ -7,6 +7,7 @@ from typing import List, Tuple
 from .exceptions import *
 
 lokad_id = b"SLP\x00"  # aka protocol code (prefix) -- this appears after the 'OP_RETURN + OP_PUSH(4)' bytes in the ScriptOutput for *ALL* SLP scripts
+valid_token_types = frozenset((1, 65, 129))  # any token types not in this set will be rejected
 
 def _i2b(val): return bytes((val,))
 
@@ -345,7 +346,7 @@ class Message:
         # 65  = type 1 as NFT child
         # 129 = type 1 as NFT parent
         token_type = self.token_type
-        if token_type not in (1, 65, 129):
+        if token_type not in valid_token_types:
             raise UnsupportedSlpTokenType(token_type)
 
         if len(self) <= 2:
@@ -615,31 +616,95 @@ class Build:
 class WalletData:
     ''' This lives in wallet instances as the .slp attribute
 
-    This thing seems contorted and inefficient.
-    FIXME: Redo this. '''
-    __slots__ = ('wallet',      # the wallet object we belong to. we access some of its private attributes
-                 'validity',    # dict of txid -> int
-                 'token_types', # dict of token_id -> dict { 'class' : str, 'decimals' : str_or_int, 'name' : str, 'group_id' : str }
-                 'tx_tokinfo',  # dict of txid -> dict { 'type': str, 'transaction_type' : int, 'token_id': hex_str, 'validity' : int }
-                 'txo',         # defaultdict-of-defaultdict-of-dicts [addr] -> [txid] -> [idx] -> { 'type' : str, 'token_id' : hex_str, 'qty' : int_or_str }
-                 )
+    This data layout is provisional for now. We will redo it to contain
+    more information once we add validation.  See the ._clear() method
+    which describes each data item. '''
     def __init__(self, wallet):
         #TODO...
         self.wallet = wallet
-        self.load()
+        self._clear()
 
-    def load(self):
-        '''TODO'''
+    def load(self) -> bool:
+        ''' This takes no locks. If calling in multithreaded environment,
+        guard with locks. (Currently this is only called in wallet.py setup
+        code so locking is not relevant). '''
+        ver = self.wallet.storage.get('slp_data_version')
+        if ver != 3.9:
+            self.wallet.print_error(f"incompatible or missing slp_data_version '{ver}'; will rebuild slp data from wallet transaction history")
+            self._clear()
+            self.need_rebuild = True
+        else:
+            try:
+                # dict of txid -> int
+                self.validity = {k.lower():int(v) for k,v in self.wallet.storage.get("slp_validity").items()}
+                # dict of token_id_hex -> set of tuples(txo_name, qty)
+                self.token_quantities = {k.lower() : { (vv0.lower(), int(vv1)) for vv0,vv1 in v} for k,v in self.wallet.storage.get("slp_token_quantities").items()}
+                # dict of Address -> set of txo_name
+                self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in self.wallet.storage.get("slp_txo_byaddr").items()}
+                # full set of all txo names that got tokens sent to them ever
+                self.txo_set = set()
+                for k,v in self.txo_byaddr.items():
+                    # build txo_set from all sets in txo_byaddr
+                    self.txo_set.update(v)
+                self.need_rebuild = False
+            except (ValueError, TypeError, AttributeError, address.AddressError, AssertionError) as e:
+                # Note we wanted the TypeError/AttributeError above on missing
+                # keys since that indicates data inconsistency, hence why
+                # the storage.get()'s above were given no defaults, so None.method() above should raise.
+                self.wallet.print_error("Error loading slp data; will flag for rebuild:", repr(e))
+                self._clear()
+                self.need_rebuild = True
+        return not self.need_rebuild
+
     def save(self):
-        '''TODO'''
+        '''Caller should hold locks'''
+        self.wallet.storage.put('slp_data_version', None)  # clear key in case we crash
+        self.wallet.storage.put('slp_validity', self.validity)
+        self.wallet.storage.put('slp_token_quantities', {k:list([v0,v1] for v0,v1 in v) for k,v in self.token_quantities.items()})
+        self.wallet.storage.put('slp_txo_byaddr', { k.to_storage_string() : list(v) for k,v in self.txo_byaddr.items() } )
+        self.wallet.storage.put('slp_data_version', 3.9)  # indicate success -- this key's value should match what's read in .load() above.
+
     def _clear(self):
-        '''TODO'''
+        '''Caller should hold locks'''
+        self.need_rebuild = False
+        self.validity = dict()  # txid -> int
+        self.txo_set = set()    # all "prevouthash:n" txo's that had tokens sent to them (spent or unspent)
+        self.txo_byaddr = dict()  # [address] -> set of "prevouthash:n" for that address
+        self.token_quantities = dict() # [token_id_hex] -> set of ("prevouthash:n", qty) tuples
 
     def rebuild(self):
+        '''This takes wallet.lock'''
         with self.wallet.lock:
             self._clear()
             for txid, tx in self.wallet.transactions.items():
                 self.add_tx(txid, Transaction(tx.raw))  # we take a copy of the transaction so prevent storing deserialized tx in wallet.transactions dict
+
+    def rm_tx(self, txid):
+        ''' Caller should hold wallet.lock
+        This is (usually) called by wallet.remove_transaction in the network
+        thread with locks held.
+
+        Note: This is a somewhat slow operation as it involves a linear
+        search through all data structures to eviscerate the tx in question.
+
+        TODO: characterize whether a speedup here is warranted. '''
+        self.validity = { k:v for k,v in self.validity.items() if k != txid }
+        for txo in list(self.txo_set):
+            if txo.rsplit(':', 1)[0] == txid:
+                self.txo_set.discard(txo)
+        for addr, txo_set in self.txo_byaddr.copy().items():
+            for txo in list(txo_set):
+                if txo.rsplit(':', 1)[0] == txid:
+                    txo_set.discard(txo)  # this actually points to the real txo_set instance in the dict
+            if not txo_set:
+                self.txo_byaddr.pop(addr, None)
+        for tok_id, txo_set in self.token_quantities.copy().items():
+            for item in list(txo_set):
+                txo, qty = item
+                if txo.rsplit(':', 1)[0] == txid:
+                    txo_set.discard(item)  # this actually points to the real txo_set instance in the dict
+            if not txo_set:
+                self.token_quantities.pop(tok_id, None)
 
     def add_tx(self, txid, tx):
         ''' Caller should hold wallet.lock.
@@ -650,32 +715,86 @@ class WalletData:
         if not isinstance(so, ScriptOutput):  # Note: ScriptOutput here is the subclass defined in this file, not address.ScriptOutput
             return
         transaction_type = so.message.transaction_type
-        if transaction_type == 'GENESIS':
-            self._add_genesis_tx(so, outputs, txid, tx)
-        elif transaction_type == 'MINT':
-            self._add_mint_tx(so, outputs, txid, tx)
-        elif transaction_type == 'SEND':
-            self._add_send_tx(so, outputs, txid, tx)
-        elif transaction_type == 'COMMIT':
-            return  # ignore COMMIT, they don't produce any tokens
-        else:
-            raise InvalidOutputMessage('Bad transaction type')
+        try:
+            if transaction_type == 'GENESIS':
+                self._add_genesis_or_mint_tx(so, outputs, txid, tx)
+            elif transaction_type == 'MINT':
+                self._add_genesis_or_mint_tx(so, outputs, txid, tx)
+            elif transaction_type == 'SEND':
+                self._add_send_tx(so, outputs, txid, tx)
+            elif transaction_type == 'COMMIT':
+                return  # ignore COMMIT, they don't produce any tokens
+            else:
+                raise InvalidOutputMessage('Bad transaction type')
+        except (AssertionError, ValueError, KeyError, TypeError, IndexError) as e:
+            self.wallet.print_error(f"ERROR: tx {txid}; exc =", repr(e))
 
-    def _add_genesis_tx(self, so, outputs, txid, tx):
-        ''' TODO '''
+    def _add_token_qty(self, token_id_hex, txo_name, qty):
+        ''' No checks are done for address, etc. qty is just faithfully added
+        for a given token/txo_name combo. '''
+        s = self.token_quantities.get(token_id_hex, set())
+        need_insert = not s
+        s.add((txo_name, qty))  # NB: negative quantity indicates mint baton
+        if need_insert: self.token_quantities[token_id_hex] = s
+
+    def _add_txo(self, token_id_hex, txid, n, addr, token_qty):
+        ''' Adds txid:n to requisite data structures, registering
+        this token output, etc. '''
+        if not isinstance(addr, address.Address) or not self.wallet.is_mine(addr):
+            # ignore txo's for addresses that are not "mine", or that are not TYPE_ADDRESS
+            return
+        name = f"{txid}:{n}"
+        if txid not in self.validity:
+            self.validity[txid] = 0
+        if token_id_hex not in self.validity:
+            self.validity[token_id_hex] = 0
+        s = self.txo_byaddr.get(addr, set())
+        need_insert = not s
+        s.add(name)
+        if need_insert: self.txo_byaddr[addr] = s
+        self.txo_set.add(name)
+        self._add_token_qty(token_id_hex, name, token_qty)
+
+    def _add_mint_baton(self, token_id_hex, txid, n, addr):
+        self._add_txo(token_id_hex, txid, n, addr, -1)
+
+    def _add_genesis_or_mint_tx(self, so, outputs, txid, tx):
+        ''' Adds the genesis and/or mint tx and keeps track of the txo's it
+        sent coins to in internal data structures '''
         token_type = so.message.token_type
-        raise NotImplementedError()
-    def _add_mint_tx(self, so, outputs, txid, tx):
-        ''' TODO '''
-        token_type = so.message.token_type
-        raise NotImplementedError()
+        is_genesis = so.message.transaction_type == "GENESIS"
+        token_id_hex = txid if is_genesis else so.message.token_id_hex
+        assert token_type in valid_token_types, "Invalid token type: FIXME"  # paranoia
+        r_type, r_addr, _dummy = outputs[1]  # may raise
+
+        # Not clear here if we should be rejecting the whole message or
+        # just the output.  Comment this out when that becomes clear.
+        # For now I'm doing what the EC-SLP wallet did rejecting this
+        # genesis message here.
+        assert r_type == bitcoin.TYPE_ADDRESS, "Token genesis/mint: output 1 != TYPE_ADDRESS, ignoring tx"
+
+        # neither of the below 2 can ever be negative due to how we read the bytes
+        baton_vout = so.message.mint_baton_vout
+        token_qty = so.message.initial_token_mint_quantity if is_genesis else so.message.additional_token_quantity
+        if baton_vout is not None:
+            b_type, b_addr, _dummy = outputs[baton_vout] # may raise
+            # SLP wallet silently ignored non-TYPE_ADDRESS, so we do same here.
+            #assert b_type == bitcoin.TYPE_ADDRESS, f"Token baton vout ({baton_vout}) != TYPE_ADDRESS, ignoring tx"
+            self._add_mint_baton(token_id_hex, txid, baton_vout, b_addr)  # this silently ignores non-TYPE_ADDRESS
+        self._add_txo(token_id_hex, txid, 1, r_addr, token_qty)
+
+
     def _add_send_tx(self, so, outputs, txid, tx):
-        ''' TODO '''
+        ''' Caller should hold locks. This adds the send for addresses that are
+        mine to appropriate internal data structures. '''
         token_type = so.message.token_type
-        raise NotImplementedError()
+        token_id_hex = so.message.token_id_hex
+        assert token_type in valid_token_types, "Invalid token type: FIXME"  # paranoia
+        amounts = so.message.token_output
+        amounts = amounts[:len(outputs)]  # truncate amounts to match outputs -- shouldn't we reject such malformed messages?
+        for n, qty in enumerate(amounts):
+            if qty <= 0:  # safely ignore 0 qty as per spec
+                continue
+            _type, addr, _dummy = outputs[n]  # shouldn't raise since we truncated list above
+            self._add_txo(token_id_hex, txid, n, addr, qty)
 
-    def rm_tx(self, txid):
-        ''' Caller should hold wallet.lock
-        This is (usually) called by wallet.remove_transaction in the network
-        thread with locks held.'''
-        raise NotImplementedError()
