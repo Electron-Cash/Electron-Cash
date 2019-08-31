@@ -856,12 +856,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         confirmed_only = config.get('confirmed_only', DEFAULT_CONFIRMED_ONLY)
         if (isInvoice):
             confirmed_only = True
-        return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only)
+        return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only, exclude_slp=True)
 
     def get_utxos(self, domain = None, exclude_frozen = False, mature = False, confirmed_only = False,
-                  *, addr_set_out = None):
+                  *, addr_set_out = None, exclude_slp = True):
         '''Note that exclude_frozen = True checks for BOTH address-level and
         coin-level frozen status.
+
+        exlude_slp skips coins that also have SLP tokens on them.  This defaults
+        to True in EC 4.0.10+ in order to prevent inadvertently burning tokens.
 
         Optional kw-only arg `addr_set_out` specifies a set in which to add all
         addresses encountered in the utxos returned. '''
@@ -875,6 +878,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 utxos = self.get_addr_utxo(addr)
                 len_before = len(coins)
                 for x in utxos.values():
+                    if exclude_slp and x['slp_token']:
+                        continue
                     if exclude_frozen and x['is_frozen_coin']:
                         continue
                     if confirmed_only and x['height'] <= 0:
