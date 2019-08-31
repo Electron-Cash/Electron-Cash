@@ -864,7 +864,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         '''Note that exclude_frozen = True checks for BOTH address-level and
         coin-level frozen status.
 
-        exlude_slp skips coins that also have SLP tokens on them.  This defaults
+        exclude_slp skips coins that also have SLP tokens on them.  This defaults
         to True in EC 4.0.10+ in order to prevent inadvertently burning tokens.
 
         Optional kw-only arg `addr_set_out` specifies a set in which to add all
