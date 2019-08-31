@@ -650,7 +650,7 @@ class WalletData(util.PrintError):
                 # build the mapping of prevouthash:n (str) -> token_id_hex (str) from self.token_quantities
                 self.txo_token_id = dict()
                 for token_id_hex, txo_dict in self.token_quantities.items():
-                    for txo, qty in txo_dict.items():
+                    for txo in txo_dict:
                         self.txo_token_id[txo] = token_id_hex
                 # dict of Address -> set of txo_name
                 self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in data.get("txo_byaddr").items()}
@@ -740,7 +740,7 @@ class WalletData(util.PrintError):
             if not txo_set:
                 self.txo_byaddr.pop(addr, None)
         for tok_id, txo_dict in self.token_quantities.copy().items():
-            for txo, qty in txo_dict.copy().items():
+            for txo in txo_dict.copy():
                 if txo.rsplit(':', 1)[0] == txid:
                     txo_dict.pop(txo, None)  # this actually points to the real txo_dict instance in the token_quantities[tok_id] dict
             if not txo_dict:
