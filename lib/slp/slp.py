@@ -638,7 +638,7 @@ class WalletData(util.PrintError):
         data = self.wallet.storage.get('slp', {})
         ver = (isinstance(data, dict) and data.get('version')) or None
         if ver != self.DATA_VERSION:
-            self.print_error(f"incompatible or missing slp_data_version '{ver}'; will rebuild slp data from wallet transaction history")
+            self.print_error(f"incompatible or missing slp data version '{ver}'; will flag for rebuild")
             self.clear()
             self.need_rebuild = True
         else:
@@ -710,13 +710,16 @@ class WalletData(util.PrintError):
         particular address.
         Call this with locks held and/or copy the set if you want to be thread-safe. '''
         return self.txo_byaddr.get(addr, set())
-    def get_batons(self, token_id_hex) -> List[str]:
+    def get_batons(self, token_id_hex, *, ret_class = list) -> List[str]:
         ''' Returns the list of txo's containing a token baton for a particular
         token_id_hex, or the empty list if no batons in wallet for said token.
-        Takes no locks. Wrap in wallet.lock to make this thread-safe.'''
-        return [txo for txo, qty in
-                    self.token_quantities.get(token_id_hex, {}).items()
-                    if qty <= -1]
+        Takes no locks. Wrap in wallet.lock to make this thread-safe.
+
+        Optional kwarg `ret_class` can be used to return some other container
+        besides a list (e.g. 'ret_class = set' would return a set). '''
+        return ret_class(txo for txo, qty in
+                            self.token_quantities.get(token_id_hex, {}).items()
+                            if qty <= -1)
     #--- /GETTERS/SETTERS
 
     #-- Wallet hooks (rm_tx, add_tx)
@@ -725,11 +728,18 @@ class WalletData(util.PrintError):
         This is (usually) called by wallet.remove_transaction in the network
         thread with locks held.
 
-        Note: This is a somewhat slow operation as it involves a linear
-        search through all data structures to eviscerate the tx in question.
+        Note: In the case where txid is not in our slp data, this returns
+        quickly.  Otherwise if txid is in the slp data, this is a somewhat slow
+        operation as it involves a linear search through all data structures to
+        eviscerate the tx in question.
 
         TODO: characterize whether a speedup here is warranted. '''
-        self.validity = { k:v for k,v in self.validity.items() if k != txid }
+        try:
+            del self.validity[txid]
+        except KeyError:
+            # The txid in question was not one we manage if it's missing
+            # from self.validity. Short-cirtuit early return for performance.
+            return
         for txo in list(self.txo_token_id.keys()):
             if txo.rsplit(':', 1)[0] == txid:
                 self.txo_token_id.pop(txo, None)
