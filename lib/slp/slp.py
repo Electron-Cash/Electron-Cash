@@ -635,33 +635,31 @@ class WalletData(util.PrintError):
         ''' This takes no locks. If calling in multithreaded environment,
         guard with locks. (Currently this is only called in wallet.py setup
         code so locking is not relevant). '''
-        data = self.wallet.storage.get('slp', {})
-        ver = (isinstance(data, dict) and data.get('version')) or None
-        if ver != self.DATA_VERSION:
-            self.print_error(f"incompatible or missing slp data version '{ver}'; will flag for rebuild")
+        data = self.wallet.storage.get('slp')
+        try:
+            assert isinstance(data, dict), "missing or invalid 'slp' dictionary"
+            ver = data['version']
+            assert ver == self.DATA_VERSION, f"incompatible or missing slp data version '{ver}', expected '{self.DATA_VERSION}'"
+            # dict of txid -> int
+            self.validity = {k.lower():int(v) for k,v in data['validity'].items()}
+            # dict of "token_id_hex" -> dict of ["txo_name"] -> qty (int)
+            self.token_quantities = {k.lower() : { vv0.lower() : int(vv1) for vv0,vv1 in v} for k,v in data['token_quantities'].items()}
+            # build the mapping of prevouthash:n (str) -> token_id_hex (str) from self.token_quantities
+            self.txo_token_id = dict()
+            for token_id_hex, txo_dict in self.token_quantities.items():
+                for txo in txo_dict:
+                    self.txo_token_id[txo] = token_id_hex
+            # dict of Address -> set of txo_name
+            self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in data['txo_byaddr'].items()}
+            self.need_rebuild = False
+        except (ValueError, TypeError, AttributeError, address.AddressError, AssertionError, KeyError) as e:
+            # Note: We want TypeError/AttributeError/KeyError raised above on
+            # missing keys since that indicates data inconsistency, hence why
+            # the lookups above do not use .get() (thus ensuring the above
+            # should raise on incorrect or missing data).
+            self.print_error("Error loading slp data; will flag for rebuild:", repr(e))
             self.clear()
             self.need_rebuild = True
-        else:
-            try:
-                # dict of txid -> int
-                self.validity = {k.lower():int(v) for k,v in data.get("validity").items()}
-                # dict of "token_id_hex" -> dict of ["txo_name"] -> qty (int)
-                self.token_quantities = {k.lower() : { vv0.lower() : int(vv1) for vv0,vv1 in v} for k,v in data.get("token_quantities").items()}
-                # build the mapping of prevouthash:n (str) -> token_id_hex (str) from self.token_quantities
-                self.txo_token_id = dict()
-                for token_id_hex, txo_dict in self.token_quantities.items():
-                    for txo in txo_dict:
-                        self.txo_token_id[txo] = token_id_hex
-                # dict of Address -> set of txo_name
-                self.txo_byaddr = {address.Address.from_string(k) : {vv.lower() for vv in v} for k,v in data.get("txo_byaddr").items()}
-                self.need_rebuild = False
-            except (ValueError, TypeError, AttributeError, address.AddressError, AssertionError) as e:
-                # Note we wanted the TypeError/AttributeError above on missing
-                # keys since that indicates data inconsistency, hence why
-                # the storage.get()'s above were given no defaults, so None.method() above should raise.
-                self.print_error("Error loading slp data; will flag for rebuild:", repr(e))
-                self.clear()
-                self.need_rebuild = True
         return not self.need_rebuild
 
     def save(self):
