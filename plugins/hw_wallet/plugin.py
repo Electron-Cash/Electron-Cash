@@ -57,13 +57,10 @@ class HW_PluginBase(BasePlugin):
                 self._cleanup_keystore_extra(keystore)
 
     def _cleanup_keystore_extra(self, keystore):
-        # awkward cleanup code for the keystore 'thread' object (qt.util.TaskThread object)
-        # we have to do it this way so as to avoid relying on and/or importing gui.qt
+        # awkward cleanup code for the keystore 'thread' object (see qt.py)
         finalization_print_error(keystore)  # track object lifecycle
-        thread = getattr(keystore, 'thread', None)
-        if thread and all(hasattr(thread, attr) for attr in ('isRunning', 'stop')) and thread.isRunning():
-            # was a Qt TaskThread, kill it, and wait up to 5 seconds for it to stop
-            thread.stop(waitTime=5.0)
+        if callable(getattr(keystore.thread, 'stop', None)):
+            keystore.thread.stop()
 
     def show_address(self, wallet, address, keystore=None):
         pass  # implemented in child classes
