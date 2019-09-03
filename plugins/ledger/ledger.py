@@ -46,7 +46,7 @@ def test_pin_unlocked(func):
             return func(self, *args, **kwargs)
         except BTChipException as e:
             if e.sw in (0x6982, 0x6f04):
-                raise Exception(_('Your {} is locked. Please unlock it.\n\nAfter unlocking, may need to re-open this wallet window as well.').format(self.device)) from e
+                raise Exception(_('Your {} is locked. Please unlock it.').format(self.device) + '\n\n' + _('After unlocking, may also need to re-open this wallet window as well.')) from e
             else:
                 raise
     return catch_exception
@@ -195,7 +195,10 @@ class Ledger_Client:
             self.cashaddrSWSupported = 'cashAddr' in gwpkArgSpecs.args
         except BTChipException as e:
             if (e.sw == 0x6faa):
-                raise Exception(_('{} is temporarily locked - please unplug and plug it in again.\n\nIf this problem persists, and you are on a Ledger Nano, please exit and restart the Bitcoin Cash application running on the device.\n\nYou may also need to re-open this wallet window as well.').format(self.device)) from e
+                raise Exception(_("{hw_wallet_name} is temporarily locked - please unplug and plug it in again."
+                                  "\n\nIf this problem persists, and you are on a Ledger Nano, please exit and "
+                                  "restart the Bitcoin Cash application running on the device."
+                                  "\n\nYou may also need to re-open this wallet window as well.").format(hw_wallet_name=self.device)) from e
             if ((e.sw & 0xFFF0) == 0x63c0):
                 raise Exception(_('Invalid PIN - please unplug the {} and plug it in again before retrying').format(self.device)) from e
             if e.sw == 0x6f00 and e.message == 'Invalid channel':

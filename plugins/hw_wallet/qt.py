@@ -184,7 +184,7 @@ class QtHandlerBase(QObject, PrintError):
 
 import sys, queue
 from electroncash.plugins import hook
-from electroncash.util import UserCancelled, finalization_print_error
+from electroncash.util import UserCancelled
 from electroncash_gui.qt.main_window import StatusBarButton
 
 class ThreadJob_TaskThread_Facade(TaskThread):
@@ -278,4 +278,7 @@ class QtPluginBase(object):
         return device_id
 
     def show_settings_dialog(self, window, keystore):
-        device_id = self.choose_device(window, keystore)
+        try:
+            device_id = self.choose_device(window, keystore)
+        except:
+            window.on_error(sys.exc_info())
