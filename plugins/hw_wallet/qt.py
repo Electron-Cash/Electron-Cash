@@ -264,7 +264,6 @@ class QtPluginBase(object):
             # Trigger a pairing
             keystore.thread.add(partial(self.get_client, keystore))
 
-
     def choose_device(self, window, keystore):
         '''This dialog box should be usable even if the user has
         forgotten their PIN or it is in bootloader mode.'''

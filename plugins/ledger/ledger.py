@@ -187,7 +187,7 @@ class Ledger_Client:
                     msg = _('Enter your {} PIN - WARNING: LAST ATTEMPT. If the PIN is not correct, the {} will be wiped.').format(self.device, self.device)
                 confirmed, p, pin = self.password_dialog(msg)
                 if not confirmed:
-                    raise Exception(_('Aborted by user - please unplug the {} and plug it in again before retrying').format(self.device))
+                    raise Exception(_('Aborted by user - please unplug the {hw_device_name} and plug it in again before retrying').format(hw_device_name=self.device))
                 pin = pin.encode()
                 self.dongleObject.verifyPin(pin)
 
@@ -195,12 +195,12 @@ class Ledger_Client:
             self.cashaddrSWSupported = 'cashAddr' in gwpkArgSpecs.args
         except BTChipException as e:
             if (e.sw == 0x6faa):
-                raise Exception(_("{hw_wallet_name} is temporarily locked - please unplug and plug it in again."
+                raise Exception(_("{hw_device_name} is temporarily locked - please unplug and plug it in again."
                                   "\n\nIf this problem persists, and you are on a Ledger Nano, please exit and "
                                   "restart the Bitcoin Cash application running on the device."
-                                  "\n\nYou may also need to re-open this wallet window as well.").format(hw_wallet_name=self.device)) from e
+                                  "\n\nYou may also need to re-open this wallet window as well.").format(hw_device_name=self.device)) from e
             if ((e.sw & 0xFFF0) == 0x63c0):
-                raise Exception(_('Invalid PIN - please unplug the {} and plug it in again before retrying').format(self.device)) from e
+                raise Exception(_('Invalid PIN - please unplug the {hw_device_name} and plug it in again before retrying').format(hw_device_name=self.device)) from e
             if e.sw == 0x6f00 and e.message == 'Invalid channel':
                 # based on docs 0x6f00 might be a more general error, hence we also compare message to be sure
                 raise Exception(_('Invalid channel.') + '\n' +

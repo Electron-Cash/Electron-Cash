@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 #
-# Electrum - lightweight Bitcoin client
+# Electron Cash - lightweight Bitcoin Cash client
 # Copyright (C) 2016  The Electrum developers
+# Copyright (C) 2019  The Electron Cash developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
