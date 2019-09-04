@@ -260,7 +260,7 @@ class QtPluginBase(object):
             handler = self.create_handler(window)
             handler.button = button
             keystore.handler = handler
-            keystore.thread = ThreadJob_TaskThread_Facade(self, window.on_error, name = wallet.diagnostic_name() + f'/keystore{i}')#TaskThread(window, window.on_error, name = wallet.diagnostic_name() + f'/keystore{i}')
+            keystore.thread = ThreadJob_TaskThread_Facade(self, window.on_error, name = wallet.diagnostic_name() + f'/keystore{i}')
             # Trigger a pairing
             keystore.thread.add(partial(self.get_client, keystore))
 
