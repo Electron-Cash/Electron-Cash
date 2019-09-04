@@ -196,9 +196,9 @@ class Ledger_Client:
         except BTChipException as e:
             if (e.sw == 0x6faa):
                 raise Exception(_("{hw_device_name} is temporarily locked - please unplug and plug it in again."
-                                  "\n\nIf this problem persists, and you are on a Ledger Nano, please exit and "
-                                  "restart the Bitcoin Cash application running on the device."
-                                  "\n\nYou may also need to re-open this wallet window as well.").format(hw_device_name=self.device)) from e
+                                  "\n\nIf this problem persists please exit and restart the Bitcoin Cash "
+                                  "application running on the device.\n\nYou may also need to re-open this "
+                                  "wallet window as well.").format(hw_device_name=self.device)) from e
             if ((e.sw & 0xFFF0) == 0x63c0):
                 raise Exception(_('Invalid PIN - please unplug the {hw_device_name} and plug it in again before retrying').format(hw_device_name=self.device)) from e
             if e.sw == 0x6f00 and e.message == 'Invalid channel':
