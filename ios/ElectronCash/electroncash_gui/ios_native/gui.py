@@ -1960,14 +1960,15 @@ class ElectrumGui(PrintError):
             else:
                 refund_address = self.wallet.get_receiving_addresses()[0]
                 ack_status, ack_msg = pr.send_payment(str(tx), refund_address) # merchant will broadcast tx for us.
-                if ack_msg == "no url":
-                    # "no url" hard-coded in send_payment method
-                    # it means merchant doesn't need the tx sent to him
-                    # since he didn't specify a POST url.
-                    # so we just broadcast and rely on that result status.
-                    ack_msg = None
-                elif not ack_status:
-                    return False, ack_msg
+                if not ack_status:
+                    if ack_msg == "no url":
+                        # "no url" hard-coded in send_payment method
+                        # it means merchant doesn't need the tx sent to him
+                        # since he didn't specify a POST url.
+                        # so we just broadcast and rely on that result status.
+                        ack_msg = None
+                    else:
+                        return False, ack_msg
                 # at this point either ack_status is True or there is "no url"
                 # and we proceed anyway with the broadcast
                 status, msg = self.daemon.network.broadcast_transaction(tx)
