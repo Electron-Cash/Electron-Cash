@@ -1145,6 +1145,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         for n, v, is_cb in item:
                             if n == prevout_n:
                                 add_to_self_txi(tx_hash, addr2, ser, v)
+                                self._addr_bal_cache.pop(addr2, None)  # invalidate cache entry
                                 break
                         else:
                             continue
