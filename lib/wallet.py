@@ -976,6 +976,34 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     else:
                         self.pruned_txo[ser] = tx_hash
                     self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
+                elif addr is None:
+                    # TESTING
+                    # Unknown address.. may be a strange p2sh redeem script
+                    prevout_hash = txi['prevout_hash']
+                    prevout_n = txi['prevout_n']
+                    ser = prevout_hash + ':%d'%prevout_n
+                    dd = self.txo.get(prevout_hash, {})
+                    for addr2, item in dd.items():
+                        for n, v, is_cb in item:
+                            if n == prevout_n:
+                                l = d.get(addr2)
+                                if l is None:
+                                    d[addr2] = l = []
+                                l.append((ser, v))
+                                del l
+                                print("added to txi", addr2, ser, tx_hash)
+                                break
+                        else:
+                            continue
+                        break
+                    else:
+                        print("making pruned", ser, tx_hash)
+                        # fixme -- this may unconditionally grow pruned_txo
+                        # permanently with unrelated tx's
+                        self.pruned_txo[ser] = tx_hash
+                    # / TESTING
+
+
             # don't keep empty entries in self.txi
             if not d:
                 self.txi.pop(tx_hash, None)
@@ -987,6 +1015,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             for n, txo in enumerate(tx.outputs()):
                 ser = tx_hash + ':%d'%n
                 _type, addr, v = txo
+                mine = False
                 if isinstance(addr, ScriptOutput):
                     if addr.is_opreturn():
                         op_return_ct += 1
@@ -1000,6 +1029,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                                 self.cashacct.add_transaction_hook(_tx_hash, _tx, _n, _addr)
                         )
                 elif self.is_mine(addr):
+                    mine = True
                     l = d.get(addr)
                     if l is None:
                         d[addr] = l = []
@@ -1008,7 +1038,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
                 # give v to txi that spends me
                 next_tx = self.pruned_txo.pop(ser, None)
-                if next_tx is not None:
+                if next_tx is not None and mine:
+                    print("giving to txi", addr, next_tx, ser)
                     dd = self.txi.get(next_tx)
                     if dd is None:
                         self.txi[next_tx] = dd = {}
