@@ -954,16 +954,21 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def _clean_pruned_txo_thread(self):
         ''' Runs in the thread self.pruned_txo_cleaner_thread which is only
-        active if self.network. It cleans the self.pruned_txo dict and the
-        self.pruned_txo_values set of txo's that are not relevant to the wallet.'''
+        active if self.network. Cleans the self.pruned_txo dict and the
+        self.pruned_txo_values set of txo's that are not relevant to the
+        wallet. The processing below is needed becasue as of 9/16/2019, Electron
+        Cash temporarily puts all txo's that pass through add_transaction into
+        self.pruned_txo. This is necessary for handling tx's with esoteric p2sh
+        redeemScripts and detecting balance changes properly for txins
+        containing such redeemScripts. See #895. '''
         def deser(ser):
             prevout_hash, prevout_n = ser.split(':')
             prevout_n = int(prevout_n)
             return prevout_hash, prevout_n
         def mkser(prevout_hash, prevout_n):
             return f'{prevout_hash}:{prevout_n}'
-        def rm(ser, pruned_too=True):
-            h, n = deser(ser)
+        def rm(ser, pruned_too=True, *, tup = None):
+            h, n = tup or deser(ser)
             s = txid_n[h]
             s.discard(n)
             if not s:
@@ -1020,7 +1025,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             defunct = ser not in self.pruned_txo
                         if defunct:
                             #self.print_error("_clean_pruned_txo_thread: skipping already-cleaned", ser)
-                            rm(ser, False)
+                            rm(ser, False, tup=(prevout_hash, prevout_n))
                             defunct_ct += 1
                             continue
                 if defunct_ct:
@@ -1056,7 +1061,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             txo = tx.outputs()[prevout_n]
                         except IndexError:
                             self.print_error("_clean_pruned_txo_thread: ERROR -- could not find output", ser)
-                            rm(ser, True)
+                            rm(ser, True, tup=(prevout_hash, prevout_n))
                             continue
                         _typ, addr, v = txo
                         rm_pruned_too = False
@@ -1065,7 +1070,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             if not mine and ser in self.pruned_txo:
                                 ct += 1
                                 rm_pruned_too = True
-                        rm(ser, rm_pruned_too)
+                        rm(ser, rm_pruned_too, tup=(prevout_hash, prevout_n))
                         if rm_pruned_too:
                             self.print_error("_clean_pruned_txo_thread: DEBUG removed", ser)
                 if ct:
@@ -1111,8 +1116,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     t = self.pruned_txo_cleaner_thread
                     if t and t.q: t.q.put('r_' + ser)  # notify of removal
                 return next_tx
-
             # /HELPER FUNCTIONS
+
             # add inputs
             self.txi[tx_hash] = d = {}
             for txi in tx.inputs():
