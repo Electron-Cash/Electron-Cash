@@ -953,6 +953,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             return
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
         with self.lock:
+            # HELPER FUNCTIONS
+            def add_to_self_txi(tx_hash, addr, ser, v):
+                ''' addr must be 'is_mine' '''
+                d = self.txi.get(tx_hash)
+                if d is None:
+                    self.txi[tx_hash] = d = {}
+                l = d.get(addr)
+                if l is None:
+                    d[addr] = l = []
+                l.append((ser, v))
+            def txin_get_info(txin):
+                prevout_hash = txi['prevout_hash']
+                prevout_n = txi['prevout_n']
+                ser = prevout_hash + ':%d'%prevout_n
+                return prevout_hash, prevout_n, ser
+            # /HELPER FUNCTIONS
             # add inputs
             self.txi[tx_hash] = d = {}
             for txi in tx.inputs():
@@ -961,36 +977,26 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 addr = txi.get('address')
                 # find value from prev output
                 if self.is_mine(addr):
-                    prevout_hash = txi['prevout_hash']
-                    prevout_n = txi['prevout_n']
-                    ser = prevout_hash + ':%d'%prevout_n
+                    prevout_hash, prevout_n, ser = txin_get_info(txi)
                     dd = self.txo.get(prevout_hash, {})
                     for n, v, is_cb in dd.get(addr, []):
                         if n == prevout_n:
-                            l = d.get(addr)
-                            if l is None:
-                                d[addr] = l = []
-                            l.append((ser, v))
-                            del l
+                            add_to_self_txi(tx_hash, addr, ser, v)
                             break
                     else:
                         self.pruned_txo[ser] = tx_hash
                     self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
                 elif addr is None:
                     # TESTING
-                    # Unknown address.. may be a strange p2sh redeem script
-                    prevout_hash = txi['prevout_hash']
-                    prevout_n = txi['prevout_n']
-                    ser = prevout_hash + ':%d'%prevout_n
+                    # Unknown address.. may be a strange p2sh redeem script,
+                    # see #895.
+                    prevout_hash, prevout_n, ser = txin_get_info(txi)
                     dd = self.txo.get(prevout_hash, {})
+                    # Find address in self.txo for this prevout_hash:prevout_n
                     for addr2, item in dd.items():
                         for n, v, is_cb in item:
                             if n == prevout_n:
-                                l = d.get(addr2)
-                                if l is None:
-                                    d[addr2] = l = []
-                                l.append((ser, v))
-                                del l
+                                add_to_self_txi(tx_hash, addr2, ser, v)
                                 print("added to txi", addr2, ser, tx_hash)
                                 break
                         else:
@@ -998,12 +1004,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         break
                     else:
                         print("making pruned", ser, tx_hash)
-                        # fixme -- this may unconditionally grow pruned_txo
-                        # permanently with unrelated tx's
+                        # FIXME -- this will unconditionally grow pruned_txo
+                        # permanently with unrelated tx's. TODO: Implement some
+                        # scheme to prune pruned_txo for irrelevant txo's.
                         self.pruned_txo[ser] = tx_hash
                     # / TESTING
-
-
             # don't keep empty entries in self.txi
             if not d:
                 self.txi.pop(tx_hash, None)
@@ -1039,15 +1044,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 # give v to txi that spends me
                 next_tx = self.pruned_txo.pop(ser, None)
                 if next_tx is not None and mine:
-                    print("giving to txi", addr, next_tx, ser)
-                    dd = self.txi.get(next_tx)
-                    if dd is None:
-                        self.txi[next_tx] = dd = {}
-                    l = dd.get(addr)
-                    if l is None:
-                        dd[addr] = l = []
-                    l.append((ser, v))
-                    del l, dd
+                    print("giving to self.txi", addr, next_tx, ser)
+                    add_to_self_txi(next_tx, addr, ser, v)
             # don't keep empty entries in self.txo
             if not d:
                 self.txo.pop(tx_hash, None)
