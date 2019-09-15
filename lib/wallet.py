@@ -1151,9 +1151,19 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             continue
                         break
                     else:
-                        # This will grow pruned_txo with potentially irrelevant
-                        # txos, however irrelevant txos will be cleaned once in
-                        # a while by the self.pruned_txo_cleaner_thread
+                        # Not found in self.txo. Flag the spend, however, and
+                        # when the out-of-order prevout tx comes in later for
+                        # this input (if it's indeed one of ours), the real
+                        # address for this input will get picked up then in the
+                        # "add outputs" section below, and self.txi will be
+                        # properly updated to indicate the coin in question was
+                        # spent.
+                        #
+                        # If it's *not* one of ours, however, the below will
+                        # grow pruned_txo with an irrelevant txo. However, the
+                        # irrelevant txo will eventually be reaped and removed
+                        # by the self.pruned_txo_cleaner_thread which runs
+                        # periodically.
                         put_pruned_txo(ser, tx_hash)
             # don't keep empty entries in self.txi
             if not d:
