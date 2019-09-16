@@ -1078,6 +1078,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         if rm_pruned_too and debug:
                             self.print_error(f"{me.name}: DEBUG removed", ser)
                 if ct:
+                    with self.lock:
+                        # Save changes to storage -- this is cheap and doesn't
+                        # actually write to file yet, just flags storage as
+                        # 'dirty' for when wallet.storage.write() is called
+                        # later.
+                        self.storage.put('pruned_txo', self.pruned_txo)
                     self.print_error(f"{me.name}: removed", ct,
                                      "(non-relevant) pruned_txo's in",
                                      f'{time.time()-t0:3.2f}', "seconds")
