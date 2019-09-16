@@ -1034,7 +1034,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 for prevout_hash, s in txid_n.copy().items():
                     try:
                         with self.lock:
-                            tx = self.transactions.get(prevout_hash) or Transaction.tx_cache_get(prevout_hash)
+                            tx = self.transactions.get(prevout_hash)
+                        if tx is None:
+                            tx = Transaction.tx_cache_get(prevout_hash)
                         if isinstance(tx, Transaction):
                             tx = Transaction(tx.raw)  # take a copy
                         else:
