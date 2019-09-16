@@ -960,8 +960,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         Cash temporarily puts all spends that pass through add_transaction and
         have an unparseable address (txi['address'] is None) into the dict
         self.pruned_txo. This is necessary for handling tx's with esoteric p2sh
-        redeemScripts and detecting balance changes properly for txins
-        containing such redeemScripts. See #895. '''
+        scriptSigs and detecting balance changes properly for txins
+        containing such scriptSigs. See #895. '''
         def deser(ser):
             prevout_hash, prevout_n = ser.split(':')
             prevout_n = int(prevout_n)
@@ -1158,8 +1158,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
                     del dd, prevout_hash, prevout_n, ser
                 elif addr is None:
-                    # Unknown/unparsed address.. may be a strange p2sh redeem
-                    # script. Try and find it in txout's if it's one of ours.
+                    # Unknown/unparsed address.. may be a strange p2sh scriptSig
+                    # Try and find it in txout's if it's one of ours.
                     # See issue #895.
                     prevout_hash, prevout_n, ser = txin_get_info(txi)
                     # Find address in self.txo for this prevout_hash:prevout_n
