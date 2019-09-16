@@ -1112,7 +1112,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     d[addr] = l = []
                 l.append((ser, v))
             def find_in_self_txo(prevout_hash: str, prevout_n: int) -> tuple:
-                ''' Returns a tuple of the Address-like-object for a given
+                ''' Returns a tuple of the (Address,value) for a given
                 prevout_hash:prevout_n, or (None, None) if not found. If valid
                 return, the Address object is found by scanning self.txo. The
                 lookup below is relatively fast in practice even on pathological
