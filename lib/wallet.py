@@ -955,8 +955,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def _clean_pruned_txo_thread(self):
         ''' Runs in the thread self.pruned_txo_cleaner_thread which is only
         active if self.network. Cleans the self.pruned_txo dict and the
-        self.pruned_txo_values set of txo's that are not relevant to the
-        wallet. The processing below is needed becasue as of 9/16/2019, Electron
+        self.pruned_txo_values set of spends that are not relevant to the
+        wallet. The processing below is needed because as of 9/16/2019, Electron
         Cash temporarily puts all spends that pass through add_transaction and
         have an unparseable address (txi['address'] is None) into the dict
         self.pruned_txo. This is necessary for handling tx's with esoteric p2sh
