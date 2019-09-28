@@ -41,6 +41,7 @@ from .i18n import _
 from .transaction import Transaction, multisig_script
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .plugins import run_hook
+from .wallet import create_new_wallet, restore_wallet_from_text
 
 known_commands = {}
 
@@ -171,17 +172,39 @@ class Commands:
         return ' '.join(sorted(known_commands.keys()))
 
     @command('')
-    def create(self):
-        """Create a new wallet"""
-        raise BaseException('Not a JSON-RPC command')
+    def create(self, passphrase=None, password=None, encrypt_file=True, seed_type=None, wallet_path=None):
+        """Create a new wallet.
+        If you want to be prompted for an argument, type '?' or ':' (concealed)
+        """
+        d = create_new_wallet(path=wallet_path,
+                              passphrase=passphrase,
+                              password=password,
+                              encrypt_file=encrypt_file,
+                              seed_type=seed_type,
+                              config=self.config)
+        return {
+            'seed': d['seed'],
+            'path': d['wallet'].storage.path,
+            'msg': d['msg'],
+        }
 
-    @command('wn')
-    def restore(self, text):
+    @command('')
+    def restore(self, text, passphrase=None, password=None, encrypt_file=True, wallet_path=None):
         """Restore a wallet from text. Text can be a seed phrase, a master
-        public key, a master private key, a list of bitcoin cash addresses
-        or bitcoin cash private keys. If you want to be prompted for your
-        seed, type '?' or ':' (concealed) """
-        raise BaseException('Not a JSON-RPC command')
+        public key, a master private key, a list of bitcoin addresses
+        or bitcoin private keys.
+        If you want to be prompted for an argument, type '?' or ':' (concealed)
+        """
+        d = restore_wallet_from_text(text,
+                                     path=wallet_path,
+                                     passphrase=passphrase,
+                                     password=password,
+                                     encrypt_file=encrypt_file,
+                                     config=self.config)
+        return {
+            'path': d['wallet'].storage.path,
+            'msg': d['msg'],
+        }
 
     @command('wp')
     def password(self, password=None, new_password=None):
