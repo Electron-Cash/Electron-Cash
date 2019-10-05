@@ -356,6 +356,17 @@ class ElectrumGui(QObject, PrintError):
         if sys.platform not in ('linux', 'win32', 'cygwin'):
             return
 
+        # On Linux we need to actually resolve the monospace font to respect the users choice.
+        # This is not done in util.py as that gets loaded before Qt is initialized.
+        # Note that some plugins can be loaded before the Qt GUI is loaded and will not get the
+        # updated monospace font.
+        if sys.platform == 'linux':
+            fixed_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+            fixed_font_info = QFontInfo(fixed_font)
+            fixed_font_family = fixed_font_info.family()
+            import electroncash_gui
+            electroncash_gui.qt.util.MONOSPACE_FONT = fixed_font_family
+
         # TODO: Check if we already have the needed emojis
         # TODO: Allow the user to download a full color emoji set
 
