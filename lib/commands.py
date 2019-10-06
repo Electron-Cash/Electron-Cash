@@ -788,6 +788,7 @@ param_descriptions = {
 command_options = {
     'password':    ("-W", "Password"),
     'new_password':(None, "New Password"),
+    'encrypt_file':(None, "Whether the file on disk should be encrypted with the provided password"),
     'receiving':   (None, "Show only receiving addresses"),
     'change':      (None, "Show only change addresses"),
     'frozen':      (None, "Show only frozen addresses"),
@@ -801,8 +802,10 @@ command_options = {
     'from_addr':   ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
     'change_addr': ("-c", "Change address. Default is a spare address, or the source address if it's not in the wallet"),
     'nbits':       (None, "Number of bits of entropy"),
+    'seed_type':   (None, "The type of seed to create, e.g. 'standard' or 'segwit'"),
     'entropy':     (None, "Custom entropy"),
     'language':    ("-L", "Default language for wordlist"),
+    'passphrase':  (None, "Seed extension"),
     'privkey':     (None, "Private key. Set to '?' to get a prompt."),
     'unsigned':    ("-u", "Do not sign transaction"),
     'locktime':    (None, "Set locktime block number"),
@@ -916,9 +919,11 @@ def add_global_options(parser):
     group.add_argument("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Show debugging information")
     group.add_argument("-D", "--dir", dest="electron_cash_path", help="electron cash directory")
     group.add_argument("-P", "--portable", action="store_true", dest="portable", default=False, help="Use local 'electron_cash_data' directory")
-    group.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
     group.add_argument("-wp", "--walletpassword", dest="wallet_password", default=None, help="Supply wallet password")
     group.add_argument("--testnet", action="store_true", dest="testnet", default=False, help="Use Testnet")
+
+def add_wallet_option(parser):
+    parser.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
 
 def get_parser():
     # create main parser
@@ -944,6 +949,7 @@ def get_parser():
     parser_gui.add_argument("-R", "--relax_warnings", action="store_true", dest="relaxwarn", default=False, help="Disables certain warnings that might be annoying during development and/or testing")
     add_network_options(parser_gui)
     add_global_options(parser_gui)
+    add_wallet_option(parser_gui)
     # daemon
     parser_daemon = subparsers.add_parser('daemon', help="Run Daemon")
     parser_daemon.add_argument("subcommand", choices=['start', 'status', 'stop', 'load_wallet', 'close_wallet'], nargs='?')
@@ -958,6 +964,9 @@ def get_parser():
         if cmdname == 'restore':
             p.add_argument("-o", "--offline", action="store_true", dest="offline", default=False, help="Run offline")
         for optname, default in zip(cmd.options, cmd.defaults):
+            if optname in ['wallet_path', 'wallet']:
+                add_wallet_option(p)
+                continue
             a, help = command_options[optname]
             b = '--' + optname
             action = "store_true" if type(default) is bool else 'store'
