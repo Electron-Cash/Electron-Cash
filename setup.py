@@ -119,20 +119,16 @@ if sys.platform in ('win32', 'cygwin'):
         ],
     }
 
-extras_require = {
-    'hardware': requirements_hw,
-    'gui': ['pyqt5'],
-}
-extras_require['full'] = [pkg for sublist in list(extras_require.values()) for pkg in sublist]
-
 setup(
     cmdclass={
         'sdist': MakeAllBeforeSdist,
     },
     name=os.environ.get('EC_PACKAGE_NAME') or "Electron Cash",
     version=os.environ.get('EC_PACKAGE_VERSION') or version.PACKAGE_VERSION,
-    install_requires=requirements,
-    extras_require=extras_require,
+    install_requires=requirements + ['pyqt5'],
+    extras_require={
+        'hardware': requirements_hw,
+    },
     packages=[
         'electroncash',
         'electroncash.locale',  # work-around for Android platform limitations
