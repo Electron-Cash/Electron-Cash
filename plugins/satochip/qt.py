@@ -8,10 +8,11 @@ from PyQt5.QtWidgets import QPushButton, QLabel, QVBoxLayout, QWidget, QGridLayo
 
 from functools import partial
 
+from ..hw_wallet.qt import QtHandlerBase, QtPluginBase
 #satochip
 from .satochip import SatochipPlugin
 from .CardConnector import CardConnector
-from ..hw_wallet.qt import QtHandlerBase, QtPluginBase
+
 
 class Plugin(SatochipPlugin, QtPluginBase):
     # icon_unpaired = "satochip_unpaired.png"

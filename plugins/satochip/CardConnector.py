@@ -10,34 +10,35 @@ from .JCconstants import JCconstants
 from .TxParser import TxParser
 from .ecc import ECPubkey, msg_magic
 
-from electroncash.util import print_error
+from electroncash.util import print_error, PrintError
 from electroncash.i18n import _
 
 import base64
+import traceback
 
 # simple observer that will print on the console the card connection events.
-class LogCardConnectionObserver( CardConnectionObserver ):
+class LogCardConnectionObserver( CardConnectionObserver, PrintError ):
     def update( self, cardconnection, ccevent ):
         if 'connect'==ccevent.type:
-            print_error( 'connecting to ' + cardconnection.getReader())
+            self.print_error( 'connecting to', cardconnection.getReader())
         elif 'disconnect'==ccevent.type:
-            print_error( 'disconnecting from ' + cardconnection.getReader())
+            self.print_error( 'disconnecting from',  cardconnection.getReader())
         elif 'command'==ccevent.type:
             if (ccevent.args[0][1] in (JCconstants.INS_SETUP, JCconstants.INS_SET_2FA_KEY,
                                         JCconstants.INS_BIP32_IMPORT_SEED, JCconstants.INS_BIP32_RESET_SEED,
                                         JCconstants.INS_CREATE_PIN, JCconstants.INS_VERIFY_PIN,
                                         JCconstants.INS_CHANGE_PIN, JCconstants.INS_UNBLOCK_PIN)):
-                print_error(f"> {toHexString(ccevent.args[0][0:5])}{(len(ccevent.args[0])-5)*' *'}")
+                self.print_error(f"> {toHexString(ccevent.args[0][0:5])}{(len(ccevent.args[0])-5)*' *'}")
             else:
-                print_error(f"> {toHexString(ccevent.args[0])}")
+                self.print_error(f"> {toHexString(ccevent.args[0])}")
         elif 'response'==ccevent.type:
             if []==ccevent.args[0]:
-                print_error( '< [] ', "%-2X %-2X" % tuple(ccevent.args[-2:]))
+                self.print_error( '< [] ', "%-2X %-2X" % tuple(ccevent.args[-2:]))
             else:
-                print_error('< ', toHexString(ccevent.args[0]), "%-2X %-2X" % tuple(ccevent.args[-2:]))
+                self.print_error('< ', toHexString(ccevent.args[0]), "%-2X %-2X" % tuple(ccevent.args[-2:]))
 
 # a simple card observer that detects inserted/removed cards
-class RemovalObserver(CardObserver):
+class RemovalObserver(CardObserver, PrintError):
     """A simple card observer that is notified
     when cards are inserted/removed from the system and
     prints the list of cards
@@ -48,15 +49,17 @@ class RemovalObserver(CardObserver):
     def update(self, observable, actions):
         (addedcards, removedcards) = actions
         for card in addedcards:
-            print_error("+Inserted: ", toHexString(card.atr))
-            self.parent.client.handler.update_status(True)
+            self.print_error("+Inserted: ", toHexString(card.atr))
+            if self.parent.client and self.parent.client.handler:
+                self.parent.client.handler.update_status(True)
         for card in removedcards:
-            print_error("-Removed: ", toHexString(card.atr))
+            self.print_error("-Removed: ", toHexString(card.atr))
             self.parent.pin= None #reset PIN
             self.parent.pin_nbr= None
-            self.parent.client.handler.update_status(False)
+            if self.parent.client and self.parent.client.handler:
+                self.parent.client.handler.update_status(False)
 
-class CardConnector:
+class CardConnector(PrintError):
 
     # Satochip supported version tuple
     # v0.4: getBIP32ExtendedKey also returns chaincode
@@ -72,6 +75,7 @@ class CardConnector:
 
     def __init__(self, client):
         # request any card type
+        #self.print_error("** client", client, " ** handler", client.handler)
         self.client=client
         self.parser=client.parser
         self.cardtype = AnyCardType()
@@ -93,9 +97,9 @@ class CardConnector:
             self.pin_nbr=None
             self.pin=None
         except CardRequestTimeoutException:
-            print_error('time-out: no card inserted during last 10s')
+            self.print_error('time-out: no card inserted during last 10s')
         except Exception as exc:
-            print_error("Error during connection:", exc)
+            self.print_error("Error during connection:", repr(exc), traceback.format_exc())
 
     def card_transmit(self, apdu):
         try:
@@ -121,9 +125,9 @@ class CardConnector:
                     (response, sw1, sw2)= self.cardservice.connection.transmit(apdu)
                 return (response, sw1, sw2)
             except CardRequestTimeoutException:
-                print_error('time-out: no card inserted during last 10s')
+                self.print_error('time-out: no card inserted during last 10s')
             except Exception as exc:
-                print_error("Error during connection:", exc)
+                self.print_error("Error during connection:", repr(exc), traceback.format_exc())
 
     def card_get_ATR(self):
         return self.cardservice.connection.getATR()
@@ -137,7 +141,7 @@ class CardConnector:
     def card_select(self):
         SELECT = [0x00, 0xA4, 0x04, 0x00, 0x08]
         apdu = SELECT + CardConnector.BYTE_AID
-        print_error("[CardConnector] card_select")#debug
+        self.print_error("card_select")#debug
         (response, sw1, sw2) = self.card_transmit(apdu)
         return (response, sw1, sw2)
 
@@ -247,10 +251,10 @@ class CardConnector:
         # send apdu
         response, sw1, sw2 = self.card_transmit(apdu)
         if sw1==0x9c and sw2==0x14:
-            print_error("[CardConnector] card_bip32_get_authentikey(): Seed is not initialized => Raising error!")
+            self.print_error("card_bip32_get_authentikey(): Seed is not initialized => Raising error!")
             raise UninitializedSeedError('Seed is not initialized')
         if sw1==0x9c and sw2==0x04:
-            print_error("[CardConnector] card_bip32_get_authentikey(): Satochip is not initialized => Raising error!")
+            self.print_error("card_bip32_get_authentikey(): Satochip is not initialized => Raising error!")
             raise UninitializedSeedError('Satochip is not initialized! You should create a new wallet!')
         # compute corresponding pubkey and send to chip for future use
         if (sw1==0x90) and (sw2==0x00):
@@ -294,7 +298,7 @@ class CardConnector:
             # if there is no more memory available, erase cache...
             #if self.get_sw12(sw1,sw2)==JCconstants.SW_NO_MEMORY_LEFT:
             if (sw1==0x9C) and (sw2==0x01):
-                print_error("[CardConnector] CardConnector: card_bip32_get_extendedkey(): Reset memory...")#debugSatochip
+                self.print_error("card_bip32_get_extendedkey(): Reset memory...")#debugSatochip
                 apdu[3]=apdu[3]^0x80
                 response, sw1, sw2 = self.card_transmit(apdu)
                 apdu[3]=apdu[3]&0x7f # reset the flag
@@ -303,7 +307,7 @@ class CardConnector:
                 raise UnexpectedSW12Error('Unexpected error code SW12='+hex(sw1)+" "+hex(sw2))
             # check for non-hardened child derivation optimization
             elif ( (response[32]&0x80)== 0x80):
-                print_error("[CardConnector] CardConnector: card_bip32_get_extendedkey(): Child Derivation optimization...")#debugSatochip
+                self.print_error("card_bip32_get_extendedkey(): Child Derivation optimization...")#debugSatochip
                 (pubkey, chaincode)= self.parser.parse_bip32_get_extendedkey(response)
                 coordy= pubkey.get_public_key_bytes(compressed=False)
                 coordy= list(coordy[33:])
@@ -512,7 +516,7 @@ class CardConnector:
             msg=msg[16:]
             apdu= apdu+IV
             if len(msg)%blocksize!=0:
-                print_error('Padding error!')
+                self.print_error('Padding error!')
             # send apdu
             (response, sw1, sw2) = self.card_transmit(apdu)
 
