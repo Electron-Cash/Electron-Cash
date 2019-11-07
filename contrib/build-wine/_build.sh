@@ -155,7 +155,7 @@ prepare_wine() {
         PYINSTALLER_COMMIT=1a8b2d47c277c451f4e358d926a47c096a5615ec
 
         # Satochip pyscard
-        PYSCARD_FILENAME=pyscard-1.9.8-cp36-cp36m-win32.whl  # python 3.6, 32-bit
+        PYSCARD_FILENAME=pyscard-1.9.9-cp36-cp36m-win32.whl  # python 3.6, 32-bit
         PYSCARD_URL=https://github.com/cculianu/Electron-Cash-Build-Tools/releases/download/v1.0/pyscard-1.9.9-cp36-cp36m-win32.whl
         PYSCARD_SHA256=99d2b450f322f9ed9682fd2a99d95ce781527e371006cded38327efca8158fe7
 
