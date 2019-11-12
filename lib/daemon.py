@@ -185,7 +185,11 @@ class Daemon(DaemonThread):
     def run_daemon(self, config_options):
         config = SimpleConfig(config_options)
         sub = config.get('subcommand')
-        assert sub in [None, 'start', 'stop', 'status', 'load_wallet', 'close_wallet']
+        subargs = config.get('subargs')
+        if subargs and sub in [None, 'start', 'stop', 'status']:
+            return "Unexpected arguments: {!r}. {!r} takes no options.".format(subargs, sub)
+        if subargs and sub in ['load_wallet', 'close_wallet']:
+            return "Unexpected arguments: {!r}. Provide options to {!r} using the -w and -wp options.".format(subargs, sub)
         if sub in [None, 'start']:
             response = "Daemon already running"
         elif sub == 'load_wallet':
@@ -221,6 +225,8 @@ class Daemon(DaemonThread):
         elif sub == 'stop':
             self.stop()
             response = "Daemon stopped"
+        else:
+            return "Unrecognized subcommand {!r}".format(sub)
         return response
 
     def run_gui(self, config_options):
