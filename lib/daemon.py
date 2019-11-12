@@ -138,8 +138,9 @@ def get_rpc_credentials(config):
 
 class Daemon(DaemonThread):
 
-    def __init__(self, config, fd, is_gui):
+    def __init__(self, config, fd, is_gui, plugins):
         DaemonThread.__init__(self)
+        self.plugins = plugins
         self.config = config
         if config.get('offline'):
             self.network = None
@@ -334,7 +335,9 @@ class Daemon(DaemonThread):
         super().stop()
 
 
-    def init_gui(self, config, plugins):
+    def init_gui(self):
+        config = self.config
+        plugins = self.plugins
         gui_name = config.get('gui', 'qt')
         if gui_name in ['lite', 'classic']:
             gui_name = 'qt'
