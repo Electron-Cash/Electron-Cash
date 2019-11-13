@@ -187,6 +187,7 @@ class Daemon(DaemonThread):
         config = SimpleConfig(config_options)
         sub = config.get('subcommand')
         subargs = config.get('subargs')
+        plugin_cmd = self.plugins.daemon_commands.get(sub)
         if subargs and sub in [None, 'start', 'stop', 'status']:
             return "Unexpected arguments: {!r}. {!r} takes no options.".format(subargs, sub)
         if subargs and sub in ['load_wallet', 'close_wallet']:
@@ -226,6 +227,9 @@ class Daemon(DaemonThread):
         elif sub == 'stop':
             self.stop()
             response = "Daemon stopped"
+        elif plugin_cmd is not None:
+            # note that daemon's own commands take precedence, i.e., a plugin CANNOT override 'load_wallet'.
+            response = plugin_cmd(self, config)
         else:
             return "Unrecognized subcommand {!r}".format(sub)
         return response
