@@ -525,7 +525,8 @@ def run_hook(name, *args):
                 results.append(r)
 
     if results:
-        assert len(results) == 1, results
+        if len(results) > 1:
+            print_error(f"run_hook: got more than 1 result from @hook '{name}':", results)
         return results[0]
 
 
