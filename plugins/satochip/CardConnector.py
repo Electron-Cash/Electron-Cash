@@ -67,8 +67,9 @@ class CardConnector(PrintError):
     # v0.6: bip32 optimization: speed up computation during derivation of non-hardened child
     # v0.7: add 2-Factor-Authentication (2FA) support
     # v0.8: support seed reset and pin change
+    # v0.9: patch message signing for alts
     SATOCHIP_PROTOCOL_MAJOR_VERSION=0
-    SATOCHIP_PROTOCOL_MINOR_VERSION=8
+    SATOCHIP_PROTOCOL_MINOR_VERSION=9
 
     # define the apdus used in this script
     BYTE_AID= [0x53,0x61,0x74,0x6f,0x43,0x68,0x69,0x70] #SatoChip
