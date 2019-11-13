@@ -22,26 +22,27 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from collections import namedtuple, defaultdict
 import codecs
-import traceback
-import os
 import imp
 import json
+import os
 import pkgutil
-import sys
-import time
 import shutil
+import sys
 import threading
+import time
+import traceback
 import zipimport
 
+from collections import namedtuple, defaultdict
+from enum import IntEnum
+from typing import Callable, Optional
+
+from . import bitcoin
+from . import version
 from .i18n import _
 from .util import print_error, user_dir, make_dir
 from .util import profiler, PrintError, DaemonThread, UserCancelled, ThreadJob
-from . import bitcoin
-from . import version
-from enum import IntEnum
-from typing import Callable, Optional
 
 plugin_loaders = {}
 hooks = defaultdict(list)
