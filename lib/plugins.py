@@ -488,18 +488,24 @@ def hook(func):
 
 def _get_func_if_hook(plugin, attr_name) -> Optional[Callable]:
     cls = plugin.__class__
-    cls_attr = getattr(cls, attr_name, None)
-    if isinstance(cls_attr, property):
-        # The queried attr_name corresponds to an instance property. We avoid
-        # calling getattr on instance properties below (since that has side
-        # effects). Just return None as that's the answer
-        return
-    # Ok, attr_name wasn't a property. So it's safe to call getattr on it to
-    # figure out if it's a function, and if so, if it has the special
-    # _is_ec_plugin_hook attribute we may have tagged it with in @hook
-    func = getattr(plugin, attr_name, None)
-    if callable(func) and getattr(func, '_is_ec_plugin_hook', False):
-        return func
+    # We examine the class-level attribute with name attr_name to see if it's a
+    # function that's tagged with _is_ec_plugin_hook. If it is, we know it was
+    # registered with @hook.
+    #
+    # Caveat: If we were to call getattr(plugin, attr_name) directly, we would
+    # potentially be invoking a function call if attr_name was decorated with
+    # @property. That's why we explicitly do this check on the class-level
+    # attribute first, before proceeding to grabbing the instance-level
+    # bound method if the checks pass.
+    cls_func = getattr(cls, attr_name, None)
+    if (getattr(cls_func, '_is_ec_plugin_hook', False)
+            and not isinstance(cls_func, property)):  # just in case they did @hook @property!
+        # Ok, attr_name has the tag, and wasn't a property.
+        # So it's safe to call getattr on it to grab the bound method, and
+        # return it after one last callable check (for paranoia's sake).
+        func = getattr(plugin, attr_name, None)
+        if callable(func):
+            return func
 
 def run_hook(name, *args):
     f_list = hooks.get(name)
