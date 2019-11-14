@@ -366,6 +366,22 @@ def make_unsigned_request(req):
     pr.signature = util.to_bytes('')
     return pr
 
+def get_payment(paymentfile):
+    p = pb2.Payment()
+    try:
+      f = open(paymentfile, "rb")
+      p.ParseFromString(f.read())
+      f.close()
+    except IOError:
+      util.print_error(paymentfile + ": Could not open payment file")
+    return p
+
+def create_payment_ack(paymentfile, memo):
+    p = get_payment(paymentfile)
+    ack = pb2.PaymentACK()
+    ack.payment.CopyFrom(p)
+    ack.memo = memo
+    return ack
 
 def sign_request_with_alias(pr, alias, alias_privkey):
     pr.pki_type = 'dnssec+btc'

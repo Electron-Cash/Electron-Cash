@@ -714,6 +714,16 @@ class Commands:
         self.wallet.sign_payment_request(address, alias, alias_addr, password)
 
     @command('w')
+    def addpayment(self, requestid, paymentfile, gettxns=False):
+        """Add a Payment file for a given payment request"""
+        return self.wallet.add_payment(requestid, paymentfile, self.config, gettxns)
+
+    @command('w')
+    def createack(self, requestid, payment_index, memo=''):
+        """Create a PaymentACK for a given payment made for a given request"""
+        return self.wallet.create_ack(requestid, payment_index, self.config, memo)
+
+    @command('w')
     def rmrequest(self, address):
         """Remove a payment request"""
         return self.wallet.remove_payment_request(address, self.config)
@@ -795,6 +805,7 @@ command_options = {
     'change_addr': ("-c", "Change address. Default is a spare address, or the source address if it's not in the wallet"),
     'nbits':       (None, "Number of bits of entropy"),
     'entropy':     (None, "Custom entropy"),
+    'gettxns':     (None, "Output the transasctions from the payment"),
     'language':    ("-L", "Default language for wordlist"),
     'privkey':     (None, "Private key. Set to '?' to get a prompt."),
     'unsigned':    ("-u", "Do not sign transaction"),

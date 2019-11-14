@@ -40,7 +40,7 @@ from collections import defaultdict
 from functools import partial
 
 from .i18n import ngettext
-from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error
+from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time, finalization_print_error, hfu
 
 from .address import Address, Script, ScriptOutput, PublicKey, OpCodes
 from .bitcoin import *
@@ -2067,6 +2067,50 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             req['address'] = req['address'].to_ui_string()
             with open(os.path.join(path, key + '.json'), 'w', encoding='utf-8') as f:
                 f.write(json.dumps(req))
+
+    def add_payment(self, requestid, paymentfile, config, gettxns):
+        if not os.path.isfile(paymentfile):
+            raise Exception('No such payment file exists')
+        payment = paymentrequest.get_payment(paymentfile)
+        if gettxns:
+            for txn in payment.transactions:
+                print(str(hfu(txn), "utf-8"))
+        rdir = config.get('requests_dir')
+        if not rdir:
+            return False
+        else:
+            path = os.path.join(rdir, 'req', requestid[0], requestid[1], requestid)
+            if not os.path.exists(path):
+                raise Exception('No such payment request exists')
+            prefix = 'payment_' + requestid + '_'
+            payments = [f for f in os.listdir(path) if f.startswith(prefix)]
+            prefixlen = len(prefix)
+            last_index = 0
+            for p in payments:
+                current_index = (int)(p[prefixlen:])
+                if  current_index > last_index:
+                    last_index = current_index
+            new_index = last_index + 1
+            with open(os.path.join(path, (prefix + (str)(new_index))), 'wb') as new_payment:
+                new_payment.write(payment.SerializeToString())
+            print_error(new_index)
+            return True
+
+    def create_ack(self, requestid, payment_index, config, memo):
+        rdir = config.get('requests_dir')
+        if not rdir:
+            return False
+        else:
+            path = os.path.join(rdir, 'req', requestid[0], requestid[1], requestid)
+            if not os.path.exists(path):
+                raise Exception('No such payment request exists')
+            paymentfile = os.path.join(path, 'payment_' + str(requestid) + '_' + str(payment_index))
+            if not os.path.isfile(paymentfile):
+                raise Exception('No such payment exists')
+            ack = paymentrequest.create_payment_ack(paymentfile, memo)
+            with open(os.path.join(path, 'ack_' + str(requestid) + '_' + str(payment_index)), 'wb') as ackfile:
+                ackfile.write(ack.SerializeToString())
+            return True
 
     def remove_payment_request(self, addr, config, clear_address_label_if_no_tx=True):
         if isinstance(addr, str):
