@@ -609,7 +609,7 @@ class BasePlugin(PrintError):
         # remove registered daemon commands
         for cmdname in self._daemon_commands:
             self.parent.daemon_commands.pop(cmdname, None)
-        self._daemon_commands = ()
+        self._daemon_commands.clear()
         self.parent.close_plugin(self)
         self.on_close()
 
