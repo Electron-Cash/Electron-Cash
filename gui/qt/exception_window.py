@@ -103,10 +103,6 @@ class Exception_Window(QWidget):
         report_button.setIcon(QIcon(":icons/tab_send.png"))
         buttons.addWidget(report_button)
 
-        never_button = QPushButton(_('Never'))
-        never_button.clicked.connect(self.show_never)
-        buttons.addWidget(never_button)
-
         close_button = QPushButton(_('Not Now'))
         close_button.clicked.connect(self.close)
         buttons.addWidget(close_button)
@@ -127,11 +123,6 @@ class Exception_Window(QWidget):
     def on_close(self):
         Exception_Window._active_window = None
         sys.__excepthook__(*self.exc_args)
-        self.close()
-
-    def show_never(self):
-        _disable(self.config)
-        Exception_Hook.uninstall()
         self.close()
 
     def closeEvent(self, event):
@@ -174,11 +165,11 @@ def _show_window(config, exctype, value, tb):
     if not Exception_Window._active_window:
         Exception_Window._active_window = Exception_Window(config, exctype, value, tb)
 
-def _is_enabled(config):
-    return config.get("show_crash_reporter", default=True)
+def is_enabled(config) -> bool:
+    return bool(config.get("show_crash_reporter2", default=True))
 
-def _disable(config):
-    config.set_key("show_crash_reporter", False)
+def set_enabled(config, b: bool):
+    config.set_key("show_crash_reporter2", bool(b))
 
 def _get_current_wallet_types():
     wtypes = { str(getattr(w.wallet, 'wallet_type', 'Unknown'))
@@ -197,9 +188,6 @@ class Exception_Hook(QObject):
     def __init__(self, config):
         super().__init__(None) # Top-level Object
         if Exception_Hook._instance: return # This is ok, we will be GC'd later.
-        if not _is_enabled(config):
-            print_error("[{}] Not installed due to user config.".format(__class__.__qualname__))
-            return # self will get auto-gc'd
         Exception_Hook._instance = self # strong reference to self should keep us alive until uninstall() is called
         self.config = config
         sys.excepthook = self.handler # yet another strong reference. We really won't die unless uninstall() is called
@@ -216,7 +204,7 @@ class Exception_Hook(QObject):
             Exception_Hook._instance = None
 
     def handler(self, exctype, value, tb):
-        if exctype is KeyboardInterrupt or exctype is SystemExit or not _is_enabled(self.config):
+        if exctype is KeyboardInterrupt or exctype is SystemExit or not is_enabled(self.config):
             sys.__excepthook__(exctype, value, tb)
         else:
             self._report_exception.emit(self.config, exctype, value, tb)

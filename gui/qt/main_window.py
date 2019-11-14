@@ -4028,7 +4028,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         gui_widgets = []
         fee_widgets = []
         global_tx_widgets, per_wallet_tx_widgets = [], []
-        id_widgets = []
+        oth_widgets = []
 
         # language
         lang_help = _('Select which language is used in the GUI (after restart).')
@@ -4140,7 +4140,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # the signal is disconnected
         disconnect_alias_received_signal = Weak.finalize(d, self.alias_received_signal.disconnect, set_alias_color)
         alias_e.editingFinished.connect(on_alias_edit)
-        id_widgets.append((alias_label, alias_e))
+        id_gb = QGroupBox(_("Identity"))
+        id_form = QFormLayout(id_gb)
+        id_form.addRow(alias_label, alias_e)
 
         # SSL certificate
         msg = ' '.join([
@@ -4163,7 +4165,32 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if SSL_error:
             SSL_id_e.setToolTip(SSL_error)
         SSL_id_e.setReadOnly(True)
-        id_widgets.append((SSL_id_label, SSL_id_e))
+        id_form.addRow(SSL_id_label, SSL_id_e)
+
+        oth_widgets.append((id_gb, None))  # commit id_form/id_gb to master layout via this data structure
+
+        from .exception_window import is_enabled as cr_is_enabled
+        from .exception_window import set_enabled as cr_set_enabled
+        cr_gb = QGroupBox(_("Crash Reporter"))
+        cr_form = QFormLayout(cr_gb)
+        #cr_form.setHorizontalSpacing(12)
+        cr_form.setFormAlignment(Qt.AlignHCenter|Qt.AlignVCenter)
+        cr_chk = QCheckBox(" ")
+        cr_chk.setChecked(cr_is_enabled(self.config))
+        cr_chk.clicked.connect(lambda b: cr_set_enabled(self.config, b))
+        cr_help = HelpLabel(_("Crash reporter enabled"),
+                            _("The crash reporter is the error window which pops-up when Electron Cash encounters an internal error.\n\n"
+                              "It is recommended that you leave this option enabled, so that developers can be notified of any internal bugs. "
+                              "When a crash is encountered you are asked if you would like to send a report.\n\n"
+                              "Private information is never revealed in crash reports to developers."))
+        cr_form.addRow(cr_chk, cr_help)
+
+        oth_widgets.append((cr_gb, None))  # commit crash reporter gb to layout
+
+        # the below top-aligns this tab
+        vspacer = QWidget()
+        vspacer.setSizePolicy(QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Ignored))  # QSizePolicy.Ignored here gives it as much space as possible (in the vertical direction)
+        oth_widgets.append((vspacer, None))
 
         units = util.base_unit_labels  # ( 'BCH', 'mBCH', 'bits' )
         msg = _('Base unit of your wallet.')\
@@ -4557,7 +4584,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 ( _("Per-Wallet Options") , per_wallet_tx_widgets),
              ]), _('Transactions')),
             (fiat_widgets, _('Fiat')),
-            (id_widgets, _('Identity')),
+            (oth_widgets, _('Other')),
         ]
         def add_tabs_info_to_tabs(tabs, tabs_info):
             def add_widget_pair(a,b,grid):
