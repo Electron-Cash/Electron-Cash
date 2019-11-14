@@ -4106,7 +4106,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         fee_lo.addWidget(customfee_label, 0, 0, 1, 1, Qt.AlignRight)
         fee_lo.addWidget(customfee_e, 0, 1, 1, 1, Qt.AlignLeft)
 
-        feebox_cb = QCheckBox(" " + _('Edit fees manually'))
+        feebox_cb = QCheckBox(_('Edit fees manually'))
         feebox_cb.setChecked(self.config.get('show_fee', False))
         feebox_cb.setToolTip(_("Show fee edit box in send tab."))
         def on_feebox(x):
@@ -4178,9 +4178,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         from . import exception_window as ew
         cr_gb = QGroupBox(_("Crash Reporter"))
-        cr_form = QFormLayout(cr_gb)
-        cr_form.setFormAlignment(Qt.AlignHCenter|Qt.AlignVCenter)
-        cr_chk = QCheckBox(" ")
+        cr_grid = QGridLayout(cr_gb)
+        cr_chk = QCheckBox()
         cr_chk.setChecked(ew.is_enabled(self.config))
         cr_chk.clicked.connect(lambda b: ew.set_enabled(self.config, b))
         cr_help = HelpLabel(_("Crash reporter enabled"),
@@ -4188,7 +4187,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                               "It is recommended that you leave this option enabled, so that developers can be notified of any internal bugs. "
                               "When a crash is encountered you are asked if you would like to send a report.\n\n"
                               "Private information is never revealed in crash reports to developers."))
-        cr_form.addRow(cr_chk, cr_help)
+        # The below dance ensures the checkbox is horizontally centered in the widget
+        cr_grid.addWidget(QWidget(), 0, 0, 1, 1)  # dummy spacer
+        cr_grid.addWidget(cr_chk, 0, 1, 1, 1, Qt.AlignRight)
+        cr_grid.addWidget(cr_help, 0, 2, 1, 1, Qt.AlignLeft)
+        cr_grid.addWidget(QWidget(), 0, 3, 1, 1) # dummy spacer
+        cr_grid.setColumnStretch(0, 1)
+        cr_grid.setColumnStretch(3, 1)
 
         # Crash reporter box at bottom of this tab
         misc_widgets.append((cr_gb, None))  # commit crash reporter gb to layout
