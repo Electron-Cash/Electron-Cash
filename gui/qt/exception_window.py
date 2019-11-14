@@ -71,6 +71,7 @@ class Exception_Window(QWidget):
         self.setMinimumSize(600, 300)
 
         main_box = QVBoxLayout()
+        main_box.setContentsMargins(20,20,20,20)
 
         heading = QLabel('<h2>' + _('Sorry!') + '</h2>')
         main_box.addWidget(heading)
