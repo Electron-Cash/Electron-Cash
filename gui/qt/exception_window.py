@@ -74,18 +74,22 @@ class Exception_Window(QWidget):
 
         heading = QLabel('<h2>' + _('Sorry!') + '</h2>')
         main_box.addWidget(heading)
-        main_box.addWidget(QLabel(_('Something went wrong running Electron Cash.')))
+        l = QLabel(_('Something went wrong running Electron Cash.'))
+        l.setWordWrap(True)
+        main_box.addWidget(l)
 
-        main_box.addWidget(QLabel(
-            _('To help us diagnose and fix the problem, you can send us a bug report that contains useful debug '
-              'information:')))
+        l = QLabel(_('To help us diagnose and fix the problem, you can send us'
+                     ' a bug report that contains useful debug information:'))
+        l.setWordWrap(True)
+        main_box.addWidget(l)
 
-        collapse_info = QPushButton(_("Show report contents"))
-        collapse_info.clicked.connect(lambda: QMessageBox.about(self, "Report contents", self.get_report_string()))
-        main_box.addWidget(collapse_info)
-
-        label = QLabel(_("Please briefly describe what led to the error (optional):") +"<br/>"+
-            "<i>"+ _("Feel free to add your email address if you are willing to provide further detail, but note that it will appear in the relevant github issue.") +"</i>")
+        label = QLabel(
+            '<br/>' + _("Please briefly describe what led to the error (optional):")
+            + '<br/><br/>' + '<i>' +
+            _("Feel free to add your email address if you are willing to provide"
+              " further detail, but note that it will appear in the relevant"
+              " github issue.") + '</i>')
+        label.setWordWrap(True)
         label.setTextFormat(QtCore.Qt.RichText)
         main_box.addWidget(label)
 
@@ -94,9 +98,20 @@ class Exception_Window(QWidget):
         self.description_textfield.setFixedHeight(50)
         main_box.addWidget(self.description_textfield)
 
-        main_box.addWidget(QLabel(_("Do you want to send this report?")))
 
         buttons = QHBoxLayout()
+
+        l = QLabel(_("Do you want to send this report?"))
+        l.setWordWrap(True)
+
+        buttons.addWidget(l)
+
+        collapse_info = QPushButton(_("Show report contents"))
+        collapse_info.clicked.connect(lambda: QMessageBox.about(self, "Report contents", self.get_report_string()))
+
+        buttons.addWidget(collapse_info)
+
+        buttons.addStretch(1)
 
         report_button = QPushButton(_('Send Bug Report'))
         report_button.clicked.connect(self.send_report)
