@@ -428,7 +428,9 @@ class DeleteWalletConfirmDialog : AlertDialogFragment() {
 class DeleteWalletDialog : CloseWalletDialog() {
     override fun onPreExecute() {
         walletName = arguments!!.getString("walletName")!!
-        daemonModel.commands.callAttr("select_wallet", null)
+        if (walletName == daemonModel.walletName) {
+            daemonModel.commands.callAttr("select_wallet", null)
+        }
     }
 
     override fun doInBackground() {
