@@ -380,10 +380,11 @@ class AboutDialog : AlertDialogFragment() {
 
 
 class OpenWalletDialog : PasswordDialog<String>() {
+    val walletName by lazy { arguments!!.getString("walletName")!! }
+
     override fun onPassword(password: String): String {
-        val name = arguments!!.getString("walletName")!!
-        daemonModel.loadWallet(name, password)
-        return name
+        daemonModel.loadWallet(walletName, password)
+        return walletName
     }
 
     override fun onPostExecute(result: String) {
@@ -398,7 +399,6 @@ class OpenWalletDialog : PasswordDialog<String>() {
     override fun onShowDialog() {
         super.onShowDialog()
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-            val walletName = arguments!!.getString("walletName")!!
             showDialog(activity!!, DeleteWalletConfirmDialog().apply {
                 arguments = Bundle().apply { putString("walletName", walletName) }
             })
