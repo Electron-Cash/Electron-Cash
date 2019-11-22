@@ -111,15 +111,15 @@ Cash to run completely independently of your system configuration.
 
 1. Install `pyenv <https://github.com/pyenv/pyenv-installer>`_ in your user
    account. Follow the printed instructions about updating your environment
-   variables and `.bashrc`, and restart your shell to ensure that they are
+   variables and ``.bashrc``, and restart your shell to ensure that they are
    loaded.
-2. Run `pyenv install 3.6.9`. This will download and compile that version of
-   python, storing it under `.pyenv` in your home directory.
-3. `cd` into the Electron Cash directory. Run `pyenv local 3.6.9` which inserts
-   a file `.python-version` into the current directory.
-4. While still in this directory, run `pip install pyqt5`.
+2. Run ``pyenv install 3.6.9``. This will download and compile that version of
+   python, storing it under ``.pyenv`` in your home directory.
+3. ``cd`` into the Electron Cash directory. Run ``pyenv local 3.6.9`` which inserts
+   a file ``.python-version`` into the current directory.
+4. While still in this directory, run ``pip install pyqt5``.
 5. If you are installing from the source file (.tar.gz or .zip) then you are
-   ready and you may run `./electron-cash`. If you are using the git version,
+   ready and you may run ``./electron-cash``. If you are using the git version,
    then continue by following the Development version instructions above.
 
 Creating Binaries
