@@ -20,9 +20,9 @@ Electron Cash - Lightweight Bitcoin Cash client
 Getting started
 ===============
 
-*Note: If running from source, Python 3.6 or above is required to run Electron Cash. If your system lacks Python 3.6,
+**Note: If running from source, Python 3.6 or above is required to run Electron Cash.** If your system lacks Python 3.6,
 you have other options, such as the `AppImage / binary releases <https://github.com/Electron-Cash/Electron-Cash/releases/>`_
-or running from source using `pyenv` (see section `Running from source on old Linux`_ below).*
+or running from source using `pyenv` (see section `Running from source on old Linux`_ below).
 
 Electron Cash is a pure python application forked from Electrum. If you want to use the Qt interface, install the Qt dependencies::
 
