@@ -439,6 +439,7 @@ class ElectrumGui(QObject, PrintError):
             submenu = m.addMenu(window.wallet.basename())
             submenu.addAction(_("Show/Hide"), window.show_or_hide)
             submenu.addAction(_("Close"), window.close)
+        m.addAction(_("Show/Hide"), self.show_or_hide)
         m.addAction(_("Dark/Light"), self.toggle_tray_icon)
         m.addSeparator()
         m.addAction(_("&Check for updates..."), lambda: self.show_update_checker(None))
@@ -457,14 +458,20 @@ class ElectrumGui(QObject, PrintError):
         self.config.set_key("dark_icon", self.dark_icon, True)
         self.tray.setIcon(self.tray_icon())
 
+    def show_or_hide(self):
+        """
+        Shows or hides all open windows. If all windows are hidden they are shown.
+        """
+        if all([w.is_hidden() for w in self.windows]):
+            for w in self.windows:
+                w.bring_to_top()
+        else:
+            for w in self.windows:
+                w.hide()
+
     def tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
-            if all([w.is_hidden() for w in self.windows]):
-                for w in self.windows:
-                    w.bring_to_top()
-            else:
-                for w in self.windows:
-                    w.hide()
+            self.show_or_hide()
 
     def close(self):
         for window in list(self.windows):
