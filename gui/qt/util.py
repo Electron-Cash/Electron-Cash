@@ -63,6 +63,8 @@ class EnterButton(QPushButton):
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Return:
             self.func()
+        else:
+            super().keyPressEvent(e)
 
 
 class ThreadedButton(QPushButton):
@@ -289,13 +291,20 @@ class MessageBoxMixin:
         if checkbox_text and isinstance(checkbox_text, str):
             chk = QCheckBox(checkbox_text)
             d.setCheckBox(chk)
+            def on_chk(b):
+                nonlocal checkbox_ischecked
+                checkbox_ischecked = bool(b)
             chk.setChecked(bool(checkbox_ischecked))
-            d.exec_()
-            ret = d.result(), chk.isChecked() # new API returns a tuple if a checkbox is specified
+            chk.clicked.connect(on_chk)
+            res = d.exec_()
+            ret = res, checkbox_ischecked # new API returns a tuple if a checkbox is specified
         else:
-            d.exec_()
-            ret = d.result() # old/no checkbox api
-        d.setParent(None) # Force GC sooner rather than later.
+            ret = d.exec_() # old/no checkbox api
+        try:
+            d.setParent(None) # Force GC sooner rather than later.
+        except RuntimeError as e:
+            # C++ object deleted -- can happen with misbehaving client code that kills parent from dialog ok
+            print_error("MsgBoxMixin WARNING: client code is killing the dialog box's parent before function return:", str(e))
         return ret
 
 class QMessageBoxMixin(QMessageBox, MessageBoxMixin):
@@ -333,8 +342,12 @@ class WaitingDialog(WindowModalDialog):
     Note if disable_escape_key is not set, user can hit cancel to prematurely
     close the dialog. Sometimes this is desirable, and sometimes it isn't, hence
     why the option is offered.'''
+
+    _update_progress_sig = pyqtSignal(int)
+
     def __init__(self, parent, message, task, on_success=None, on_error=None, auto_cleanup=True,
-                 *, auto_show=True, auto_exec=False, title=None, disable_escape_key=False):
+                 *, auto_show=True, auto_exec=False, title=None, disable_escape_key=False,
+                 progress_bar=None, progress_min=0, progress_max=0):
         assert parent
         if isinstance(parent, MessageBoxMixin):
             parent = parent.top_level_window()
@@ -346,6 +359,15 @@ class WaitingDialog(WindowModalDialog):
         vbox.addWidget(label)
         self.accepted.connect(self.on_accepted)
         self.rejected.connect(self.on_rejected)
+        self._pbar = None
+        if progress_bar:
+            self._pbar = p =QProgressBar()
+            p.setMinimum(progress_min)
+            p.setMaximum(progress_max)
+            if isinstance(progress_bar, str):
+                p.setTitle(progress_bar)
+            self._update_progress_sig.connect(p.setValue)
+            vbox.addWidget(p)
         if auto_show and not auto_exec:
             self.open()
         self.thread = TaskThread(self)
@@ -356,6 +378,16 @@ class WaitingDialog(WindowModalDialog):
 
     def wait(self):
         self.thread.wait()
+
+    def update_progress(self, progress: int):
+        if not self._pbar:
+            return
+        try:
+            progress = int(progress)
+        except (ValueError, TypeError):
+            return
+        else:
+            self._update_progress_sig.emit(progress)
 
     def on_accepted(self):
         self.thread.stop()
@@ -479,15 +511,15 @@ def address_combo(addresses):
     return hbox, addr_combo
 
 
-def filename_field(parent, config, defaultname, select_msg):
+def filename_field(config, defaultname, select_msg):
 
+    gb = QGroupBox(_("Format"))
     vbox = QVBoxLayout()
-    vbox.addWidget(QLabel(_("Format")))
-    gb = QGroupBox("format", parent)
-    b1 = QRadioButton(gb)
+    gb.setLayout(vbox)
+    b1 = QRadioButton()
     b1.setText(_("CSV"))
     b1.setChecked(True)
-    b2 = QRadioButton(gb)
+    b2 = QRadioButton()
     b2.setText(_("JSON"))
     vbox.addWidget(b1)
     vbox.addWidget(b2)
@@ -520,7 +552,7 @@ def filename_field(parent, config, defaultname, select_msg):
     b1.clicked.connect(lambda: set_csv(True))
     b2.clicked.connect(lambda: set_csv(False))
 
-    return vbox, filename_e, b1
+    return gb, filename_e, b1
 
 class ElectrumItemDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
@@ -615,7 +647,7 @@ class MyTreeWidget(QTreeWidget):
             if item and col > -1:
                 self.on_activated(item, col)
         else:
-            QTreeWidget.keyPressEvent(self, event)
+            super().keyPressEvent(event)
 
     def permit_edit(self, item, column):
         return (column in self.editable_columns
@@ -966,12 +998,6 @@ class SortableTreeWidgetItem(QTreeWidgetItem):
             # If not, we will just do string comparison
             return self.text(column) < other.text(column)
 
-class OPReturnError(Exception):
-    """ thrown when the OP_RETURN for a tx not of the right format """
-
-class OPReturnTooLarge(OPReturnError):
-    """ thrown when the OP_RETURN for a tx is >220 bytes """
-
 class RateLimiter(PrintError):
     ''' Manages the state of a @rate_limited decorated function, collating
     multiple invocations. This class is not intented to be used directly. Instead,
@@ -1229,7 +1255,7 @@ def webopen(url: str):
         if os.fork() == 0:
             del os.environ['LD_LIBRARY_PATH']
             webbrowser.open(url)
-            sys.exit(0)
+            os._exit(0)  # Python docs advise doing this after forking to prevent atexit handlers from executing.
     else:
         webbrowser.open(url)
 

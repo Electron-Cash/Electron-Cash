@@ -30,9 +30,7 @@ import sys
 from typing import Dict
 from collections import namedtuple
 
-from . import locale as ec_locale  # Causes translation files to be extracted on Android.
-
-LOCALE_DIR = os.path.dirname(ec_locale.__file__)
+LOCALE_DIR = os.path.join(os.path.dirname(__file__), 'locale')
 language = gettext.translation('electron-cash', LOCALE_DIR, fallback=True)
 
 def _(x):
@@ -246,6 +244,10 @@ languages: Dict[str, LanguageDef] = {
     'sv_SE': LanguageDef(
         name='Svenska',
         matches=lambda c: re.match('^sv.*', c), excludes=lambda c: False
+        ),
+    'sw_KE': LanguageDef(
+        name='Swahili',
+        matches=lambda c: re.match('^sw.*', c), excludes=lambda c: False
         ),
     'ta_IN': LanguageDef(
         name='தமிழ்',

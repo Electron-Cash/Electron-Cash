@@ -22,29 +22,30 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from collections import namedtuple
 import codecs
-import traceback
-import os
 import imp
 import json
+import os
 import pkgutil
-import sys
-import time
 import shutil
+import sys
 import threading
+import time
+import traceback
 import zipimport
 
-from .i18n import _
-from .util import print_error, user_dir, make_dir
-from .util import profiler, PrintError, DaemonThread, UserCancelled, ThreadJob
+from collections import namedtuple, defaultdict
+from enum import IntEnum
+from typing import Callable, Optional
+
 from . import bitcoin
 from . import version
-from enum import IntEnum
+from .i18n import _
+from .util import print_error, print_stderr, user_dir, make_dir
+from .util import profiler, PrintError, DaemonThread, UserCancelled, ThreadJob
 
 plugin_loaders = {}
-hook_names = set()
-hooks = {}
+hooks = defaultdict(list)
 
 
 class ExternalPluginCodes(IntEnum):
@@ -82,6 +83,7 @@ class Plugins(DaemonThread):
         self.config = config
         self.gui_name = gui_name
         self.hw_wallets = {}
+        self.daemon_commands = {}
         self.internal_plugins = {}
         self.internal_plugin_metadata = {}
         self.external_plugins = {}
@@ -118,8 +120,8 @@ class Plugins(DaemonThread):
                 try:
                     self.load_internal_plugin(name)
                 except BaseException as e:
-                    traceback.print_exc(file=sys.stdout)
-                    self.print_error("cannot initialize plugin %s:" % name, str(e))
+                    fmt = traceback.format_exc()
+                    self.print_error(f"cannot initialize plugin {name}: {e!r} {fmt}")
 
     def load_external_plugins(self):
         external_plugin_dir = self.get_external_plugin_dir()
@@ -148,8 +150,8 @@ class Plugins(DaemonThread):
                 try:
                     self.load_external_plugin(package_name)
                 except BaseException as e:
-                    traceback.print_exc(file=sys.stdout)
-                    self.print_error("cannot initialize plugin %s:" % package_name, str(e))
+                    traceback.print_exc(file=sys.stdout) # shouldn't this be... suppressed unless -v?
+                    self.print_error(f"cannot initialize plugin {package_name} {e!r}")
 
     def get_internal_plugin(self, name, force_load=False):
         if force_load and name not in self.internal_plugins:
@@ -447,8 +449,7 @@ class Plugins(DaemonThread):
                     if p.is_enabled():
                         out.append([name, details[2], p])
                 except:
-                    traceback.print_exc()
-                    self.print_error("cannot load plugin for:", name)
+                    self.print_error("cannot load plugin for:", name, "exception:", repr(sys.exc_info()[1]))
         return out
 
     def register_wallet_type(self, name, gui_good, wallet_type, is_external):
@@ -484,8 +485,29 @@ class Plugins(DaemonThread):
 
 
 def hook(func):
-    hook_names.add(func.__name__)
+    func._is_ec_plugin_hook = True
     return func
+
+def _get_func_if_hook(plugin, attr_name) -> Optional[Callable]:
+    cls = plugin.__class__
+    # We examine the class-level attribute with name attr_name to see if it's a
+    # function that's tagged with _is_ec_plugin_hook. If it is, we know it was
+    # registered with @hook.
+    #
+    # Caveat: If we were to call getattr(plugin, attr_name) directly, we would
+    # potentially be invoking a function call if attr_name was decorated with
+    # @property. That's why we explicitly do this check on the class-level
+    # attribute first, before proceeding to grabbing the instance-level
+    # bound method if the checks pass.
+    cls_func = getattr(cls, attr_name, None)
+    if (getattr(cls_func, '_is_ec_plugin_hook', False)
+            and not isinstance(cls_func, property)):  # just in case they did @hook @property!
+        # Ok, attr_name has the tag, and wasn't a property.
+        # So it's safe to call getattr on it to grab the bound method, and
+        # return it after one last callable check (for paranoia's sake).
+        func = getattr(plugin, attr_name, None)
+        if callable(func):
+            return func
 
 def run_hook(name, *args):
     f_list = hooks.get(name)
@@ -505,8 +527,36 @@ def run_hook(name, *args):
                 results.append(r)
 
     if results:
-        assert len(results) == 1, results
+        if len(results) > 1:
+            print_error(f"run_hook: got more than 1 result from @hook '{name}':", results)
         return results[0]
+
+def daemon_command(func):
+    """ Method decorator for BasePlugin subclasses to add a remote command
+    to the daemon. Usage:
+
+        class MyPlugin(BasePlugin):
+            @daemon_command
+            def myplugin_action1(self, daemon, config):
+                ...
+            @daemon_command
+            def myplugin_action2(self, daemon, config):
+                ...
+
+    These can then be invoked as:
+
+        ./electron-cash daemon myplugin_action1 arg arg arg ...
+
+    Here `config` is *not* the usual global config but also includes the options
+    from the command line client:
+    - config['wallet_path'] is the wallet passed using -w ; you can use
+      config.get_wallet_path() to get it or a default.
+    - config['password'] is the wallet password passed using -wp.
+    - config['subargs'] are the extra `arg` passed after the subcommand.
+    See Daemon.run_daemon for an idea on how to use this.
+    """
+    func._is_daemon_command = True
+    return func
 
 
 class BasePlugin(PrintError):
@@ -515,12 +565,27 @@ class BasePlugin(PrintError):
         self.name = name
         self.config = config
         self.wallet = None
+        self._hooks_i_registered = []
         # add self to hooks
-        for k in dir(self):
-            if k in hook_names:
-                l = hooks.get(k, [])
-                l.append((self, getattr(self, k)))
-                hooks[k] = l
+        for aname in dir(self):
+            func = _get_func_if_hook(self, aname)
+            if func is not None:
+                hooks[aname].append((self, func))
+                self._hooks_i_registered.append((aname,func))
+
+        # collect names of all class attributes with ._is_daemon_command
+        self._daemon_commands = set(attrname for attrname in dir(type(self))
+                                    if getattr(getattr(type(self),attrname), '_is_daemon_command',False))
+        # we don't allow conflicting definitions of daemon command (between different plugins)
+        for c in self._daemon_commands.intersection(self.parent.daemon_commands):
+            self._daemon_commands.discard(c)
+            try:
+                origclass = type(self.parent.daemon_commands[c].__self__)
+            except (KeyError, AttributeError):
+                origclass = 'unknown'
+            print_stderr(f'Ignoring plugin daemon command {repr(c)} from {type(self)} (already exists from {origclass})')
+        self.parent.daemon_commands.update({ cmdname : getattr(self,cmdname)
+                                             for cmdname in self._daemon_commands })
 
     def set_enabled_prefix(self, prefix):
         # This is set via a method in order not to break the existing API.
@@ -534,11 +599,17 @@ class BasePlugin(PrintError):
 
     def close(self):
         # remove self from hooks
-        for k in dir(self):
-            if k in hook_names:
-                l = hooks.get(k, [])
-                l.remove((self, getattr(self, k)))
-                hooks[k] = l
+        for name, func in self._hooks_i_registered:
+            l = hooks.get(name, [])
+            try: l.remove((self, func))
+            except ValueError: pass  # this should never happen but it pays to be paranoid.
+            if not l:
+                hooks.pop(name, None)
+        self._hooks_i_registered.clear()  # just to kill strong refs to self ASAP, for GC
+        # remove registered daemon commands
+        for cmdname in self._daemon_commands:
+            self.parent.daemon_commands.pop(cmdname, None)
+        self._daemon_commands.clear()
         self.parent.close_plugin(self)
         self.on_close()
 

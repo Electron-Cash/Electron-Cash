@@ -37,7 +37,6 @@ import random
 import time
 import threading
 from collections import defaultdict
-from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 
 from .i18n import ngettext
@@ -52,7 +51,7 @@ from . import keystore
 from .storage import multisig_type, WalletStorage
 
 from . import transaction
-from .transaction import Transaction
+from .transaction import Transaction, InputValueMissing
 from .plugins import run_hook
 from . import bitcoin
 from . import coinchooser
@@ -448,6 +447,20 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def is_up_to_date(self):
         with self.lock: return self.up_to_date
+
+    def is_fully_settled_down(self):
+        ''' Returns True iff the wallet is up to date and its synchronizer
+        and verifier aren't busy doing work, and its pruned_txo_values list
+        is currently empty.  This is used as a final check by the Qt GUI
+        to decide if it should do a final refresh of all tabs in some cases.'''
+        with self.lock:
+            ret = self.up_to_date
+            if ret and self.verifier:
+                ret = self.verifier.is_up_to_date()
+            if ret and self.synchronizer:
+                ret = self.synchronizer.is_up_to_date()
+            ret = ret and not self.pruned_txo_values
+            return bool(ret)
 
     def set_label(self, name, text = None):
         with self.lock:
@@ -1376,25 +1389,135 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return h2
 
     def export_history(self, domain=None, from_timestamp=None, to_timestamp=None, fx=None,
-                       show_addresses=False, decimal_point=8):
+                       show_addresses=False, decimal_point=8,
+                       *, fee_calc_timeout=10.0, download_inputs=False,
+                       progress_callback=None):
+        ''' Export history. Used by RPC & GUI.
+
+        Arg notes:
+        - `fee_calc_timeout` is used when computing the fee (which is done
+          asynchronously in another thread) to limit the total amount of time in
+          seconds spent waiting for fee calculation. The timeout is a total time
+          allotment for this function call. (The reason the fee calc can take a
+          long time is for some pathological tx's, it is very slow to calculate
+          fee as it involves deserializing prevout_tx from the wallet, for each
+          input).
+        - `download_inputs`, if True, will allow for more accurate fee data to
+          be exported with the history by using the Transaction class input
+          fetcher to download *all* prevout_hash tx's for inputs (even for
+          inputs not in wallet). This feature requires self.network (ie, we need
+          to be online) otherwise it will behave as if download_inputs=False.
+        - `progress_callback`, if specified, is a callback which receives a
+          single float argument in the range [0.0,1.0] indicating how far along
+          the history export is going. This is intended for interop with GUI
+          code. Node the progress callback is not guaranteed to be called in the
+          context of the main thread, therefore GUI code should use appropriate
+          signals/slots to update the GUI with progress info.
+
+        Note on side effects: This function may update self.tx_fees. Rationale:
+        it will spend some time trying very hard to calculate accurate fees by
+        examining prevout_tx's (leveraging the fetch_input_data code in the
+        Transaction class). As such, it is worthwhile to cache the results in
+        self.tx_fees, which gets saved to wallet storage. This is not very
+        demanding on storage as even for very large wallets with huge histories,
+        tx_fees does not use more than a few hundred kb of space. '''
         from .util import timestamp_to_datetime
+        # we save copies of tx's we deserialize to this temp dict because we do
+        # *not* want to deserialize tx's in wallet.transactoins since that
+        # wastes memory
+        local_tx_cache = {}
+        # some helpers for this function
+        t0 = time.time()
+        def time_remaining(): return max(fee_calc_timeout - (time.time()-t0), 0)
+        class MissingTx(RuntimeError):
+            ''' Can happen in rare circumstances if wallet history is being
+            radically reorged by network thread while we are in this code. '''
+        def get_tx(tx_hash):
+            ''' Try to get a tx from wallet, then from the Transaction class
+            cache if that fails. In either case it deserializes the copy and
+            puts the deserialized tx in local stack dict local_tx_cache. The
+            reason we don't deserialize the tx's from self.transactions is that
+            we do not want to keep deserialized tx's in memory. The
+            self.transactions dict should contain just raw tx's (not
+            deserialized). Deserialized tx's eat on the order of 10x the memory
+            because because of the Python lists, dict, etc they contain, per
+            instance. '''
+            tx = local_tx_cache.get(tx_hash)
+            if tx:
+                return tx
+            tx = Transaction.tx_cache_get(tx_hash)
+            if not tx:
+                tx = copy.deepcopy(self.transactions.get(tx_hash))
+            if tx:
+                tx.deserialize()
+                local_tx_cache[tx_hash] = tx
+            else:
+                raise MissingTx(f'txid {tx_hash} dropped out of wallet history while exporting')
+            return tx
+        def try_calc_fee(tx_hash):
+            ''' Try to calc fee from cheapest to most expensive calculation.
+            Ultimately asks the transaction class to look at prevouts in wallet and uses
+            that scheme as a last (more CPU intensive) resort. '''
+            fee = self.tx_fees.get(tx_hash)
+            if fee is not None:
+                return fee
+            def do_get_fee(tx_hash):
+                tx = get_tx(tx_hash)
+                def try_get_fee(tx):
+                    try: return tx.get_fee()
+                    except InputValueMissing: pass
+                fee = try_get_fee(tx)
+                t_remain = time_remaining()
+                if fee is None and t_remain:
+                    q = queue.Queue()
+                    def done():
+                        q.put(1)
+                    tx.fetch_input_data(self, use_network=bool(download_inputs), done_callback=done)
+                    try: q.get(timeout=t_remain)
+                    except queue.Empty: pass
+                    fee = try_get_fee(tx)
+                return fee
+            fee = do_get_fee(tx_hash)
+            if fee is not None:
+                self.tx_fees[tx_hash] = fee  # save fee to wallet if we bothered to dl/calculate it.
+            return fee
+        def fmt_amt(v, is_diff):
+            if v is None:
+                return '--'
+            return format_satoshis(v, decimal_point=decimal_point,
+                                   is_diff=is_diff)
+
+        # grab history
         h = self.get_history(domain, reverse=True)
         out = []
+
+        n, l = 0, max(1, float(len(h)))
         for tx_hash, height, conf, timestamp, value, balance in h:
-            if from_timestamp and timestamp < from_timestamp:
+            if progress_callback:
+                progress_callback(n/l)
+            n += 1
+            timestamp_safe = timestamp
+            if timestamp is None:
+                timestamp_safe = time.time()  # set it to "now" so below code doesn't explode.
+            if from_timestamp and timestamp_safe < from_timestamp:
                 continue
-            if to_timestamp and timestamp >= to_timestamp:
+            if to_timestamp and timestamp_safe >= to_timestamp:
+                continue
+            try:
+                fee = try_calc_fee(tx_hash)
+            except MissingTx as e:
+                self.print_error(str(e))
                 continue
             item = {
-                'txid':tx_hash,
-                'height':height,
-                'confirmations':conf,
-                'timestamp':timestamp,
-                'value': (format_satoshis(value, decimal_point=decimal_point, is_diff=True)
-                          if value is not None else '--'),
-                'balance': format_satoshis(balance, decimal_point=decimal_point)
+                'txid'          : tx_hash,
+                'height'        : height,
+                'confirmations' : conf,
+                'timestamp'     : timestamp_safe,
+                'value'         : fmt_amt(value, is_diff=True),
+                'fee'           : fmt_amt(fee, is_diff=False),
+                'balance'       : fmt_amt(balance, is_diff=False),
             }
-            if item['height']>0:
+            if item['height'] > 0:
                 date_str = format_time(timestamp) if timestamp is not None else _("unverified")
             else:
                 date_str = _("unconfirmed")
@@ -1408,8 +1531,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 self.print_error(f"Warning: could not export label for {tx_hash}, defaulting to ???")
                 item['label'] = "???"
             if show_addresses:
-                tx = self.transactions.get(tx_hash)
-                tx.deserialize()
+                tx = get_tx(tx_hash)
                 input_addresses = []
                 output_addresses = []
                 for x in tx.inputs():
@@ -1422,10 +1544,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 item['input_addresses'] = input_addresses
                 item['output_addresses'] = output_addresses
             if fx is not None:
-                date = timestamp_to_datetime(time.time() if conf <= 0 else timestamp)
+                date = timestamp_to_datetime(timestamp_safe)
                 item['fiat_value'] = fx.historical_value_str(value, date)
                 item['fiat_balance'] = fx.historical_value_str(balance, date)
+                item['fiat_fee'] = fx.historical_value_str(fee, date)
             out.append(item)
+        if progress_callback:
+            progress_callback(1.0)  # indicate done, just in case client code expects a 1.0 in order to detect completion
         return out
 
     def get_label(self, tx_hash):
@@ -1736,11 +1861,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return not self.is_watching_only() and hasattr(self.keystore, 'get_private_key')
 
     def is_used(self, address):
-        return self.get_address_history(address) and not self.is_empty(address)
+        return self.get_address_history(address) and self.is_empty(address)
 
     def is_empty(self, address):
         assert isinstance(address, Address)
-        return any(self.get_addr_balance(address))
+        return not any(self.get_addr_balance(address))
 
     def address_is_old(self, address, age_limit=2):
         age = -1
@@ -1939,7 +2064,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     baseurl = baseurl.replace(*rewrite)
                 out['request_url'] = os.path.join(baseurl, 'req', key[0], key[1], key, key)
                 out['URI'] += '&r=' + out['request_url']
-                out['index_url'] = os.path.join(baseurl, 'index.html') + '?id=' + key
+                if not 'index_url' in out:
+                    out['index_url'] = os.path.join(baseurl, 'index.html') + '?id=' + key
                 websocket_server_announce = config.get('websocket_server_announce')
                 if websocket_server_announce:
                     out['websocket_server'] = websocket_server_announce
@@ -1978,7 +2104,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return status, conf
 
     def make_payment_request(self, addr, amount, message, expiration=None, *,
-                             op_return=None, op_return_raw=None, payment_url=None):
+                             op_return=None, op_return_raw=None, payment_url=None, index_url=None):
         assert isinstance(addr, Address)
         if op_return and op_return_raw:
             raise ValueError("both op_return and op_return_raw cannot be specified as arguments to make_payment_request")
@@ -1994,6 +2120,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         }
         if payment_url:
             d['payment_url'] = payment_url + "/" + _id
+        if index_url:
+            d['index_url'] = index_url + "/" + _id
         if op_return:
             d['op_return'] = op_return
         if op_return_raw:

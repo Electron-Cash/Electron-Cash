@@ -50,7 +50,7 @@ NO_SIGNATURE = 'ff'
 class SerializationError(Exception):
     """ Thrown when there's a problem deserializing or serializing """
 
-class InputValueMissing(Exception):
+class InputValueMissing(ValueError):
     """ thrown when the value of an input is needed but not present """
 
 class BCDataStream(object):
@@ -326,6 +326,7 @@ def parse_input(vds):
             d['address'] = UnknownAddress()
             d['type'] = 'unknown'
         if not Transaction.is_txin_complete(d):
+            del d['scriptSig']
             d['value'] = vds.read_uint64()
     return d
 
@@ -516,6 +517,7 @@ class Transaction:
         if self._inputs is not None:
             return
         d = deserialize(self.raw)
+        self.invalidate_common_sighash_cache()
         self._inputs = d['inputs']
         self._outputs = [(x['type'], x['address'], x['value']) for x in d['outputs']]
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
@@ -594,9 +596,18 @@ class Transaction:
 
     @classmethod
     def input_script(self, txin, estimate_size=False, sign_schnorr=False):
+        # For already-complete transactions, scriptSig will be set and we prefer
+        # to use it verbatim in order to get an exact reproduction (including
+        # malleated push opcodes, etc.).
+        scriptSig = txin.get('scriptSig', None)
+        if scriptSig is not None:
+            return scriptSig
+
+        # For partially-signed inputs, or freshly signed transactions, the
+        # scriptSig will be missing and so we construct it from pieces.
         _type = txin['type']
         if _type == 'coinbase':
-            return txin['scriptSig']
+            raise RuntimeError('Attempted to serialize coinbase with missing scriptSig')
         pubkeys, sig_list = self.get_siglist(txin, estimate_size, sign_schnorr=sign_schnorr)
         script = ''.join(push_script(x) for x in sig_list)
         if _type == 'p2pk':
@@ -609,7 +620,7 @@ class Transaction:
         elif _type == 'p2pkh':
             script += push_script(pubkeys[0])
         elif _type == 'unknown':
-            return txin['scriptSig']
+            raise RuntimeError('Cannot serialize unknown input with missing scriptSig')
         return script
 
     @classmethod
@@ -654,7 +665,8 @@ class Transaction:
         s += script
         s += int_to_hex(txin.get('sequence', 0xffffffff - 1), 4)
         # offline signing needs to know the input value
-        if ('value' in txin   # Legacy txs
+        if ('value' in txin
+            and txin.get('scriptSig') is None
             and not (estimate_size or self.is_txin_complete(txin))):
             s += int_to_hex(txin['value'], 8)
         return s
@@ -678,20 +690,68 @@ class Transaction:
         warnings.warn("warning: deprecated tx.nHashType()", FutureWarning, stacklevel=2)
         return 0x01 | (cls.SIGHASH_FORKID + (cls.FORKID << 8))
 
-    def serialize_preimage(self, i, nHashType=0x00000041):
+    def invalidate_common_sighash_cache(self):
+        ''' Call this to invalidate the cached common sighash (computed by
+        `calc_common_sighash` below).
+
+        This is function is for advanced usage of this class where the caller
+        has mutated the transaction after computing its signatures and would
+        like to explicitly delete the cached common sighash. See
+        `calc_common_sighash` below. '''
+        try: del self._cached_sighash_tup
+        except AttributeError: pass
+
+    def calc_common_sighash(self, use_cache=False):
+        """ Calculate the common sighash components that are used by
+        transaction signatures. If `use_cache` enabled then this will return
+        already-computed values from the `._cached_sighash_tup` attribute, or
+        compute them if necessary (and then store).
+
+        For transactions with N inputs and M outputs, calculating all sighashes
+        takes only O(N + M) with the cache, as opposed to O(N^2 + NM) without
+        the cache.
+
+        Returns three 32-long bytes objects: (hashPrevouts, hashSequence, hashOutputs).
+
+        Warning: If you modify non-signature parts of the transaction
+        afterwards, this cache will be wrong! """
+        inputs = self.inputs()
+        outputs = self.outputs()
+        meta = (len(inputs), len(outputs))
+
+        if use_cache:
+            try:
+                cmeta, res = self._cached_sighash_tup
+            except AttributeError:
+                pass
+            else:
+                # minimal heuristic check to detect bad cached value
+                if cmeta == meta:
+                    # cache hit and heuristic check ok
+                    return res
+                else:
+                    del cmeta, res, self._cached_sighash_tup
+
+        hashPrevouts = Hash(bfh(''.join(self.serialize_outpoint(txin) for txin in inputs)))
+        hashSequence = Hash(bfh(''.join(int_to_hex(txin.get('sequence', 0xffffffff - 1), 4) for txin in inputs)))
+        hashOutputs = Hash(bfh(''.join(self.serialize_output(o) for o in outputs)))
+
+        res = hashPrevouts, hashSequence, hashOutputs
+        # cach resulting value, along with some minimal metadata to defensively
+        # program against cache invalidation (due to class mutation).
+        self._cached_sighash_tup = meta, res
+        return res
+
+    def serialize_preimage(self, i, nHashType=0x00000041, use_cache = False):
+        """ See `.calc_common_sighash` for explanation of use_cache feature """
         if (nHashType & 0xff) != 0x41:
             raise ValueError("other hashtypes not supported; submit a PR to fix this!")
 
         nVersion = int_to_hex(self.version, 4)
         nHashType = int_to_hex(nHashType, 4)
         nLocktime = int_to_hex(self.locktime, 4)
-        inputs = self.inputs()
-        outputs = self.outputs()
-        txin = inputs[i]
 
-        hashPrevouts = bh2u(Hash(bfh(''.join(self.serialize_outpoint(txin) for txin in inputs))))
-        hashSequence = bh2u(Hash(bfh(''.join(int_to_hex(txin.get('sequence', 0xffffffff - 1), 4) for txin in inputs))))
-        hashOutputs = bh2u(Hash(bfh(''.join(self.serialize_output(o) for o in outputs))))
+        txin = self.inputs()[i]
         outpoint = self.serialize_outpoint(txin)
         preimage_script = self.get_preimage_script(txin)
         scriptCode = var_int(len(preimage_script) // 2) + preimage_script
@@ -700,7 +760,10 @@ class Transaction:
         except KeyError:
             raise InputValueMissing
         nSequence = int_to_hex(txin.get('sequence', 0xffffffff - 1), 4)
-        preimage = nVersion + hashPrevouts + hashSequence + outpoint + scriptCode + amount + nSequence + hashOutputs + nLocktime + nHashType
+
+        hashPrevouts, hashSequence, hashOutputs = self.calc_common_sighash(use_cache = use_cache)
+
+        preimage = nVersion + bh2u(hashPrevouts) + bh2u(hashSequence) + outpoint + scriptCode + amount + nSequence + bh2u(hashOutputs) + nLocktime + nHashType
         return preimage
 
     def serialize(self, estimate_size=False):
@@ -749,19 +812,26 @@ class Transaction:
         self.raw = None
 
     def input_value(self):
-        return sum(x['value'] for x in (self.fetched_inputs() or self.inputs()))
+        ''' Will return the sum of all input values, if the input values
+        are known (may consult self.fetched_inputs() to get a better idea of
+        possible input values).  Will raise InputValueMissing if input values
+        are missing. '''
+        try:
+            return sum(x['value'] for x in (self.fetched_inputs() or self.inputs()))
+        except (KeyError, TypeError, ValueError) as e:
+            raise InputValueMissing from e
 
     def output_value(self):
         return sum(val for tp, addr, val in self.outputs())
 
     def get_fee(self):
         ''' Try and calculate the fee based on the input data, and returns it as
-        satoshis (int). Can raise one of: (KeyError, TypeError, ValueError) on
-        tx's where fee data is missing, so client code should catch these. '''
+        satoshis (int). Can raise InputValueMissing on tx's where fee data is
+        missing, so client code should catch that. '''
         # first, check if coinbase; coinbase tx always has 0 fee
-        if self._inputs and self._inputs[0].get('type') == 'coinbase':
+        if self.inputs() and self._inputs[0].get('type') == 'coinbase':
             return 0
-        # otherwise just sum up all values - may raise
+        # otherwise just sum up all values - may raise InputValueMissing
         return self.input_value() - self.output_value()
 
     @profiler
@@ -1174,7 +1244,7 @@ class Transaction:
                         wallet.network.cancel_requests(func)
             if len(inps) == len(self._inputs) and eph.get('_fetch') == t:  # sanity check
                 eph.pop('_fetch', None)  # potential race condition here, popping wrong t -- but in practice w/ CPython threading it won't matter
-                print_error("fetch_input_data: elapsed {} sec".format(time.time()-t0))
+                print_error(f"fetch_input_data: elapsed {(time.time()-t0):.4f} sec")
                 if done_callback:
                     done_callback(*done_args)
         # /doIt
@@ -1250,3 +1320,45 @@ def tx_from_str(txt):
     tx_dict = json.loads(str(txt))
     assert "hex" in tx_dict.keys()
     return tx_dict["hex"]
+
+
+# ---
+class OPReturn:
+    ''' OPReturn helper namespace. Used by GUI main_window.py and also
+    lib/commands.py '''
+    class Error(Exception):
+        """ thrown when the OP_RETURN for a tx not of the right format """
+
+    class TooLarge(Error):
+        """ thrown when the OP_RETURN for a tx is >220 bytes """
+
+    @staticmethod
+    def output_for_stringdata(op_return):
+        from .i18n import _
+        if not isinstance(op_return, str):
+            raise OPReturn.Error('OP_RETURN parameter needs to be of type str!')
+        op_return_code = "OP_RETURN "
+        op_return_encoded = op_return.encode('utf-8')
+        if len(op_return_encoded) > 220:
+            raise OPReturn.TooLarge(_("OP_RETURN message too large, needs to be no longer than 220 bytes"))
+        op_return_payload = op_return_encoded.hex()
+        script = op_return_code + op_return_payload
+        amount = 0
+        return (TYPE_SCRIPT, ScriptOutput.from_string(script), amount)
+
+    @staticmethod
+    def output_for_rawhex(op_return):
+        from .i18n import _
+        if not isinstance(op_return, str):
+            raise OPReturn.Error('OP_RETURN parameter needs to be of type str!')
+        if op_return == 'empty':
+            op_return = ''
+        try:
+            op_return_script = b'\x6a' + bytes.fromhex(op_return.strip())
+        except ValueError:
+            raise OPReturn.Error(_('OP_RETURN script expected to be hexadecimal bytes'))
+        if len(op_return_script) > 223:
+            raise OPReturn.TooLarge(_("OP_RETURN script too large, needs to be no longer than 223 bytes"))
+        amount = 0
+        return (TYPE_SCRIPT, ScriptOutput.protocol_factory(op_return_script), amount)
+# /OPReturn

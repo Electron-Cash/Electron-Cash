@@ -260,8 +260,8 @@ class BlindSigner:
 
     Security note: If we were to sign two distinct requests for the same R,
     then our private key could be recovered. Thus, you can only call .sign()
-    once. If you need a new blind signature then you must create a new
-    object.
+    once (and this class enforces this restriction in a thread-safe manner).
+    If you need a new blind signature then you must create a new instance.
 
     Security note 2: If an adversary knows that this private key is related
     to another key (say, they are related by multiplication or addition of a
@@ -269,6 +269,21 @@ class BlindSigner:
     signature *from the other key*! For example, all keys in a BIP32 "xpub"
     are related, and so you should seriously avoid using this function with
     standard BIP32 or any other public key derivation method.
+
+    Security note 3: If a blind signer allows multiple blind signature
+    requests to be serviced in parallel (i.e., have multiple `.get_R`'s issued
+    at the same time, having not yet received the parameters for `.sign`),
+    then an adversary can perform work and submit carefully designed requests
+    that allow an additional signature to be created. E.g., with 511 parallel
+    requests, 512 signatures could be produced with ~2^35 work of precomputation
+    on the part of the adversary.
+    See:
+    - Schnorr 2001 "Security of Blind Discrete Log Signatures against Interactive Attacks"
+      https://www.math.uni-frankfurt.de/~dmst/research/papers/schnorr.blind_sigs_attack.2001.pdf
+    - Wagner 2002 "A Generalized Birthday Problem"
+      https://www.iacr.org/archive/crypto2002/24420288/24420288.pdf
+    - A possible solution that should make it so at least 2^70 work is needed
+      to get an additional signature: https://eprint.iacr.org/2019/877
     """
     order = ecdsa.SECP256k1.generator.order()
 
@@ -417,7 +432,7 @@ class BlindSignatureRequest:
         Rnew_buf = create_string_buffer(64)
         publist = (c_void_p*3)(*(cast(x, c_void_p) for x in (R_buf, A_buf, pubkey_buf)))
         res = seclib.secp256k1_ec_pubkey_combine(ctx, Rnew_buf, publist, 3)
-        assert res == 1, "fails with 2^-256 chance (if sum is point at infinity)"
+        assert res == 1, "fails with 2^-256 chance (if sum is point at infinity), in which case we have cracked the key"
 
         # serialize the new R point
         Rnew_serialized = create_string_buffer(65)
@@ -435,12 +450,19 @@ class BlindSignatureRequest:
         """ returns 32 bytes e value, to be sent to the signer """
         return self.e.to_bytes(32,'big')
 
-    def finalize(self, sbytes):
-        """ expects 32 bytes s value, returns 64 byte finished signature """
+    def finalize(self, sbytes, check = True):
+        """ expects 32 bytes s value, returns 64 byte finished signature
+
+        If check=True (default) this will perform a verification of the result.
+        Upon failure it raises RuntimeError. The cause for this error is that
+        the blind signer has provided an incorrect blinded s value."""
         assert len(sbytes) == 32
 
         s = int.from_bytes(sbytes,'big')
 
         snew = (self.c*(s + self.a)) % self.order
 
-        return self.Rxnew + snew.to_bytes(32,'big')
+        sig = self.Rxnew + snew.to_bytes(32,'big')
+        if check and not verify(self.pubkey, sig, self.message_hash):
+            raise RuntimeError("Blind signature verification failed.")
+        return sig

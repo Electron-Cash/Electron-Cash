@@ -5,10 +5,6 @@
     "blackie.c3-soft.com": {
         "s": "60002"
     },
-    "cash-testnet.theblains.org": {
-        "s": "50004",
-        "t": "50003"
-    },
     "testnet.imaginary.cash": {
         "s": "50002"
     },
@@ -26,5 +22,9 @@
     "electroncash.de": {
         "s": "50004",
         "t": "50003"
+    },
+    "tbch.loping.net": {
+        "s": "60002",
+        "t": "60001"
     }
 }

@@ -172,13 +172,13 @@ class AddressList(MyTreeWidget):
                 name = _("Receiving") if not is_change else _("Change")
                 seq_item = QTreeWidgetItem( [ name, '', '', '', '', ''] )
                 account_item.addChild(seq_item)
-                if not is_change and not had_item_count: # first time we create this widget, auto-expand the default address list
+                if not had_item_count: # first time we create this widget, auto-expand the default address list
                     seq_item.setExpanded(True)
                     expanded_item_names.add(item_path(seq_item))
             else:
                 seq_item = account_item
-            used_item = QTreeWidgetItem( [ _("Used"), '', '', '', '', ''] )
-            used_flag = False
+            hidden_item = QTreeWidgetItem( [ _("Empty") if is_change else _("Used"), '', '', '', '', ''] )
+            has_hidden = False
             addr_list = change_addresses if is_change else receiving_addresses
             # Cash Account support - we do this here with the already-prepared addr_list for performance reasons
             ca_list_all = self.wallet.cashacct.get_cashaccounts(addr_list)
@@ -189,7 +189,10 @@ class AddressList(MyTreeWidget):
             # / cash account
             for n, address in enumerate(addr_list):
                 num = len(self.wallet.get_address_history(address))
-                is_used = self.wallet.is_used(address)
+                if is_change:
+                    is_hidden = self.wallet.is_empty(address)
+                else:
+                    is_hidden = self.wallet.is_used(address)
                 balance = sum(self.wallet.get_addr_balance(address))
                 address_text = address.to_ui_string()
                 # Cash Accounts
@@ -236,11 +239,11 @@ class AddressList(MyTreeWidget):
                     address_item.setBackground(0, QColor('lightblue'))
                 if self.wallet.is_beyond_limit(address, is_change):
                     address_item.setBackground(0, QColor('red'))
-                if is_used:
-                    if not used_flag:
-                        seq_item.insertChild(0, used_item)
-                        used_flag = True
-                    used_item.addChild(address_item)
+                if is_hidden:
+                    if not has_hidden:
+                        seq_item.insertChild(0, hidden_item)
+                        has_hidden = True
+                    hidden_item.addChild(address_item)
                 else:
                     seq_item.addChild(address_item)
                 if address in addresses_to_re_select:
@@ -320,8 +323,8 @@ class AddressList(MyTreeWidget):
             if self.wallet.can_export():
                 menu.addAction(_("Private key"), lambda: self.parent.show_private_key(addr))
             if not is_multisig and not self.wallet.is_watching_only():
-                menu.addAction(_("Sign/verify message"), lambda: self.parent.sign_verify_message(addr))
-                menu.addAction(_("Encrypt/decrypt message"), lambda: self.parent.encrypt_message(addr))
+                menu.addAction(_("Sign/verify message") + "...", lambda: self.parent.sign_verify_message(addr))
+                menu.addAction(_("Encrypt/decrypt message") + "...", lambda: self.parent.encrypt_message(addr))
             if can_delete:
                 menu.addAction(_("Remove from wallet"), lambda: self.parent.remove_address(addr))
             addr_URL = web.BE_URL(self.config, 'addr', addr)
@@ -356,6 +359,8 @@ class AddressList(MyTreeWidget):
         if coins:
             menu.addAction(_("Spend from"),
                            partial(self.parent.spend_coins, coins))
+
+        run_hook('address_list_context_menu_setup', self, menu, addrs)
 
         # Add Cash Accounts section at the end, if relevant
         if not multi_select:

@@ -235,6 +235,7 @@ class ElectrumGui(PrintError):
         self.refresh_rate_max = 5.0
         self.refresh_rate_current = self.refresh_rate_min
         self.refresh_cost_stats = dict()
+        self.header_dl_start_height = 0
 
         self.keyEnclave = utils.SecureKeyEnclave(self.appDomain)
         self.encPasswords = utils.FileBackedDict(os.path.join(self.config.path, 'enc_pws.json'))
@@ -507,13 +508,7 @@ class ElectrumGui(PrintError):
             utils.NSDeallocObserver(alert).connect(OnDealloc)
 
     def on_rotated(self): # called by PythonAppDelegate after screen rotation
-        #update status bar label width
-
-        # on rotation sometimes the notif gets messed up.. so re-create it
-        #if self.downloadingNotif is not None and self.is_downloading_notif_showing() and self.downloadingNotif_view is not None:
-        #    self.dismiss_downloading_notif()
-        #    self.show_downloading_notif()
-        pass
+        utils.ios13_status_bar_workaround.on_rotated()
 
     def on_history(self, event, *args):
         utils.NSLog("ON HISTORY '%s' (IsMainThread: %s)",event,str(NSThread.currentThread.isMainThread))
@@ -577,6 +572,7 @@ class ElectrumGui(PrintError):
         def Completion() -> None:
             pass
         self.downloadingNotif_view.removeFromSuperview()
+        utils.ios13_status_bar_workaround.push()
         self.downloadingNotif.displayNotificationWithView_completion_(
             self.downloadingNotif_view,
             Completion
@@ -594,11 +590,12 @@ class ElectrumGui(PrintError):
         def compl() -> None:
             #print("Dismiss completion")
             if (self.downloadingNotif_view is not None
-                and dnf.customView is not None
-                and self.downloadingNotif_view.isDescendantOfView_(dnf.customView)):
+                    and dnf.customView is not None
+                    and self.downloadingNotif_view.isDescendantOfView_(dnf.customView)):
                 activityIndicator = self.downloadingNotif_view.viewWithTag_(1)
                 activityIndicator.animating = False # turn off animation to save CPU cycles
                 self.downloadingNotif_view.removeFromSuperview()
+            utils.ios13_status_bar_workaround.pop()
             dnf.release()
         dnf.dismissNotificationWithCompletion_(compl)
 
@@ -706,8 +703,13 @@ class ElectrumGui(PrintError):
                         int(self.daemon.network.is_connected()))
             '''
             if lh is not None and sh is not None and lh >= 0 and sh > 0 and lh < sh:
-                show_dl_pct = int((lh*100.0)/float(sh))
+                self.header_dl_start_height = lh0 = self.header_dl_start_height or lh
+                if lh0 > lh:
+                    # guard in case cached start height is wonky or there was a reorg
+                    self.header_dl_start_height = lh0 = lh
+                show_dl_pct = int(((lh-lh0)*100.0)/float(sh-lh0))
                 walletStatus = wallets.StatusDownloadingHeaders
+                del lh0
 
             if blockHeightChanged:
                 self.refresh_components('history')
@@ -729,6 +731,7 @@ class ElectrumGui(PrintError):
         if show_dl_pct is not None and self.tabController.didLayout:
             self.show_downloading_notif(_("Downloading headers {}% ...").format(show_dl_pct) if show_dl_pct > 0 else None)
         else:
+            self.header_dl_start_height = 0 # reset the counter
             self.dismiss_downloading_notif()
 
         self.walletsVC.status = walletStatus
@@ -962,14 +965,17 @@ class ElectrumGui(PrintError):
 
     @property
     def prefs_use_schnorr(self) -> bool:
+        if not self.wallet: return False
         return bool(self.wallet.is_schnorr_enabled())
 
     @prefs_use_schnorr.setter
     def prefs_use_schnorr(self, b):
-        self.wallet.set_schnorr_enabled(b)
+        if self.wallet:
+            self.wallet.set_schnorr_enabled(b)
 
     @property
     def prefs_is_schnorr_possible(self) -> bool:
+        if not self.wallet: return False
         return self.wallet.is_schnorr_possible()
 
     def prefs_get_use_change(self) -> tuple: # returns the setting plus a second bool that indicates whether this setting can be modified
@@ -1050,6 +1056,11 @@ class ElectrumGui(PrintError):
         while pvc and pvc.presentedViewController and not pvc.presentedViewController.isBeingDismissed():
             # keep looking up the view controller hierarchy until we find a modal that is *NOT* being dismissed currently
             pvc = pvc.presentedViewController
+        if pvc and pvc.isBeingDismissed():
+            utils.NSLog("**** WARNING: presentedViewController %s is being dismissed; will default to rootViewController %s", repr(pvc), repr(rvc))
+            # Avoid "being dismissed" viewControllers. This appears redundant
+            # but this check is needed in case the first pvc was "beingDismissed"
+            pvc = None
         return pvc if pvc else rvc
 
     def get_current_nav_controller(self) -> ObjCInstance:
@@ -1483,7 +1494,7 @@ class ElectrumGui(PrintError):
             # or data file corruption in low disk space conditions.
             return
         fd, server = ed.get_fd_or_server(self.config)
-        self.daemon = ed.Daemon(self.config, fd, True)
+        self.daemon = ed.Daemon(self.config, fd, True, None)
         self.daemon.start()
         self.on_new_daemon()
 
@@ -2047,10 +2058,10 @@ class ElectrumGui(PrintError):
         self.refresh_components('helper')
 
     def is_touchid_possible(self) -> bool:
-        return self.keyEnclave.has_keys()
+        return bool(not utils.is_simulator() and self.keyEnclave.has_keys())
 
     def is_touchid_available(self) -> bool:
-        return self.is_touchid_possible() and self.keyEnclave.biometrics_available()
+        return bool(self.is_touchid_possible() and self.keyEnclave.biometrics_available())
 
     def check_touchid_for_gui(self, onOff : bool) -> bool:
         if not onOff: return False
@@ -2337,20 +2348,51 @@ class ElectrumGui(PrintError):
 
     def get_wallet_password_using_touchid(self, wallet_name : str, completion : Callable[[str, bool],None], prompt : str = None) -> None:
         hexpass = self.encPasswords.get(wallet_name)
+        bug_alert_vc = None
         if not hexpass:
             completion(None)
             return
-        def MyCallback(pw : str, err : str) -> None:
-            lostKey = False
-            if err:
-                if self.keyEnclave.lastErrorCode == -50:
-                    lostKey = True
-                utils.NSLog("Got error (Code=%d) from enclave attempting to get password for %s: %s", self.keyEnclave.lastErrorCode, wallet_name, err)
-            completion(pw, lostKey)
-        self.keyEnclave.decrypt_hex2str(hexpass, MyCallback, prompt = prompt)
+        #
+        # The below piece of contortion is to effect a workaround iOS bugs  in
+        # iOS versions in the inclusive range [13.1.0,13.1.2].
+        # The bug is that the Touch ID dialog from the OS libs doesn't always
+        # pop up.
+        # See: https://forums.developer.apple.com/thread/122628
+        #
+        def do_it() -> None:
+            def MyCallback(pw : str, err : str) -> None:
+                nonlocal bug_alert_vc
+                if bug_alert_vc:
+                    bug_alert_vc.dismissViewControllerAnimated_completion_(False, None)
+                    bug_alert_vc = None
+                lostKey = False
+                if err:
+                    if self.keyEnclave.lastErrorCode == -50:
+                        lostKey = True
+                    utils.NSLog("Got error (Code=%d) from enclave attempting to get password for %s: %s", self.keyEnclave.lastErrorCode, wallet_name, err)
+                completion(pw, lostKey)
+            self.keyEnclave.decrypt_hex2str(hexpass, MyCallback, prompt = prompt)
+        vtup = utils.ios_version_tuple()
+        vc = self.get_presented_viewcontroller()
+        if vc and vtup >= (13, 1, 0) and vtup < (13, 1, 3) and not utils.is_iphoneX():
+            # Workaround for TouchID prompt missing bug in iOS.
+            # https://forums.developer.apple.com/thread/122628
+            # Broken for: 13.1.0, 13.1.1, 13.1.2; confirmed fixed in 13.1.3.
+            bug_alert_vc = utils.show_please_wait(vc = vc,
+                                                  title = _('Waiting for Touch ID...'),
+                                                  message = _('Please touch the home button'),
+                                                  completion = do_it,
+                                                  animated = False)
+        else:
+            do_it()
 
     def setup_key_enclave(self, completion : Callable[[],None]) -> None:
-        if not self.keyEnclave.has_keys():
+        # TODO: Find out why simulator crashes when trying to
+        # create a key (even when simulator has biometrics enabled).
+        #   -Calin 10/16/2019
+        if (not utils.is_simulator()
+                and not self.keyEnclave.has_keys()
+                and self.keyEnclave.biometrics_available()):
             # UGH.. they lost their keys, or never had them.  Zero out our enc_pws and our touchIdAsked files..
             self.encPasswords.clearAll()
             self.touchIdAsked.clearAll()

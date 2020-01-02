@@ -28,7 +28,7 @@
 import sys, os, json, qrcode, qrcode.image.svg, tempfile, random, queue, threading, time, stat
 from collections import namedtuple
 from inspect import signature
-from typing import Callable, Any
+from typing import Callable, Any, Tuple
 from .uikit_bindings import *
 from .custom_objc import *
 
@@ -50,15 +50,16 @@ def is_iphone4() -> bool:
     # iphone4 has <1136 pix height
     return is_iphone() and ( UIScreen.mainScreen.nativeBounds.size.height - 1136.0 < -0.5 )
 
-IPHONE_X_SIZES = [
-    ( 1125.0, 2436.0 ), # iPhone X & iPhone XS
-    (  828.0, 1792.0 ), # iPhone XR
-    ( 1242.0, 2688.0 ), # iPhone XS Max
-]
 def is_iphoneX() -> bool:
     if is_iphone():
+        def iphone_X_sizes() -> Tuple[CGSize]:
+            return (
+                CGSizeMake( 1125.0, 2436.0 ), # iPhone X & iPhone XS
+                CGSizeMake(  828.0, 1792.0 ), # iPhone XR
+                CGSizeMake( 1242.0, 2688.0 ), # iPhone XS Max
+            )
         size = UIScreen.mainScreen.nativeBounds.size
-        for s in IPHONE_X_SIZES:
+        for s in iphone_X_sizes():
             if abs(s.width - size.width) < 0.5 and abs(s.height - size.height) < 0.5:
                 return True
     return False
@@ -75,6 +76,9 @@ def is_portrait() -> bool:
 
 def is_debug_build() -> bool:
     return bool(HelpfulGlue.isDebugBuild())
+
+def is_simulator() -> bool:
+    return bool(HelpfulGlue.isSimulator())
 
 def get_fn_and_ext(fileName: str) -> tuple:
     *p1, ext = fileName.split('.')
@@ -124,8 +128,32 @@ def cleanup_tmp_dir():
         NSLog("Cleanup Tmp Dir: removed %d/%d files from tmp dir in %f ms",ct,tot,(time.time()-t0)*1e3)
 
 def ios_version_string() -> str:
-    dev = UIDevice.currentDevice
-    return "%s %s %s (%s)"%(str(dev.systemName), str(dev.systemVersion), str(dev.model), str(dev.identifierForVendor))
+    return "%s %s %s (%s)"%ios_version_tuple_full()
+
+_VER_TUP_FULL = None
+def ios_version_tuple_full() -> Tuple[str]:
+    global _VER_TUP_FULL
+    if _VER_TUP_FULL is None:
+        dev = UIDevice.currentDevice
+        _VER_TUP_FULL = (str(dev.systemName), str(dev.systemVersion), str(dev.model), str(dev.identifierForVendor))
+    return _VER_TUP_FULL
+
+_VER_TUP = None
+def ios_version_tuple() -> Tuple[int]:
+    global _VER_TUP
+    if _VER_TUP is None:
+        def parse_tup():
+            try:
+                sv = ios_version_tuple_full()[1].split('.')
+                while len(sv) < 3:  # because we can never rely on Apple not making this have 2 or 4 elements, etc...
+                    sv += ['0']
+                sv = tuple(int(x) for x in sv)  # convert to tuple
+                return sv
+            except (IndexError, TypeError, ValueError) as e:
+                print("ERROR in ios_version_tuple, cannot parse", sv, " -- returning (0,0,0); exception was:", repr(e))
+                return 0,0,0
+        _VER_TUP = parse_tup()
+    return _VER_TUP
 
 # new color schem from Max
 _ColorScheme = None
@@ -384,7 +412,8 @@ def show_share_actions(vc : ObjCInstance,
 ###################################################
 ### Show modal alert
 ###################################################
-def show_please_wait(vc : ObjCInstance, message : str, animated : bool = True, completion : Callable[[],None] = None) -> ObjCInstance:
+def show_please_wait(vc : ObjCInstance, message : str, animated : bool = True, completion : Callable[[],None] = None,
+                     title: str = None) -> ObjCInstance:
     pw = None
     try:
         objs = NSBundle.mainBundle.loadNibNamed_owner_options_("PleaseWait", None, None)
@@ -394,10 +423,11 @@ def show_please_wait(vc : ObjCInstance, message : str, animated : bool = True, c
                 break
     except:
         NSLog("Could not load PleaseWait.nib:",sys.exc_info()[1])
+    title = title or _("Please wait")
     if not pw:
-        return show_alert(vc, title = _("Please wait"), message = message, actions = [], animated = animated, completion = completion)
+        return show_alert(vc, title = title, message = message, actions = [], animated = animated, completion = completion)
     pw.message.text = message
-    pw.pleaseWait.text = _("Please wait")
+    pw.pleaseWait.text = title
     vc.presentViewController_animated_completion_(pw, animated, completion)
     return pw
 
@@ -714,11 +744,17 @@ def show_notification(message : str,
                       ) -> ObjCInstance:
     cw_notif = CWStatusBarNotification.new().autorelease()
 
+    already_dismissed = False
     def onTap() -> None:
         #print("onTap")
         if onTapCallback is not None: onTapCallback()
         if not cw_notif.notificationIsDismissing and not noTapDismiss:
-            cw_notif.dismissNotification()
+            def _compl() -> None:
+                nonlocal already_dismissed
+                if not already_dismissed:
+                    already_dismissed = True
+                    ios13_status_bar_workaround.pop()
+            cw_notif.dismissNotificationWithCompletion_(_compl)
 
     if isinstance(color, UIColor):
         pass
@@ -749,16 +785,24 @@ def show_notification(message : str,
     message = str(message)
     duration = float(duration) if duration is not None else None
     cw_notif.notificationTappedBlock = onTap
+    ios13_status_bar_workaround.push()
     if duration is None and completion is not None:
-        cw_notif.displayNotificationWithMessage_completion_(message, Block(completion))
+        def _compl() -> None: completion()
+        cw_notif.displayNotificationWithMessage_completion_(message, _compl)
     else:
         if duration is None: duration = 2.0
-        cw_notif.displayNotificationWithMessage_forDuration_(message, duration)
+        def _compl() -> None:
+            nonlocal already_dismissed
+            if not already_dismissed:
+                already_dismissed = True
+                ios13_status_bar_workaround.pop()
+        cw_notif.displayNotificationWithMessage_forDuration_dismissedCompletion_(message, duration, _compl)
     return cw_notif
 
 def dismiss_notification(cw_notif : ObjCInstance) -> None:
     if cw_notif is not None and not cw_notif.notificationIsDismissing:
-        cw_notif.dismissNotification()
+        def _compl() -> None: ios13_status_bar_workaround.pop()
+        cw_notif.dismissNotificationWithCompletion_(_compl)
 
  #######################################################
  ### NSLog emulation -- python wrapper for NSLog
@@ -1736,3 +1780,141 @@ class boilerplate:
             blurView.frame = parent.frame
             parent.addSubview_(blurView)
         return blurView
+
+###
+### iOS13 Status Bar Workaround stuff
+###
+class ios13_status_bar_workaround:
+    ''' iOS 13.0+ introduced a new "bug" where the top status bar produced by
+    iOS cannot be covered by our popup notification. As a result, if on iOS 13+
+    and on non-iPhoneX, we must hide the iOS built-in status bar otherwise our
+    "Downloading headers..." status notification gets garbled and intermixed
+    with the iOS status bar. On iPhone X or above, the status bar from iOS is in
+    the notch area, and we avoid that area, so we don't need this workaround for
+    latest phones. Just iPhone 4, 5, 6, 7, & 8.
+
+    Use cls.push() when presenting a new notification and cls.pop()
+    when it is dismissed.
+
+    When the first notification is presented, the status bar will be hidden.
+    When the last notification is dismissed, the status bar will be shown again.
+
+    Note this mechanism violates encapsulation and accesses the
+    ElectrumWindow.gui.window instance to modify the window geometry. '''
+    # - PRIVATE
+    _lock = threading.Lock()
+    _ctr = 0
+    _needs_workaround = None
+    _application = None
+
+    def noop_if_not_needed(func):
+        def wrapper(*args, **kwargs):
+            cls = (args and args[0]) or __class__
+            cls._chk_init_cache_values()
+            if not cls._needs_workaround:
+                return
+            return func(*args, **kwargs)
+        return wrapper
+
+    # + PUBLIC Helpers
+    @staticmethod
+    def does_status_bar_clash_with_notifications() -> bool:
+        ''' Returns True iff the we are on iOS 13.0+ and not on an iPhoneX.
+        (In that case we need to do the workaround.) Returns False otherwise. '''
+        try:
+            return bool(ios_version_tuple()[0] >= 13 and not is_iphoneX())
+        except Exception as e:
+            print("ERROR trying to figure out if we should hide the status bar:", repr(e))
+            return True
+
+    @staticmethod
+    def is_workaround_possible() -> bool:
+        ''' Returns True iff iPhone, False otherwise. '''
+        return not is_ipad()
+
+    # + PUBLIC INTERFACE
+    @classmethod
+    def appdelegate_hook(cls, appdelegate : ObjCInstance, application : ObjCInstance) -> None:
+        ''' Hook intended to be called from the `application:willFinishLaunchingWithOptions:`
+        UIApplicationDelegate method. Basically all it does is unconditionally
+        hide the status bar if on and iPad running iOS >= 13.0, otherwise
+        is essentially a noop. '''
+        cls._application = application  # cache singleton now while we're at it
+        if (cls.does_status_bar_clash_with_notifications()
+                and not cls.is_workaround_possible()):
+            # on iPad we just hide the status bar permanently. If they want to
+            # see it they can always put the app in a window then it will be
+            # visible.
+            application.setStatusBarHidden_(True)
+
+    @classmethod
+    @noop_if_not_needed
+    def push(cls):
+        with cls._lock:
+            if not cls._ctr:
+                # latch the status bar as hidden when _ctr is 0
+                cls._status_bar_hide()
+            cls._ctr += 1
+            return cls._ctr
+
+    @classmethod
+    @noop_if_not_needed
+    def pop(cls):
+        with cls._lock:
+            if cls._ctr <= 1:
+                # latch the status bar as visible when the _ctr hits 0
+                cls._status_bar_unhide()
+                cls._ctr = 0
+            else:
+                cls._ctr -= 1
+
+    @classmethod
+    @noop_if_not_needed
+    def on_rotated(cls):
+        with cls._lock:
+            if not cls._ctr:
+                return
+            # at this point we know a notification is up, so readjust our window
+            # (note that the window only readjusts if we are in portrait mode)
+            cls._status_bar_hide()
+
+    # - PRIVATE
+    @classmethod
+    def _chk_init_cache_values(cls):
+        # cache some values
+        if cls._needs_workaround is None:
+            cls._needs_workaround = cls.does_status_bar_clash_with_notifications() and cls.is_workaround_possible()
+        if cls._application is None:
+            cls._application = UIApplication.sharedApplication
+
+    @classmethod
+    def _status_bar_hide(cls):
+        ''' latch the status bar off '''
+        def sb_height():
+            s = cls._application.statusBarFrame.size
+            return min(s.width, s.height)
+        sb_height_was = sb_height() # save current status bar height for adjustment below...
+        cls._application.setStatusBarHidden_(True)
+        from . import gui
+        g = gui.ElectrumGui.gui
+        if g and g.window:
+            g.window.frame = r = UIScreen.mainScreen.bounds  # this breaks on iPad in windowed mode.... TODO: FIX!
+            # Move window down so it doesn't glitch up after we hid the status bar
+            # Note that `sb_height_was` may be 0 if we didn't have a status bar
+            # visible (ie we are in landscape mode).
+            r.origin.y += sb_height_was
+            r.size.height -= sb_height_was
+            g.window.frame = r
+
+    @classmethod
+    def _status_bar_unhide(cls):
+        ''' latch the status bar on '''
+        cls._application.setStatusBarHidden_(False)
+        # portrait mode, hiding the status bar had an effect... adjust the window
+        from . import gui
+        g = gui.ElectrumGui.gui
+        if g and g.window:
+            # restore window to its full position.. at this point
+            # mainScreen.bounds is under the status bar (if visible)
+            g.window.frame = UIScreen.mainScreen.bounds # this breaks on iPad in windowed mode.... TODO: FIX!
+#/end ios13_status_bar_workaround

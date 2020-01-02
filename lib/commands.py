@@ -23,25 +23,28 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import sys
-import datetime
 import argparse
-import json
 import ast
 import base64
-from functools import wraps
-from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
+import datetime
+import json
+import queue
+import sys
+import time
 
-from .import util
-from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes
-from .import bitcoin
+from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
+from functools import wraps
+
+from . import bitcoin
+from . import util
 from .address import Address, AddressError
 from .bitcoin import hash_160, COIN, TYPE_ADDRESS
 from .i18n import _
-from .transaction import Transaction, multisig_script
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .plugins import run_hook
 from .wallet import create_new_wallet, restore_wallet_from_text
+from .transaction import Transaction, multisig_script, OPReturn
+from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes
 
 known_commands = {}
 
@@ -495,11 +498,24 @@ class Commands:
         return bitcoin.verify_message(address, sig, message)
 
     def _mktx(self, outputs, fee=None, change_addr=None, domain=None, nocheck=False,
-              unsigned=False, password=None, locktime=None):
+              unsigned=False, password=None, locktime=None, op_return=None, op_return_raw=None):
+        if op_return and op_return_raw:
+            raise ValueError('Both op_return and op_return_raw cannot be specified together!')
         self.nocheck = nocheck
         change_addr = self._resolver(change_addr)
         domain = None if domain is None else map(self._resolver, domain)
         final_outputs = []
+        if op_return:
+            final_outputs.append(OPReturn.output_for_stringdata(op_return))
+        elif op_return_raw:
+            try:
+                op_return_raw = op_return_raw.strip()
+                tmp = bytes.fromhex(op_return_raw).hex()
+                assert tmp == op_return_raw.lower()
+                op_return_raw = tmp
+            except Exception as e:
+                raise ValueError("op_return_raw must be an even number of hex digits") from e
+            final_outputs.append(OPReturn.output_for_rawhex(op_return_raw))
         for address, amount in outputs:
             address = self._resolver(address)
             amount = satoshis(amount)
@@ -515,11 +531,12 @@ class Commands:
         return tx
 
     @command('wp')
-    def payto(self, destination, amount, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None):
+    def payto(self, destination, amount, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
+              op_return=None, op_return_raw=None):
         """Create a transaction. """
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
-        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, unsigned, password, locktime)
+        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, unsigned, password, locktime, op_return, op_return_raw)
         return tx.as_dict()
 
     @command('wp')
@@ -531,19 +548,47 @@ class Commands:
         return tx.as_dict()
 
     @command('w')
-    def history(self, year=None, show_addresses=False, show_fiat=False):
+    def history(self, year=0, show_addresses=False, show_fiat=False, use_net=False, timeout=30.0):
         """Wallet history. Returns the transaction history of your wallet."""
-        kwargs = {'show_addresses': show_addresses}
+        t0 = time.time()
+        year, show_addresses, show_fiat, use_net, timeout = (
+            int(year), bool(show_addresses), bool(show_fiat), bool(use_net),
+            float(timeout) )
+        def time_remaining(): return max(timeout - (time.time()-t0), 0)
+        kwargs = { 'show_addresses'   : show_addresses,
+                   'fee_calc_timeout' : timeout,
+                   'download_inputs'  : use_net,        }
         if year:
-            import time
             start_date = datetime.datetime(year, 1, 1)
             end_date = datetime.datetime(year+1, 1, 1)
             kwargs['from_timestamp'] = time.mktime(start_date.timetuple())
             kwargs['to_timestamp'] = time.mktime(end_date.timetuple())
         if show_fiat:
             from .exchange_rate import FxThread
-            fx = FxThread(self.config, None)
+            fakenet, q = None, None
+            if use_net and time_remaining():
+                class FakeNetwork:
+                    ''' This simply exists to implement trigger_callback which
+                    is the only thing the FX thread calls if you pass it a
+                    'network' object. We use it to get notified of when FX
+                    history has been downloaded. '''
+                    def __init__(self, q):
+                        self.q = q
+                    def trigger_callback(self, *args, **kwargs):
+                        self.q.put(True)
+                q = queue.Queue()
+                fakenet = FakeNetwork(q)
+            fx = FxThread(self.config, fakenet)
             kwargs['fx'] = fx
+            fx.run()  # invoke the fx to grab history rates at least once, otherwise results will always contain "No data" (see #1671)
+            if fakenet and q and fx.is_enabled() and fx.get_history_config():
+                # queue.get docs aren't clean on whether 0 means block or don't
+                # block, so we ensure at least 1ms timeout.
+                # we also limit waiting for fx to 10 seconds in case it had
+                # errors.
+                try: q.get(timeout=min(max(time_remaining()/2.0, 0.001), 10.0))
+                except queue.Empty: pass
+                kwargs['fee_calc_timeout'] = time_remaining()  # since we blocked above, recompute time_remaining for kwargs
         return self.wallet.export_history(**kwargs)
 
     @command('w')
@@ -614,7 +659,7 @@ class Commands:
     def encrypt(self, pubkey, message):
         """Encrypt a message with a public key. Use quotes if the message contains whitespaces."""
         if not isinstance(pubkey, (str, bytes, bytearray)) or not isinstance(message, (str, bytes, bytearray)):
-            raise RuntimeError("pubkey and message text must both be strings")
+            raise ValueError("pubkey and message text must both be strings")
         message = to_bytes(message)
         res =  bitcoin.encrypt_message(message, pubkey)
         if isinstance(res, (bytes, bytearray)):
@@ -627,7 +672,7 @@ class Commands:
     def decrypt(self, pubkey, encrypted, password=None):
         """Decrypt a message encrypted with a public key."""
         if not isinstance(pubkey, str) or not isinstance(encrypted, str):
-            raise RuntimeError("pubkey and encrypted text must both be strings")
+            raise ValueError("pubkey and encrypted text must both be strings")
         res = self.wallet.decrypt_message(pubkey, encrypted, password)
         if isinstance(res, (bytes, bytearray)):
             # prevent "JSON serializable" errors in case this came from
@@ -688,7 +733,7 @@ class Commands:
         return self.wallet.get_unused_address().to_ui_string()
 
     @command('w')
-    def addrequest(self, amount, memo='', expiration=None, force=False, payment_url=None):
+    def addrequest(self, amount, memo='', expiration=None, force=False, payment_url=None, index_url=None):
         """Create a payment request, using the first unused address of the wallet.
         The address will be condidered as used after this operation.
         If no payment is received, the address will be considered as unused if the payment request is deleted from the wallet."""
@@ -704,7 +749,7 @@ class Commands:
                 return False
         amount = satoshis(amount)
         expiration = int(expiration) if expiration else None
-        req = self.wallet.make_payment_request(addr, amount, memo, expiration, payment_url = payment_url)
+        req = self.wallet.make_payment_request(addr, amount, memo, expiration, payment_url = payment_url, index_url = index_url)
         self.wallet.add_payment_request(req, self.config)
         out = self.wallet.get_payment_request(addr, self.config)
         return self._format_request(out)
@@ -787,42 +832,46 @@ param_descriptions = {
 }
 
 command_options = {
-    'password':    ("-W", "Password"),
-    'wallet_path': (None, "Wallet path(create/restore commands)"),
-    'new_password':(None, "New Password"),
-    'encrypt_file':(None, "Whether the file on disk should be encrypted with the provided password"),
-    'receiving':   (None, "Show only receiving addresses"),
-    'change':      (None, "Show only change addresses"),
-    'frozen':      (None, "Show only frozen addresses"),
-    'unused':      (None, "Show only unused addresses"),
-    'funded':      (None, "Show only funded addresses"),
     'balance':     ("-b", "Show the balances of listed addresses"),
-    'labels':      ("-l", "Show the labels of listed addresses"),
-    'nocheck':     (None, "Do not verify aliases"),
-    'imax':        (None, "Maximum number of inputs"),
-    'fee':         ("-f", "Transaction fee (in BCH)"),
-    'from_addr':   ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
+    'change':      (None, "Show only change addresses"),
     'change_addr': ("-c", "Change address. Default is a spare address, or the source address if it's not in the wallet"),
-    'nbits':       (None, "Number of bits of entropy"),
-    'seed_type':   (None, "The type of seed to create, e.g. 'standard' or 'segwit'"),
-    'entropy':     (None, "Custom entropy"),
-    'language':    ("-L", "Default language for wordlist"),
-    'passphrase':  (None, "Seed extension"),
-    'privkey':     (None, "Private key. Set to '?' to get a prompt."),
-    'unsigned':    ("-u", "Do not sign transaction"),
-    'locktime':    (None, "Set locktime block number"),
     'domain':      ("-D", "List of addresses"),
-    'memo':        ("-m", "Description of the request"),
+    'encrypt_file':(None, "Whether the file on disk should be encrypted with the provided password"),
+    'entropy':     (None, "Custom entropy"),
     'expiration':  (None, "Time in seconds"),
-    'timeout':     (None, "Timeout in seconds"),
-    'force':       (None, "Create new address beyond gap limit, if no more addresses are available."),
-    'pending':     (None, "Show only pending requests."),
     'expired':     (None, "Show only expired requests."),
+    'fee':         ("-f", "Transaction fee (in BCH)"),
+    'force':       (None, "Create new address beyond gap limit, if no more addresses are available."),
+    'from_addr':   ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
+    'frozen':      (None, "Show only frozen addresses"),
+    'funded':      (None, "Show only funded addresses"),
+    'imax':        (None, "Maximum number of inputs"),
+    'index_url':   (None, 'Override the URL where you would like users to be shown the BIP70 Payment Request'),
+    'labels':      ("-l", "Show the labels of listed addresses"),
+    'language':    ("-L", "Default language for wordlist"),
+    'locktime':    (None, "Set locktime block number"),
+    'memo':        ("-m", "Description of the request"),
+    'nbits':       (None, "Number of bits of entropy"),
+    'new_password':(None, "New Password"),
+    'nocheck':     (None, "Do not verify aliases"),
+    'op_return':   (None, "Specify string data to add to the transaction as an OP_RETURN output"),
+    'op_return_raw': (None, 'Specify raw hex data to add to the transaction as an OP_RETURN output (0x6a aka the OP_RETURN byte will be auto-prepended for you so do not include it)'),
     'paid':        (None, "Show only paid requests."),
+    'passphrase':  (None, "Seed extension"),
+    'password':    ("-W", "Password"),
+    'payment_url': (None, 'Optional URL where you would like users to POST the BIP70 Payment message'),
+    'pending':     (None, "Show only pending requests."),
+    'privkey':     (None, "Private key. Set to '?' to get a prompt."),
+    'receiving':   (None, "Show only receiving addresses"),
+    'seed_type':   (None, "The type of seed to create, e.g. 'standard' or 'segwit'"),
     'show_addresses': (None, "Show input and output addresses"),
     'show_fiat':   (None, "Show fiat value of transactions"),
+    'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
+    'unsigned':    ("-u", "Do not sign transaction"),
+    'unused':      (None, "Show only unused addresses"),
+    'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates."),
+    'wallet_path': (None, "Wallet path(create/restore commands)"),
     'year':        (None, "Show history for a given year"),
-    'payment_url': (None, 'Optional URL where you would like users to POST the BIP70 Payment message'),
 }
 
 
@@ -951,7 +1000,8 @@ def get_parser():
     add_global_options(parser_gui)
     # daemon
     parser_daemon = subparsers.add_parser('daemon', help="Run Daemon")
-    parser_daemon.add_argument("subcommand", choices=['start', 'status', 'stop', 'load_wallet', 'close_wallet'], nargs='?')
+    parser_daemon.add_argument("subcommand", nargs='?', help="start, stop, status, load_wallet, close_wallet. Other commands may be added by plugins.")
+    parser_daemon.add_argument("subargs", nargs='*', metavar='arg', help="additional arguments (used by plugins)")
     #parser_daemon.set_defaults(func=run_daemon)
     add_network_options(parser_daemon)
     add_global_options(parser_daemon)

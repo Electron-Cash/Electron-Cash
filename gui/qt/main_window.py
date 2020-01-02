@@ -52,6 +52,7 @@ import electroncash.web as web
 from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct
 from electroncash import paymentrequest
+from electroncash.transaction import OPReturn
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
 from electroncash.contacts import Contact
 try:
@@ -99,6 +100,8 @@ class StatusBarButton(QPushButton):
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Return:
             self.func()
+        else:
+            super().keyPressEvent(e)
 
 
 from electroncash.paymentrequest import PR_PAID
@@ -202,7 +205,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         wrtabs = Weak.ref(tabs)  # We use a weak reference here to help along python gc of QShortcut children: prevent the lambdas below from holding a strong ref to self.
         self._shortcuts.add( QShortcut(QKeySequence("Ctrl+W"), self, self.close) )
-        self._shortcuts.add( QShortcut(QKeySequence("Ctrl+Q"), self, self.close) )
         # Below is now addded to the menu as Ctrl+R but we'll also support F5 like browsers do
         self._shortcuts.add( QShortcut(QKeySequence("F5"), self, self.update_wallet) )
         self._shortcuts.add( QShortcut(QKeySequence("Ctrl+PgUp"), self, lambda: wrtabs() and wrtabs().setCurrentIndex((wrtabs().currentIndex() - 1)%wrtabs().count())) )
@@ -592,20 +594,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         destroyed_print_error(menubar)
 
         file_menu = menubar.addMenu(_("&File"))
-        self.recently_visited_menu = file_menu.addMenu(_("&Recently open"))
+        self.recently_visited_menu = file_menu.addMenu(_("Open &Recent"))
         file_menu.addAction(_("&Open") + "...", self.open_wallet).setShortcut(QKeySequence.Open)
         file_menu.addAction(_("&New/Restore") + "...", self.new_wallet).setShortcut(QKeySequence.New)
-        file_menu.addAction(_("&Save Copy") + "...", self.backup_wallet).setShortcut(QKeySequence.SaveAs)
-        file_menu.addAction(_("Delete") + "...", self.remove_wallet)
+        file_menu.addAction(_("&Save Copy As") + "...", self.backup_wallet).setShortcut(QKeySequence.SaveAs)
+        file_menu.addAction(_("&Delete") + "...", self.remove_wallet)
         file_menu.addSeparator()
-        file_menu.addAction(_("&Quit"), self.close)
+        file_menu.addAction(_("&Quit"), self.close).setShortcut(QKeySequence.Quit)
 
         wallet_menu = menubar.addMenu(_("&Wallet"))
-        wallet_menu.addAction(_("&Information") + "...", self.show_master_public_keys, QKeySequence("Ctrl+I"))
+        wallet_menu.addAction(_("&Information"), self.show_master_public_keys, QKeySequence("Ctrl+I"))
         wallet_menu.addSeparator()
         self.password_menu = wallet_menu.addAction(_("&Password") + "...", self.change_password_dialog)
-        self.seed_menu = wallet_menu.addAction(_("&Seed") + "...", self.show_seed_dialog)
-        self.private_keys_menu = wallet_menu.addMenu(_("&Private keys"))
+        self.seed_menu = wallet_menu.addAction(_("&Seed"), self.show_seed_dialog)
+        self.private_keys_menu = wallet_menu.addMenu(_("Private Keys"))
         self.private_keys_menu.addAction(_("&Sweep") + "...", self.sweep_key_dialog)
         self.import_privkey_menu = self.private_keys_menu.addAction(_("&Import") + "...", self.do_import_privkey)
         self.export_menu = self.private_keys_menu.addMenu(_("&Export"))
@@ -613,15 +615,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.export_menu.addAction(_("&BIP38 Encrypted") + "...", self.export_bip38_dialog)
         self.import_address_menu = wallet_menu.addAction(_("Import addresses") + "...", self.import_addresses)
         wallet_menu.addSeparator()
-        self._rebuild_history_action = wallet_menu.addAction(_("&Rebuild history"), self.rebuild_history)
-        self._scan_beyond_gap_action = wallet_menu.addAction(_("&Scan beyond gap..."), self.scan_beyond_gap)
+        self._rebuild_history_action = wallet_menu.addAction(_("&Rebuild History") + "...", self.rebuild_history)
+        self._scan_beyond_gap_action = wallet_menu.addAction(_("Scan &More Addresses..."), self.scan_beyond_gap)
         self._scan_beyond_gap_action.setEnabled(bool(self.wallet.is_deterministic() and self.network))
         wallet_menu.addSeparator()
 
         labels_menu = wallet_menu.addMenu(_("&Labels"))
         labels_menu.addAction(_("&Import") + "...", self.do_import_labels)
         labels_menu.addAction(_("&Export") + "...", self.do_export_labels)
-        contacts_menu = wallet_menu.addMenu(_("Contacts"))
+        contacts_menu = wallet_menu.addMenu(_("&Contacts"))
         contacts_menu.addAction(_("&New") + "...", self.new_contact_dialog)
         contacts_menu.addAction(_("Import") + "...", lambda: self.contact_list.import_contacts())
         contacts_menu.addAction(_("Export") + "...", lambda: self.contact_list.export_contacts())
@@ -632,8 +634,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         hist_menu.addAction(_("Export") + "...", self.export_history_dialog)
 
         wallet_menu.addSeparator()
-        wallet_menu.addAction(_("Find"), self.toggle_search, QKeySequence("Ctrl+F"))
-        wallet_menu.addAction(_("&Refresh GUI"), self.update_wallet, QKeySequence("Ctrl+R"))
+        wallet_menu.addAction(_("&Find"), self.toggle_search, QKeySequence("Ctrl+F"))
+        wallet_menu.addAction(_("Refresh GUI"), self.update_wallet, QKeySequence("Ctrl+R"))
 
 
         def add_toggle_action(view_menu, tab):
@@ -651,7 +653,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         tools_menu = menubar.addMenu(_("&Tools"))
 
-        prefs_tit = _("Preferences")  + "..."
+        prefs_tit = _("Preferences") + "..."
         a = tools_menu.addAction(prefs_tit, self.settings_dialog, QKeySequence("Ctrl+,") )  # Note: on macOS this hotkey sequence won't be shown in the menu (since it's reserved by the system), but will still work. :/
         if sys.platform == 'darwin':
             # This turns off the heuristic matching based on name and keeps the
@@ -665,19 +667,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         tools_menu.addAction(_("Installed &Plugins") + "...", self.external_plugins_dialog, QKeySequence("Ctrl+P"))
         if sys.platform.startswith('linux'):
             tools_menu.addSeparator()
-            tools_menu.addAction(_("&Hardware wallet support..."), self.hardware_wallet_support)
+            tools_menu.addAction(_("&Hardware Wallet Support..."), self.hardware_wallet_support)
         tools_menu.addSeparator()
-        tools_menu.addAction(_("&Sign/verify message") + "...", self.sign_verify_message)
-        tools_menu.addAction(_("&Encrypt/decrypt message") + "...", self.encrypt_message)
+        tools_menu.addAction(_("&Sign/Verify Message") + "...", self.sign_verify_message)
+        tools_menu.addAction(_("&Encrypt/Decrypt Message") + "...", self.encrypt_message)
         tools_menu.addSeparator()
 
-        paytomany_menu = tools_menu.addAction(_("&Pay to many"), self.paytomany, QKeySequence("Ctrl+M"))
+        paytomany_menu = tools_menu.addAction(_("&Pay to Many"), self.paytomany, QKeySequence("Ctrl+M"))
 
-        raw_transaction_menu = tools_menu.addMenu(_("&Load transaction"))
-        raw_transaction_menu.addAction(_("From &file") + "...", self.do_process_from_file)
-        raw_transaction_menu.addAction(_("From &text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
-        raw_transaction_menu.addAction(_("From the &blockchain") + "...", self.do_process_from_txid, QKeySequence("Ctrl+B"))
-        raw_transaction_menu.addAction(_("From &QR code") + "...", self.read_tx_from_qrcode)
+        raw_transaction_menu = tools_menu.addMenu(_("&Load Transaction"))
+        raw_transaction_menu.addAction(_("From &File") + "...", self.do_process_from_file)
+        raw_transaction_menu.addAction(_("From &Text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
+        raw_transaction_menu.addAction(_("From the &Blockchain") + "...", self.do_process_from_txid, QKeySequence("Ctrl+B"))
+        raw_transaction_menu.addAction(_("From &QR Code") + "...", self.read_tx_from_qrcode)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
         if ColorScheme.dark_scheme and sys.platform != 'darwin':  # use dark icon in menu except for on macOS where we can't be sure it will look right due to the way menus work on macOS
@@ -691,13 +693,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         help_menu = menubar.addMenu(_("&Help"))
         help_menu.addAction(_("&About"), self.show_about)
         help_menu.addAction(_("About Qt"), self.app.aboutQt)
-        help_menu.addAction(_("&Check for updates..."), lambda: self.gui_object.show_update_checker(self))
-        help_menu.addAction(_("&Official website"), lambda: webopen("https://electroncash.org"))
+        help_menu.addAction(_("&Check for Updates"), lambda: self.gui_object.show_update_checker(self))
+        help_menu.addAction(_("&Official Website"), lambda: webopen("https://electroncash.org"))
         help_menu.addSeparator()
         help_menu.addAction(_("Documentation"), lambda: webopen("http://electroncash.readthedocs.io/")).setShortcut(QKeySequence.HelpContents)
-        help_menu.addAction(_("&Report Bug"), self.show_report_bug)
+        help_menu.addAction(_("&Report Bug..."), self.show_report_bug)
         help_menu.addSeparator()
-        help_menu.addAction(_("&Donate to server"), self.donate_to_server)
+        help_menu.addAction(_("&Donate to Server") + "...", self.donate_to_server)
 
 
     def donate_to_server(self):
@@ -1700,34 +1702,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if fee_rate is None: fee_rate = self.config.custom_fee_rate() / 1000.0
             return str(round(fee_rate*100)/100) + " sats/B"
 
-    @staticmethod
-    def output_for_opreturn_stringdata(op_return):
-        if not isinstance(op_return, str):
-            raise OPReturnError('OP_RETURN parameter needs to be of type str!')
-        op_return_code = "OP_RETURN "
-        op_return_encoded = op_return.encode('utf-8')
-        if len(op_return_encoded) > 220:
-            raise OPReturnTooLarge(_("OP_RETURN message too large, needs to be no longer than 220 bytes"))
-        op_return_payload = op_return_encoded.hex()
-        script = op_return_code + op_return_payload
-        amount = 0
-        return (TYPE_SCRIPT, ScriptOutput.from_string(script), amount)
-
-    @staticmethod
-    def output_for_opreturn_rawhex(op_return):
-        if not isinstance(op_return, str):
-            raise OPReturnError('OP_RETURN parameter needs to be of type str!')
-        if op_return == 'empty':
-            op_return = ''
-        try:
-            op_return_script = b'\x6a' + bytes.fromhex(op_return.strip())
-        except ValueError:
-            raise OPReturnError(_('OP_RETURN script expected to be hexadecimal bytes'))
-        if len(op_return_script) > 223:
-            raise OPReturnTooLarge(_("OP_RETURN script too large, needs to be no longer than 223 bytes"))
-        amount = 0
-        return (TYPE_SCRIPT, ScriptOutput.protocol_factory(op_return_script), amount)
-
     def do_update_fee(self):
         '''Recalculate the fee.  If the fee was manually input, retain it, but
         still build the TX to see if there are enough funds.
@@ -1751,9 +1725,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 opreturn_message = self.message_opreturn_e.text() if self.config.get('enable_opreturn') else None
                 if opreturn_message:
                     if self.opreturn_rawhex_cb.isChecked():
-                        outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
+                        outputs.append(OPReturn.output_for_rawhex(opreturn_message))
                     else:
-                        outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
+                        outputs.append(OPReturn.output_for_stringdata(opreturn_message))
                 tx = self.wallet.make_unsigned_transaction(self.get_coins(), outputs, self.config, fee)
                 self.not_enough_funds = False
                 self.op_return_toolong = False
@@ -1762,10 +1736,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if not freeze_fee:
                     self.fee_e.setAmount(None)
                 return
-            except OPReturnTooLarge:
+            except OPReturn.TooLarge:
                 self.op_return_toolong = True
                 return
-            except OPReturnError as e:
+            except OPReturn.Error as e:
                 self.statusBar().showMessage(str(e))
                 return
             except BaseException:
@@ -1960,13 +1934,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             opreturn_message = self.message_opreturn_e.text()
             if opreturn_message:
                 if self.opreturn_rawhex_cb.isChecked():
-                    outputs.append(self.output_for_opreturn_rawhex(opreturn_message))
+                    outputs.append(OPReturn.output_for_rawhex(opreturn_message))
                 else:
-                    outputs.append(self.output_for_opreturn_stringdata(opreturn_message))
-        except OPReturnTooLarge as e:
+                    outputs.append(OPReturn.output_for_stringdata(opreturn_message))
+        except OPReturn.TooLarge as e:
             self.show_error(str(e))
             return
-        except OPReturnError as e:
+        except OPReturn.Error as e:
             self.show_error(str(e))
             return
 
@@ -2042,11 +2016,52 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             else:
                 self.show_error(_('CoinText: Please specify an amount'))
 
+    def _chk_no_segwit_suspects(self):
+        ''' Makes sure the payto_e has no addresses that might be BTC segwit
+        in it and if it does, warn user. Intended to be called from do_send.
+        Returns True if no segwit suspects were detected in the payto_e,
+        False otherwise.  If False is returned, a suitable error dialog
+        will have already been presented to the user. '''
+        if bool(self.config.get('allow_legacy_p2sh', False)):
+            return True
+        segwits = set()
+        prefix_char = '3' if not networks.net.TESTNET else '2'
+        for line in self.payto_e.lines():
+            line = line.strip()
+            if ':' in line and line.lower().startswith(networks.net.CASHADDR_PREFIX + ":"):
+                line = line.split(':', 1)[1]  # strip bitcoincash: prefix
+            if ',' in line:
+                line = line.split(',', 1)[0]  # if address, amount line, strip address out and ignore rest
+            line = line.strip()
+            if line.startswith(prefix_char) and Address.is_valid(line):
+                segwits.add(line)
+        if segwits:
+            msg = ngettext("Possible BTC Segwit address in 'Pay to' field. "
+                           "Please use CashAddr format for p2sh addresses.\n\n{segwit_addresses}",
+                           "Possible BTC Segwit addresses in 'Pay to' field. "
+                           "Please use CashAddr format for p2sh addresses.\n\n{segwit_addresses}",
+                           len(segwits)).format(segwit_addresses='\n'.join(segwits))
+            detail = _("Legacy '{prefix_char}...' p2sh address support in the Send tab is "
+                       "restricted by default in order to prevent inadvertently "
+                       "sending BCH to Segwit BTC addresses.\n\n"
+                       "If you are an expert user, go to 'Preferences -> Transactions' "
+                       "to enable the use of legacy p2sh addresses in the Send tab.").format(prefix_char=prefix_char)
+            self.show_error(msg, detail_text=detail)
+            return False
+        return True
+
     def do_preview(self):
         self.do_send(preview = True)
 
     def do_send(self, preview = False):
         if run_hook('abort_send', self):
+            return
+
+        # paranoia -- force a resolve right away in case user pasted an
+        # openalias or cashacct and hit preview too quickly.
+        self.payto_e.resolve(force_if_has_focus=True)
+
+        if not self._chk_no_segwit_suspects():
             return
 
         r = self.read_send_tab()
@@ -3450,9 +3465,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             wwlbl = WWLabel()
             def set_ww_txt(pf_shown=False):
                 if pf_shown:
-                    pf_text = ("<font face='{monoface}' size=+1><b>"
-                               + bip38
-                               + '</b></font> <a href="hide">{link}</a>').format(link=_("Hide"), monoface=MONOSPACE_FONT)
+                    pf_text = ( ("<font face='{monoface}' size=+1><b>".format(monoface=MONOSPACE_FONT))
+                                + bip38
+                                + ('</b></font> <a href="hide">{link}</a>'.format(link=_("Hide"))) )
                 else:
                     pf_text = '<a href="show">{link}</a>'.format(link=_("Click to show"))
                 wwlbl.setText(
@@ -3474,8 +3489,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         defaultname = 'electron-cash-private-keys.csv' if not bip38 else 'electron-cash-bip38-keys.csv'
         select_msg = _('Select file to export your private keys to')
-        hbox, filename_e, csv_button = filename_field(self, self.config, defaultname, select_msg)
-        vbox.addLayout(hbox)
+        box, filename_e, csv_button = filename_field(self.config, defaultname, select_msg)
+        vbox.addSpacing(12)
+        vbox.addWidget(box)
 
         b = OkButton(d, _('Export'))
         b.setEnabled(False)
@@ -3622,8 +3638,32 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox = QVBoxLayout(d)
         defaultname = os.path.expanduser('~/electron-cash-history.csv')
         select_msg = _('Select file to export your wallet transactions to')
-        hbox, filename_e, csv_button = filename_field(self, self.config, defaultname, select_msg)
-        vbox.addLayout(hbox)
+        box, filename_e, csv_button = filename_field(self.config, defaultname, select_msg)
+        vbox.addWidget(box)
+        include_addresses_chk = QCheckBox(_("Include addresses"))
+        include_addresses_chk.setChecked(True)
+        include_addresses_chk.setToolTip(_("Include input and output addresses in history export"))
+        vbox.addWidget(include_addresses_chk)
+        fee_dl_chk = QCheckBox(_("Fetch accurate fees from network (slower)"))
+        fee_dl_chk.setChecked(self.is_fetch_input_data())
+        fee_dl_chk.setEnabled(bool(self.wallet.network))
+        fee_dl_chk.setToolTip(_("If this is checked, accurate fee and input value data will be retrieved from the network"))
+        vbox.addWidget(fee_dl_chk)
+        fee_time_w = QWidget()
+        fee_time_w.setToolTip(_("The amount of overall time in seconds to allow for downloading fee data before giving up"))
+        hbox = QHBoxLayout(fee_time_w)
+        hbox.setContentsMargins(20, 0, 0, 0)
+        hbox.addWidget(QLabel(_("Timeout:")), 0, Qt.AlignRight)
+        fee_time_sb = QSpinBox()
+        fee_time_sb.setMinimum(10)
+        fee_time_sb.setMaximum(9999)
+        fee_time_sb.setSuffix(" " + _("seconds"))
+        fee_time_sb.setValue(30)
+        fee_dl_chk.clicked.connect(fee_time_w.setEnabled)
+        fee_time_w.setEnabled(fee_dl_chk.isChecked())
+        hbox.addWidget(fee_time_sb, 0, Qt.AlignLeft)
+        hbox.addStretch(1)
+        vbox.addWidget(fee_time_w)
         vbox.addStretch(1)
         hbox = Buttons(CancelButton(d), OkButton(d, _('Export')))
         vbox.addLayout(hbox)
@@ -3636,13 +3676,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         filename = filename_e.text()
         if not filename:
             return
+        success = False
         try:
-            self.do_export_history(self.wallet, filename, csv_button.isChecked())
-        except (IOError, os.error) as reason:
+            # minimum 10s time for calc. fees, etc
+            timeout = max(fee_time_sb.value() if fee_dl_chk.isChecked() else 10.0, 10.0)
+            success = self.do_export_history(filename, csv_button.isChecked(),
+                                             download_inputs=fee_dl_chk.isChecked(),
+                                             timeout=timeout,
+                                             include_addresses=include_addresses_chk.isChecked())
+        except Exception as reason:
             export_error_label = _("Electron Cash was unable to produce a transaction export.")
             self.show_critical(export_error_label + "\n" + str(reason), title=_("Unable to export history"))
-            return
-        self.show_message(_("Your wallet history has been successfully exported."))
+        else:
+            if success:
+                self.show_message(_("Your wallet history has been successfully exported."))
 
     def plot_history_dialog(self):
         if plot_history is None:
@@ -3653,37 +3700,78 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             plt = plot_history(self.wallet, history)
             plt.show()
 
-    def do_export_history(self, wallet, fileName, is_csv):
-        history = wallet.export_history(fx=self.fx)
-        ccy = (self.fx and self.fx.get_currency()) or ''
-        has_fiat_columns = history and self.fx and self.fx.show_history() and 'fiat_value' in history[0] and 'fiat_balance' in history[0]
-        lines = []
-        for item in history:
-            if is_csv:
-                cols = [item['txid'], item.get('label', ''), item['confirmations'], item['value'], item['date']]
-                if has_fiat_columns:
-                    cols += [item['fiat_value'], item['fiat_balance']]
-                lines.append(cols)
-            else:
-                if has_fiat_columns and ccy:
-                    item['fiat_currency'] = ccy  # add the currency to each entry in the json. this wastes space but json is bloated anyway so this won't hurt too much, we hope
-                elif not has_fiat_columns:
-                    # No need to include these fields as they will always be 'No Data'
-                    item.pop('fiat_value', None)
-                    item.pop('fiat_balance', None)
-                lines.append(item)
+    def is_fetch_input_data(self):
+        ''' default on if network.auto_connect is True, otherwise use config value '''
+        return bool(self.wallet and self.wallet.network and self.config.get('fetch_input_data', self.wallet.network.auto_connect))
 
-        with open(fileName, "w+", encoding="utf-8") as f:  # ensure encoding to utf-8. Avoid Windows cp1252. See #1453.
-            if is_csv:
-                transaction = csv.writer(f, lineterminator='\n')
-                cols = ["transaction_hash","label", "confirmations", "value", "timestamp"]
-                if has_fiat_columns:
-                    cols += [f"fiat_value_{ccy}", f"fiat_balance_{ccy}"]  # in CSV mode, we use column names eg fiat_value_USD, etc
-                transaction.writerow(cols)
-                for line in lines:
-                    transaction.writerow(line)
-            else:
-                f.write(json.dumps(lines, indent=4))
+    def set_fetch_input_data(self, b):
+        self.config.set_key('fetch_input_data', bool(b))
+
+    def do_export_history(self, fileName, is_csv, *, download_inputs=False, timeout=30.0, include_addresses=True):
+        wallet = self.wallet
+        if not wallet:
+            return
+        dlg = None  # this will be set at the bottom of this function
+        def task():
+            def update_prog(x):
+                if dlg: dlg.update_progress(int(x*100))
+            return wallet.export_history(fx=self.fx,
+                                         show_addresses=include_addresses,
+                                         decimal_point=self.decimal_point,
+                                         fee_calc_timeout=timeout,
+                                         download_inputs=download_inputs,
+                                         progress_callback=update_prog)
+        success = False
+        def on_success(history):
+            nonlocal success
+            ccy = (self.fx and self.fx.get_currency()) or ''
+            has_fiat_columns = history and self.fx and self.fx.show_history() and 'fiat_value' in history[0] and 'fiat_balance' in history[0] and 'fiat_fee' in history[0]
+            lines = []
+            for item in history:
+                if is_csv:
+                    cols = [item['txid'], item.get('label', ''), item['confirmations'], item['value'], item['fee'], item['date']]
+                    if has_fiat_columns:
+                        cols += [item['fiat_value'], item['fiat_balance'], item['fiat_fee']]
+                    if include_addresses:
+                        inaddrs_filtered = (x for x in (item.get('input_addresses') or [])
+                                            if Address.is_valid(x))
+                        outaddrs_filtered = (x for x in (item.get('output_addresses') or [])
+                                             if Address.is_valid(x))
+                        cols.append( ','.join(inaddrs_filtered) )
+                        cols.append( ','.join(outaddrs_filtered) )
+                    lines.append(cols)
+                else:
+                    if has_fiat_columns and ccy:
+                        item['fiat_currency'] = ccy  # add the currency to each entry in the json. this wastes space but json is bloated anyway so this won't hurt too much, we hope
+                    elif not has_fiat_columns:
+                        # No need to include these fields as they will always be 'No Data'
+                        item.pop('fiat_value', None)
+                        item.pop('fiat_balance', None)
+                        item.pop('fiat_fee', None)
+                    lines.append(item)
+
+            with open(fileName, "w+", encoding="utf-8") as f:  # ensure encoding to utf-8. Avoid Windows cp1252. See #1453.
+                if is_csv:
+                    transaction = csv.writer(f, lineterminator='\n')
+                    cols = ["transaction_hash","label", "confirmations", "value", "fee", "timestamp"]
+                    if has_fiat_columns:
+                        cols += [f"fiat_value_{ccy}", f"fiat_balance_{ccy}", f"fiat_fee_{ccy}"]  # in CSV mode, we use column names eg fiat_value_USD, etc
+                    if include_addresses:
+                        cols += ["input_addresses", "output_addresses"]
+                    transaction.writerow(cols)
+                    for line in lines:
+                        transaction.writerow(line)
+                else:
+                    f.write(json.dumps(lines, indent=4))
+            success = True
+        # kick off the waiting dialog to do all of the above
+        dlg = WaitingDialog(self.top_level_window(),
+                            _("Exporting history, please wait ..."),
+                            task, on_success, self.on_error, disable_escape_key=True,
+                            auto_exec=False, auto_show=False, progress_bar=True, progress_min=0, progress_max=100)
+        dlg.exec_()
+        # this will block heere in the WaitingDialog event loop... and set success to True if success
+        return success
 
     def sweep_key_dialog(self):
         addresses = self.wallet.get_unused_addresses()
@@ -4013,9 +4101,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox = QVBoxLayout()
         tabs = QTabWidget()
         gui_widgets = []
-        fee_widgets = []
+        misc_widgets = []
         global_tx_widgets, per_wallet_tx_widgets = [], []
-        id_widgets = []
 
         # language
         lang_help = _('Select which language is used in the GUI (after restart).')
@@ -4084,11 +4171,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.fee_slider.update()
             self.fee_slider_mogrifier()
 
+        fee_gb = QGroupBox(_('Fees'))
+        fee_lo = QGridLayout(fee_gb)
+
         customfee_e = BTCSatsByteEdit()
         customfee_e.setAmount(self.config.custom_fee_rate() / 1000.0 if self.config.has_custom_fee_rate() else None)
         customfee_e.textChanged.connect(on_customfee)
-        customfee_label = HelpLabel(_('Custom Fee Rate'), _('Custom Fee Rate in Satoshis per byte'))
-        fee_widgets.append((customfee_label, customfee_e))
+        customfee_label = HelpLabel(_('Custom fee rate:'), _('Custom Fee Rate in Satoshis per byte'))
+        fee_lo.addWidget(customfee_label, 0, 0, 1, 1, Qt.AlignRight)
+        fee_lo.addWidget(customfee_e, 0, 1, 1, 1, Qt.AlignLeft)
 
         feebox_cb = QCheckBox(_('Edit fees manually'))
         feebox_cb.setChecked(self.config.get('show_fee', False))
@@ -4097,7 +4188,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.config.set_key('show_fee', x == Qt.Checked)
             self.fee_e.setVisible(bool(x))
         feebox_cb.stateChanged.connect(on_feebox)
-        fee_widgets.append((feebox_cb, None))
+        fee_lo.addWidget(feebox_cb, 1, 0, 1, 2, Qt.AlignJustify)
+
+        # Fees box up top
+        misc_widgets.append((fee_gb, None))
 
         msg = _('OpenAlias record, used to receive coins and to sign payment requests.') + '\n\n'\
               + _('The following alias providers are available:') + '\n'\
@@ -4127,7 +4221,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # the signal is disconnected
         disconnect_alias_received_signal = Weak.finalize(d, self.alias_received_signal.disconnect, set_alias_color)
         alias_e.editingFinished.connect(on_alias_edit)
-        id_widgets.append((alias_label, alias_e))
+        id_gb = QGroupBox(_("Identity"))
+        id_form = QFormLayout(id_gb)
+        id_form.addRow(alias_label, alias_e)
 
         # SSL certificate
         msg = ' '.join([
@@ -4150,7 +4246,33 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if SSL_error:
             SSL_id_e.setToolTip(SSL_error)
         SSL_id_e.setReadOnly(True)
-        id_widgets.append((SSL_id_label, SSL_id_e))
+        id_form.addRow(SSL_id_label, SSL_id_e)
+
+        # Identity box in middle of this tab
+        misc_widgets.append((id_gb, None))  # commit id_form/id_gb to master layout via this data structure
+
+        from . import exception_window as ew
+        cr_gb = QGroupBox(_("Crash Reporter"))
+        cr_grid = QGridLayout(cr_gb)
+        cr_chk = QCheckBox()
+        cr_chk.setChecked(ew.is_enabled(self.config))
+        cr_chk.clicked.connect(lambda b: ew.set_enabled(self.config, b))
+        cr_help = HelpLabel(_("Crash reporter enabled"),
+                            _("The crash reporter is the error window which pops-up when Electron Cash encounters an internal error.\n\n"
+                              "It is recommended that you leave this option enabled, so that developers can be notified of any internal bugs. "
+                              "When a crash is encountered you are asked if you would like to send a report.\n\n"
+                              "Private information is never revealed in crash reports to developers."))
+        # The below dance ensures the checkbox is horizontally centered in the widget
+        cr_grid.addWidget(QWidget(), 0, 0, 1, 1)  # dummy spacer
+        cr_grid.addWidget(cr_chk, 0, 1, 1, 1, Qt.AlignRight)
+        cr_grid.addWidget(cr_help, 0, 2, 1, 1, Qt.AlignLeft)
+        cr_grid.addWidget(QWidget(), 0, 3, 1, 1) # dummy spacer
+        cr_grid.setColumnStretch(0, 1)
+        cr_grid.setColumnStretch(3, 1)
+
+        # Crash reporter box at bottom of this tab
+        misc_widgets.append((cr_gb, None))  # commit crash reporter gb to layout
+
 
         units = util.base_unit_labels  # ( 'BCH', 'mBCH', 'bits' )
         msg = _('Base unit of your wallet.')\
@@ -4182,7 +4304,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         block_explorers = web.BE_sorted_list()
         msg = _('Choose which online block explorer to use for functions that open a web browser')
-        block_ex_label = HelpLabel(_('Online Block Explorer') + ':', msg)
+        block_ex_label = HelpLabel(_('Online block explorer') + ':', msg)
         block_ex_combo = QComboBox()
         block_ex_combo.addItems(block_explorers)
         block_ex_combo.setCurrentIndex(block_ex_combo.findText(web.BE_from_config(self.config)))
@@ -4193,7 +4315,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         gui_widgets.append((block_ex_label, block_ex_combo))
 
         qr_combo = QComboBox()
-        qr_label = HelpLabel(_('Video Device'), '')
+        qr_label = HelpLabel(_('Video device'), '')
         qr_did_scan = False
         def set_no_camera(e=''):
             # Older Qt or missing libs -- disable GUI control and inform user why
@@ -4201,7 +4323,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             qr_combo.clear()
             qr_combo.addItem(_("Default"), "default")
             qr_combo.setToolTip(_("Unable to probe for cameras on this system. QtMultimedia is likely missing."))
-            qr_label.setText(_('Video Device') + ' ' + _('(disabled)') + ':')
+            qr_label.setText(_('Video device') + ' ' + _('(disabled)') + ':')
             qr_label.help_text = qr_combo.toolTip() + "\n\n" + str(e)
             qr_label.setToolTip(qr_combo.toolTip())
         def scan_cameras():
@@ -4219,8 +4341,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             system_cameras = QCameraInfo.availableCameras()
             qr_combo.clear()
             qr_combo.addItem(_("Default"), "default")
-            qr_label.setText(_('Video Device') + ':')
-            qr_label.help_text = _("For scanning Qr codes.")
+            qr_label.setText(_('Video device') + ':')
+            qr_label.help_text = _("For scanning QR codes.")
             qr_combo.setToolTip(qr_label.help_text)
             qr_label.setToolTip(qr_label.help_text)
             for cam in system_cameras:
@@ -4242,7 +4364,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         gui_widgets.append((qr_label, qr_combo))
 
         colortheme_combo = QComboBox()
-        colortheme_combo.addItem(_('Light'), 'default')
+        colortheme_combo.addItem(_('Default'), 'default')  # We can't name this "light" in the UI as sometimes the default is actually dark-looking eg on Mojave or on some Linux desktops.
         colortheme_combo.addItem(_('Dark'), 'dark')
         theme_name = self.config.get('qt_gui_color_theme', 'default')
         dark_theme_available = self.gui_object.is_dark_theme_available()
@@ -4271,7 +4393,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if sys.platform not in ('darwin',):
             # Enable/Disable HighDPI -- this option makes no sense for macOS
             # and thus does not appear on that platform
-            hidpi_chk = QCheckBox(_('Automatic high DPI scaling'))
+            hidpi_chk = QCheckBox(_('Automatic high-DPI scaling'))
             if sys.platform in ('linux',):
                 hidpi_chk.setToolTip(_("Enable/disable this option if you experience graphical glitches (such as overly large status bar icons)"))
             else: # windows
@@ -4352,7 +4474,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         notify_tx_cb.stateChanged.connect(on_notify_tx)
         per_wallet_tx_widgets.append((notify_tx_cb, None))
 
-
         usechange_cb = QCheckBox(_('Use change addresses'))
         if self.force_use_single_change_addr:
             usechange_cb.setChecked(True)
@@ -4420,8 +4541,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         opret_cb.stateChanged.connect(self.on_toggled_opreturn)
         global_tx_widgets.append((opret_cb,None))
 
+        # Legacy BCT Segwit Send Protection™
+        legacy_p2sh_cb = QCheckBox(_('Allow legacy p2sh in the Send tab'))
+        prefix_char = '3' if not networks.net.TESTNET else '2'
+        legacy_p2sh_cb.setToolTip(_('If enabled, you will be allowed to use legacy \'{prefix_char}...\' style addresses in the Send tab.\nOtherwise you must use CashAddr for p2sh in the UI.').format(prefix_char=prefix_char))
+        legacy_p2sh_cb.setChecked(bool(self.config.get('allow_legacy_p2sh', False)))
+        def on_legacy_p2sh_cb(b):
+            self.config.set_key('allow_legacy_p2sh', bool(b))
+        legacy_p2sh_cb.stateChanged.connect(on_legacy_p2sh_cb)
+        global_tx_widgets.append((legacy_p2sh_cb, None))
+
+
         # Schnorr
-        use_schnorr_cb = QCheckBox(_("Enable Schnorr signatures"))
+        use_schnorr_cb = QCheckBox(_("Sign with Schnorr signatures"))
         use_schnorr_cb.setChecked(self.wallet.is_schnorr_enabled())
         use_schnorr_cb.stateChanged.connect(self.wallet.set_schnorr_enabled)
         no_schnorr_reason = []
@@ -4517,21 +4649,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         fiat_address_checkbox.stateChanged.connect(on_fiat_address)
         ex_combo.currentIndexChanged.connect(on_exchange)
 
+        hist_checkbox.setText(_('Show history rates'))
+        fiat_address_checkbox.setText(_('Show fiat balance for addresses'))
+
         fiat_widgets = []
-        fiat_widgets.append((QLabel(_('Fiat currency')), ccy_combo))
-        fiat_widgets.append((QLabel(_('Show history rates')), hist_checkbox))
-        fiat_widgets.append((QLabel(_('Show Fiat balance for addresses')), fiat_address_checkbox))
-        fiat_widgets.append((QLabel(_('Source')), ex_combo))
+        fiat_widgets.append((QLabel(_('Fiat currency:')), ccy_combo))
+        fiat_widgets.append((QLabel(_('Source:')), ex_combo))
+        fiat_widgets.append((hist_checkbox, None))
+        fiat_widgets.append((fiat_address_checkbox, None))
 
         tabs_info = [
             (gui_widgets, _('General')),
-            (fee_widgets, _('Fees')),
+            (misc_widgets, pgettext("The preferences -> Fees,misc tab", 'Fees && Misc.')),
             (OrderedDict([
                 ( _("App-Global Options") , global_tx_widgets ),
                 ( _("Per-Wallet Options") , per_wallet_tx_widgets),
              ]), _('Transactions')),
             (fiat_widgets, _('Fiat')),
-            (id_widgets, _('Identity')),
         ]
         def add_tabs_info_to_tabs(tabs, tabs_info):
             def add_widget_pair(a,b,grid):
@@ -5198,6 +5332,9 @@ class TxUpdateMgr(QObject, PrintError):
         self.weakParent = Weak.ref(main_window_parent)
         main_window_parent.history_updated_signal.connect(self.verifs_get_and_clear, Qt.DirectConnection)  # immediately clear verif_q on history update because it would be redundant to keep the verify queue around after a history list update
         main_window_parent.on_timer_signal.connect(self.do_check, Qt.DirectConnection)  # hook into main_window's timer_actions function
+        self.full_hist_refresh_timer = QTimer(self)
+        self.full_hist_refresh_timer.setInterval(1000); self.full_hist_refresh_timer.setSingleShot(False)
+        self.full_hist_refresh_timer.timeout.connect(self.schedule_full_hist_refresh_maybe)
 
     def diagnostic_name(self):
         return ((self.weakParent() and self.weakParent().diagnostic_name()) or "???") + "." + __class__.__name__
@@ -5287,6 +5424,36 @@ class TxUpdateMgr(QObject, PrintError):
                 parent.history_list.setSortingEnabled(True)
             parent.history_list.setUpdatesEnabled(True)
             parent.update_status()
+            if parent.history_list.has_unknown_balances:
+                self.print_error("History tab: 'Unknown' balances detected, will schedule a GUI refresh after wallet settles")
+                self._full_refresh_ctr = 0
+                self.full_hist_refresh_timer.start()
+
+    _full_refresh_ctr = 0
+    def schedule_full_hist_refresh_maybe(self):
+        ''' self.full_hist_refresh_timer timeout slot. May schedule a full
+        history refresh after wallet settles if we have "Unknown" balances. '''
+        parent = self.weakParent()
+        if self._full_refresh_ctr > 60:
+            # Too many retries. Give up.
+            self.print_error("History tab: Full refresh scheduler timed out.. wallet hasn't settled in 1 minute. Giving up.")
+            self.full_hist_refresh_timer.stop()
+        elif parent and parent.history_list.has_unknown_balances:
+            # Still have 'Unknown' balance. Check if wallet is settled.
+            if self.need_process_v or not parent.wallet.is_fully_settled_down():
+                # Wallet not fully settled down yet... schedule this function to run later
+                self.print_error("History tab: Wallet not yet settled.. will try again in 1 second...")
+            else:
+                # Wallet has settled. Schedule an update. Note this function may be called again
+                # in 1 second to check if the 'Unknown' situation has corrected itself.
+                self.print_error("History tab: Wallet has settled down, latching need_update to true")
+                parent.need_update.set()
+            self._full_refresh_ctr += 1
+        else:
+            # No more polling is required. 'Unknown' balance disappeared from
+            # GUI (or parent window was just closed).
+            self.full_hist_refresh_timer.stop()
+            self._full_refresh_ctr = 0
 
     @rate_limited(5.0, classlevel=True)
     def process_notifs(self):

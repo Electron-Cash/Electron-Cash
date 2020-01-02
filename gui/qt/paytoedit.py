@@ -326,10 +326,10 @@ class PayToEdit(PrintError, ScanQRTextEdit):
                 # TODO: update fee
         super(PayToEdit,self).qr_input(_on_qr_success)
 
-    def _resolve_open_alias(self):
+    def _resolve_open_alias(self, *, force_if_has_focus=False):
         prev_vals = self.is_alias, self.validated  # used only if early return due to unchanged text below
         self.is_alias, self.validated = False, False
-        if self.hasFocus():
+        if not force_if_has_focus and self.hasFocus():
             return
         if self.is_multiline():  # only supports single line entries atm
             return
@@ -390,6 +390,7 @@ class PayToEdit(PrintError, ScanQRTextEdit):
 
         return True
 
+    _rx_split = re.compile(r'(\s+)|(\s*,\s*)')  # split on ',' or on <whitespace>
     def _resolve_cash_accounts(self, skip_verif=False):
         ''' This should be called if not hasFocus(). Will run through the
         text in the payto and rewrite any verified cash accounts we find. '''
@@ -398,7 +399,8 @@ class PayToEdit(PrintError, ScanQRTextEdit):
         lines_orig = lines.copy()
         need_verif = set()
         for n, line in enumerate(lines):
-            parts = line.split(maxsplit=1)
+            line = line.strip()
+            parts = self._rx_split.split(line, maxsplit=1)
             if not parts:
                 # nothing there..
                 continue
@@ -453,7 +455,7 @@ class PayToEdit(PrintError, ScanQRTextEdit):
             self.setText('\n'.join(lines))
 
 
-    def resolve(self):
+    def resolve(self, *, force_if_has_focus = False):
         ''' This is called by the main window periodically from a timer. See
         main_window.py function `timer_actions`.
 
@@ -484,13 +486,13 @@ class PayToEdit(PrintError, ScanQRTextEdit):
             # See the comment at the end of this function about why this flag is
             # here.
             return
-        if self._resolve_open_alias():
+        if self._resolve_open_alias(force_if_has_focus=force_if_has_focus):
             # it was an openalias -- abort and don't proceed to cash account
             # resolve
             return
-        if self.hasFocus() or self.is_pr:
-            # PR by definition can't proceed, and we also don't proceed if
-            # user is still editing.
+        if (not force_if_has_focus and self.hasFocus()) or self.is_pr:
+            # PR by definition can't proceed.
+            # We also don't proceed if user is still editing.
             return
 
         # self._ca_busy is a reentrancy prevention flag, needed because

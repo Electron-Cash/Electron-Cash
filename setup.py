@@ -131,7 +131,6 @@ setup(
     },
     packages=[
         'electroncash',
-        'electroncash.locale',  # work-around for Android platform limitations
         'electroncash.qrreaders',
         'electroncash.slp',
         'electroncash.utils',
@@ -151,6 +150,8 @@ setup(
         'electroncash_plugins.digitalbitbox',
         'electroncash_plugins.virtualkeyboard',
         'electroncash_plugins.shuffle',
+        'electroncash_plugins.satochip',
+        'electroncash_plugins.satochip_2FA',
     ],
     package_dir={
         'electroncash': 'lib',
