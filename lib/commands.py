@@ -767,6 +767,7 @@ class Commands:
         return sorted(known_commands.keys())
 
 param_descriptions = {
+    'wallet_path': 'Wallet path(create/restore commands)',
     'privkey': 'Private key. Type \'?\' to get a prompt.',
     'destination': 'Bitcoin Cash address, contact or alias',
     'address': 'Bitcoin Cash address',
@@ -787,6 +788,7 @@ param_descriptions = {
 
 command_options = {
     'password':    ("-W", "Password"),
+    'wallet_path': (None, "Wallet path(create/restore commands)"),
     'new_password':(None, "New Password"),
     'encrypt_file':(None, "Whether the file on disk should be encrypted with the provided password"),
     'receiving':   (None, "Show only receiving addresses"),
@@ -919,11 +921,9 @@ def add_global_options(parser):
     group.add_argument("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Show debugging information")
     group.add_argument("-D", "--dir", dest="electron_cash_path", help="electron cash directory")
     group.add_argument("-P", "--portable", action="store_true", dest="portable", default=False, help="Use local 'electron_cash_data' directory")
+    group.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
     group.add_argument("-wp", "--walletpassword", dest="wallet_password", default=None, help="Supply wallet password")
     group.add_argument("--testnet", action="store_true", dest="testnet", default=False, help="Use Testnet")
-
-def add_wallet_option(parser):
-    parser.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
 
 def get_parser():
     # create main parser
@@ -949,7 +949,6 @@ def get_parser():
     parser_gui.add_argument("-R", "--relax_warnings", action="store_true", dest="relaxwarn", default=False, help="Disables certain warnings that might be annoying during development and/or testing")
     add_network_options(parser_gui)
     add_global_options(parser_gui)
-    add_wallet_option(parser_gui)
     # daemon
     parser_daemon = subparsers.add_parser('daemon', help="Run Daemon")
     parser_daemon.add_argument("subcommand", choices=['start', 'status', 'stop', 'load_wallet', 'close_wallet'], nargs='?')
@@ -964,9 +963,6 @@ def get_parser():
         if cmdname == 'restore':
             p.add_argument("-o", "--offline", action="store_true", dest="offline", default=False, help="Run offline")
         for optname, default in zip(cmd.options, cmd.defaults):
-            if optname in ['wallet_path', 'wallet']:
-                add_wallet_option(p)
-                continue
             a, help = command_options[optname]
             b = '--' + optname
             action = "store_true" if type(default) is bool else 'store'
