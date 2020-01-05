@@ -34,8 +34,10 @@ from electroncash.i18n import _, pgettext
 from electroncash import networks
 from electroncash.util import print_error, Weak, PrintError
 from electroncash.network import serialize_server, deserialize_server, get_eligible_servers
+from electroncash.tor import TorController
 
 from .util import *
+from .utils import UserPortValidator
 
 protocol_names = ['TCP', 'SSL']
 protocol_letters = 'ts'
@@ -120,7 +122,7 @@ class NodesListWidget(QTreeWidget):
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
-        self.setHeaderLabels([_('Connected node'), _('Height')])
+        self.setHeaderLabels([_('Connected node'), '', _('Height')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
 
@@ -152,7 +154,7 @@ class NodesListWidget(QTreeWidget):
         pt.setX(50)
         self.customContextMenuRequested.emit(pt)
 
-    def update(self, network):
+    def update(self, network, servers):
         self.clear()
         self.addChild = self.addTopLevelItem
         chains = network.get_blockchains()
@@ -161,16 +163,24 @@ class NodesListWidget(QTreeWidget):
             b = network.blockchains[k]
             name = b.get_name()
             if n_chains >1:
-                x = QTreeWidgetItem([name + '@%d'%b.get_base_height(), '%d'%b.height()])
+                x = QTreeWidgetItem([name + '@%d'%b.get_base_height(), '', '%d'%b.height()])
                 x.setData(0, Qt.UserRole, 1)
                 x.setData(1, Qt.UserRole, b.base_height)
             else:
                 x = self
             for i in items:
                 star = ' ◀' if i == network.interface else ''
-                item = QTreeWidgetItem([i.host + star, '%d'%i.tip])
+
+                display_text = i.host
+                is_onion = i.host.lower().endswith('.onion')
+                if is_onion and i.host in servers and 'display' in servers[i.host]:
+                    display_text = servers[i.host]['display'] + ' (.onion)'
+
+                item = QTreeWidgetItem([display_text + star, '', '%d'%i.tip])
                 item.setData(0, Qt.UserRole, 0)
                 item.setData(1, Qt.UserRole, i.server)
+                if is_onion:
+                    item.setIcon(1, QIcon(":icons/tor_logo.svg"))
                 x.addChild(item)
             if n_chains>1:
                 self.addTopLevelItem(x)
@@ -180,21 +190,22 @@ class NodesListWidget(QTreeWidget):
         h.setStretchLastSection(False)
         h.setSectionResizeMode(0, QHeaderView.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
 class ServerFlag:
     ''' Used by ServerListWidget for Server flags & Symbols '''
     Banned = 2 # Blacklisting/banning was a hidden mechanism inherited from Electrum. We would blacklist misbehaving servers under the hood. Now that facility is exposed (editable by the user). We never connect to blacklisted servers.
     Preferred = 1 # Preferred servers (white-listed) start off as the servers in servers.json and are "more trusted" and optionally the user can elect to connect to only these servers
     NoFlag = 0
-    Symbol = ("", "★", "⛔") # indexed using pseudo-enum above
-    UnSymbol = ("", "✖", "⚬") # used for "disable X" context menu
+    Symbol = ("", "⭐", "⛔") # indexed using pseudo-enum above
+    UnSymbol = ("", "❌", "✅") # used for "disable X" context menu
 
 class ServerListWidget(QTreeWidget):
 
     def __init__(self, parent):
         QTreeWidget.__init__(self)
         self.parent = parent
-        self.setHeaderLabels(['', _('Host'), _('Port')])
+        self.setHeaderLabels(['', _('Host'), '', _('Port')])
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.create_menu)
 
@@ -263,7 +274,8 @@ class ServerListWidget(QTreeWidget):
         self.setIndentation(0)
         wl_only = network.is_whitelist_only()
         for _host, d in sorted(servers.items()):
-            if _host.lower().endswith('.onion') and not use_tor:
+            is_onion = _host.lower().endswith('.onion')
+            if is_onion and not use_tor:
                 continue
             port = d.get(protocol)
             if port:
@@ -273,11 +285,18 @@ class ServerListWidget(QTreeWidget):
                 flag = flag or flag2; del flag2
                 tt = tt or tt2; del tt2
                 flagval |= flagval2; del flagval2
-                x = QTreeWidgetItem([flag, _host, port])
+
+                display_text = _host
+                if is_onion and 'display' in d:
+                    display_text = d['display'] + ' (.onion)'
+
+                x = QTreeWidgetItem([flag, display_text, '', port])
+                if is_onion:
+                    x.setIcon(2, QIcon(":icons/tor_logo.svg"))
                 if tt: x.setToolTip(0, tt)
                 if (wl_only and flagval != ServerFlag.Preferred) or flagval & ServerFlag.Banned:
                     # lighten the text of servers we can't/won't connect to for the given mode
-                    self.lightenItemText(x, range(1,3))
+                    self.lightenItemText(x, range(1,4))
                 x.setData(2, Qt.UserRole, server)
                 x.setData(0, Qt.UserRole, flagval)
                 self.addTopLevelItem(x)
@@ -287,6 +306,7 @@ class ServerListWidget(QTreeWidget):
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
 
 class NetworkChoiceLayout(QObject, PrintError):
@@ -299,7 +319,7 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.tor_proxy = None
 
         # tor detector
-        self.td = TorDetector(self)
+        self.td = TorDetector(self, self.network)
         self.td.found_proxy.connect(self.suggest_proxy)
 
         self.tabs = tabs = QTabWidget()
@@ -419,25 +439,34 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.proxy_user.editingFinished.connect(self.set_proxy)
         self.proxy_password.editingFinished.connect(self.set_proxy)
 
-        self.proxy_mode.currentIndexChanged.connect(self.proxy_settings_changed)
-        self.proxy_host.textEdited.connect(self.proxy_settings_changed)
-        self.proxy_port.textEdited.connect(self.proxy_settings_changed)
-        self.proxy_user.textEdited.connect(self.proxy_settings_changed)
-        self.proxy_password.textEdited.connect(self.proxy_settings_changed)
-
         self.tor_cb = QCheckBox(_("Use Tor Proxy"))
         self.tor_cb.setIcon(QIcon(":icons/tor_logo.svg"))
         self.tor_cb.setEnabled(False)
         self.tor_cb.clicked.connect(self.use_tor_proxy)
 
+        self.tor_enabled = QCheckBox(_("Start integrated Tor client"))
+        self.tor_enabled.setIcon(QIcon(":icons/tor_logo.svg"))
+        self.tor_enabled.clicked.connect(self.set_tor_enabled)
+        self.tor_enabled.setChecked(self.network.tor_controller.is_enabled())
+
+        self.tor_socks_port = QLineEdit()
+        self.tor_socks_port.setFixedWidth(60)
+        self.tor_socks_port.editingFinished.connect(self.set_tor_socks_port)
+        self.tor_socks_port.setText(str(self.network.tor_controller.get_socks_port()))
+        port_validator = UserPortValidator(self.tor_socks_port)
+        port_validator.stateChanged.connect(UserPortValidator.setRedBorder)
+        self.tor_socks_port.setValidator(port_validator)
+
         grid.addWidget(self.tor_cb, 1, 0, 1, 3)
-        grid.addWidget(self.proxy_cb, 2, 0, 1, 3)
-        grid.addWidget(HelpButton(_('Proxy settings apply to all connections: with Electron Cash servers, but also with third-party services.')), 2, 4)
-        grid.addWidget(self.proxy_mode, 4, 1)
-        grid.addWidget(self.proxy_host, 4, 2)
-        grid.addWidget(self.proxy_port, 4, 3)
-        grid.addWidget(self.proxy_user, 5, 2)
-        grid.addWidget(self.proxy_password, 5, 3)
+        grid.addWidget(self.tor_enabled, 2, 0, 1, 2)
+        grid.addWidget(self.tor_socks_port, 2, 2)
+        grid.addWidget(self.proxy_cb, 3, 0, 1, 3)
+        grid.addWidget(HelpButton(_('Proxy settings apply to all connections: with Electron Cash servers, but also with third-party services.')), 3, 4)
+        grid.addWidget(self.proxy_mode, 5, 1)
+        grid.addWidget(self.proxy_host, 5, 2)
+        grid.addWidget(self.proxy_port, 5, 3)
+        grid.addWidget(self.proxy_user, 6, 2)
+        grid.addWidget(self.proxy_password, 6, 3)
         grid.setRowStretch(7, 1)
 
         # Blockchain Tab
@@ -477,11 +506,24 @@ class NetworkChoiceLayout(QObject, PrintError):
         vbox.addWidget(tabs)
         self.layout_ = vbox
 
+        self.network.tor_controller.active_port_changed.append_weak(self.on_tor_port_changed)
+
         self.fill_in_proxy_settings()
         self.update()
 
+    def on_tor_port_changed(self, controller: TorController):
+        if not controller.active_socks_port or not controller.is_enabled() or not self.tor_use:
+            return
+
+        # The Network class handles actually changing the port, we just
+        # set the value in the text box here.
+        self.proxy_port.setText(str(controller.active_socks_port))
+
     def check_disable_proxy(self, b):
         if not self.config.is_modifiable('proxy'):
+            b = False
+        if self.tor_use:
+            # Disallow changing the proxy settings when Tor is in use
             b = False
         for w in [self.proxy_mode, self.proxy_host, self.proxy_port, self.proxy_user, self.proxy_password]:
             w.setEnabled(b)
@@ -521,11 +563,15 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.autoconnect_cb.setChecked(auto_connect)
         self.preferred_only_cb.setChecked(preferred_only)
 
+        self.servers = self.network.get_servers()
+
         host = self.network.interface.host if self.network.interface else pgettext('Referencing server', 'None')
+        is_onion = host.lower().endswith('.onion')
+        if is_onion and host in self.servers and 'display' in self.servers[host]:
+            host = self.servers[host]['display'] + ' (.onion)'
         self.server_label.setText(host)
 
         self.set_protocol(protocol)
-        self.servers = self.network.get_servers()
         def protocol_suffix():
             if protocol == 't':
                 return '  (non-SSL)'
@@ -562,12 +608,17 @@ class NetworkChoiceLayout(QObject, PrintError):
         else:
             msg = ''
         self.split_label.setText(msg)
-        self.nodes_list_widget.update(self.network)
+        self.nodes_list_widget.update(self.network, self.servers)
 
     def fill_in_proxy_settings(self):
         host, port, protocol, proxy_config, auto_connect = self.network.get_parameters()
         if not proxy_config:
             proxy_config = {"mode": "none", "host": "localhost", "port": "9050"}
+
+        # We need to restore the "Use tor" checkbox as its value is needed in the server
+        # list, to determine whether to show .onion servers, before the TorDetector
+        # has been started.
+        self._set_tor_use(self.config.get('tor_use', False))
 
         b = proxy_config.get('mode') != "none"
         self.check_disable_proxy(b)
@@ -661,24 +712,32 @@ class NetworkChoiceLayout(QObject, PrintError):
                       'password':str(self.proxy_password.text())}
         else:
             proxy = None
-            self.tor_cb.setChecked(False)
         self.network.set_parameters(host, port, protocol, proxy, auto_connect)
 
     def suggest_proxy(self, found_proxy):
         if not found_proxy:
             self.tor_cb.setEnabled(False)
-            self.tor_cb.setChecked(False) # It's not clear to me that if the tor service goes away and comes back later, and in the meantime they unchecked proxy_cb, that this should remain checked. I can see it being confusing for that to be the case. Better to uncheck. It gets auto-re-checked anyway if it comes back and it's the same due to code below. -Calin
+            self._set_tor_use(False) # It's not clear to me that if the tor service goes away and comes back later, and in the meantime they unchecked proxy_cb, that this should remain checked. I can see it being confusing for that to be the case. Better to uncheck. It gets auto-re-checked anyway if it comes back and it's the same due to code below. -Calin
             return
         self.tor_proxy = found_proxy
-        self.tor_cb.setText("Use Tor proxy at port " + str(found_proxy[1]))
-        if (self.proxy_mode.currentIndex() == self.proxy_mode.findText('SOCKS5')
+        self.tor_cb.setText(_("Use Tor proxy at port {tor_port}").format(tor_port = found_proxy[1]))
+        same_proxy = (self.proxy_mode.currentIndex() == self.proxy_mode.findText('SOCKS5')
             and self.proxy_host.text() == found_proxy[0]
             and self.proxy_port.text() == str(found_proxy[1])
-            and self.proxy_cb.isChecked()):
-            self.tor_cb.setChecked(True)
+            and self.proxy_cb.isChecked())
+        self._set_tor_use(same_proxy)
         self.tor_cb.setEnabled(True)
 
+    def _set_tor_use(self, use_it):
+        self.tor_use = use_it
+        self.config.set_key('tor_use', self.tor_use)
+        self.tor_cb.setChecked(self.tor_use)
+        self.proxy_cb.setEnabled(not self.tor_use)
+        self.check_disable_proxy(not self.tor_use)
+
     def use_tor_proxy(self, use_it):
+        self._set_tor_use(use_it)
+
         if not use_it:
             self.proxy_cb.setChecked(False)
         else:
@@ -691,10 +750,15 @@ class NetworkChoiceLayout(QObject, PrintError):
             self.proxy_port.setText(str(self.tor_proxy[1]))
             self.proxy_user.setText("")
             self.proxy_password.setText("")
-            self.tor_cb.setChecked(True)
             self.proxy_cb.setChecked(True)
-        self.check_disable_proxy(use_it)
         self.set_proxy()
+
+    def set_tor_enabled(self, enabled: bool):
+        self.network.tor_controller.set_enabled(enabled)
+
+    def set_tor_socks_port(self):
+        socks_port = int(self.tor_socks_port.text())
+        self.network.tor_controller.set_socks_port(socks_port)
 
     def proxy_settings_changed(self):
         self.tor_cb.setChecked(False)
@@ -760,6 +824,15 @@ class NetworkChoiceLayout(QObject, PrintError):
 class TorDetector(QThread):
     found_proxy = pyqtSignal(object)
 
+    def __init__(self, parent, network):
+        super().__init__(parent)
+        self.network = network
+        self.network.tor_controller.active_port_changed.append_weak(self.on_tor_port_changed)
+
+    def on_tor_port_changed(self, controller: TorController):
+        if controller.active_socks_port and self.isRunning():
+            self.stopQ.put('kick')
+
     def start(self):
         self.stopQ = queue.Queue() # create a new stopQ blowing away the old one just in case it has old data in it (this prevents races with stop/start arriving too quickly for the thread)
         super().start()
@@ -767,10 +840,15 @@ class TorDetector(QThread):
     def stop(self):
         if self.isRunning():
             self.stopQ.put(None)
+            self.wait()
 
     def run(self):
-        ports = [9050, 9150] # Probable ports for Tor to listen at
         while True:
+            ports = [9050, 9150] # Probable ports for Tor to listen at
+
+            if self.network.tor_controller and self.network.tor_controller.is_enabled() and self.network.tor_controller.active_socks_port:
+                ports.insert(0, self.network.tor_controller.active_socks_port)
+
             for p in ports:
                 if TorDetector.is_tor_port(p):
                     self.found_proxy.emit(("127.0.0.1", p))
@@ -778,8 +856,13 @@ class TorDetector(QThread):
             else:
                 self.found_proxy.emit(None) # no proxy found, will hide the Tor checkbox
             try:
-                self.stopQ.get(timeout=10.0) # keep trying every 10 seconds
-                return # we must have gotten a stop signal if we get here, break out of function, ending thread
+                stopq = self.stopQ.get(timeout=10.0) # keep trying every 10 seconds
+                if stopq is None:
+                    return # we must have gotten a stop signal if we get here, break out of function, ending thread
+                # We were kicked, which means the integrated tor port changed.
+                # Run the detection after a slight delay which increases the reliability.
+                QThread.msleep(250)
+                continue
             except queue.Empty:
                 continue # timeout, keep looping
 

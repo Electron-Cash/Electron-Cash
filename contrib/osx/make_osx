@@ -48,7 +48,7 @@ VERSION=`git describe --tags`
 
 # Paramterize
 BUILDDIR=/tmp/electron-cash-build
-LIBSECP_VERSION="a9752bb2d1c1f5abb30e5bde7a1fad582629e46d"  # According to Mark B. Lundeberg, using a commit hash guarantees no repository man-in-the-middle funny business as git is secure when verifying hashes.
+LIBSECP_VERSION="a0530612dd02c8d052631678b0f4f30d7aa7cb42"  # using a commit hash guarantees no repository man-in-the-middle funny business as git is secure when verifying hashes.
 # Compute major.minor Python version from above using Bash array magic
 MAJ_MIN=(${PYTHON_VERSION//./ })
 MAJ_MIN=${MAJ_MIN[0]}.${MAJ_MIN[1]}
@@ -146,10 +146,6 @@ pyinstaller --version
 
 rm -rf ./dist
 
-info "Refreshing submodules..."
-git submodule init
-git submodule update
-
 rm  -rf $BUILDDIR > /dev/null 2>&1
 mkdir -p $BUILDDIR
 
@@ -183,9 +179,13 @@ git clean -f -x -q
     --disable-static \
     --enable-shared || fail "Could not configure for secp256k1"
 make -j4 || fail "Could not build secp256k1"
-git checkout master  # Undo the previous explicit checkout to this hash
+#git checkout master  # Undo the previous explicit checkout to this hash
 popd
 cp -fp contrib/secp256k1/.libs/libsecp256k1.0.dylib contrib/osx || fail "Could not copy secp256k1 binary to its destination"
+
+info "Building integrated Tor"
+contrib/make_zlib && contrib/make_libevent && contrib/make_openssl && contrib/make_tor || fail "Could not build Tor"
+
 
 info "Installing requirements..."
 python3 -m pip install -Ir ./contrib/deterministic-build/requirements.txt --user || fail "Could not install requirements"
