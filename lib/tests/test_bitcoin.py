@@ -1,6 +1,7 @@
 import base64
 import unittest
 import sys
+import ecdsa
 from ecdsa.util import number_to_string
 
 from ..address import Address
@@ -12,7 +13,8 @@ from ..bitcoin import (
     var_int, op_push, regenerate_key,
     verify_message, deserialize_privkey, serialize_privkey,
     is_minikey, is_compressed, is_xpub,
-    xpub_type, is_xprv, is_bip32_derivation, seed_type, Bip38Key)
+    xpub_type, is_xprv, is_bip32_derivation, seed_type, Bip38Key, generator,
+    CURVE_ORDER, point_at_infinity, ECPubkey, ECPrivkey)
 from ..networks import set_mainnet, set_testnet
 from ..util import bfh
 
@@ -26,9 +28,10 @@ class Test_bitcoin(unittest.TestCase):
 
     def test_crypto(self):
         for message in [b"Chancellor on brink of second bailout for banks", b'\xff'*512]:
-            self._do_test_crypto(message)
+            self._do_test_crypto_legacy(message)
+            self._do_test_crypto_new(message)
 
-    def _do_test_crypto(self, message):
+    def _do_test_crypto_legacy(self, message):
         G = generator_secp256k1
         _r  = G.order()
         pvk = ecdsa.util.randrange( pow(2,256) ) %_r
@@ -54,6 +57,55 @@ class Test_bitcoin(unittest.TestCase):
         signature = eck.sign_message(message, True)
         #print signature
         EC_KEY.verify_message(eck, signature, message)
+
+    def _do_test_crypto_new(self, message):
+        G = generator()
+        _r  = G.order()
+        pvk = ecdsa.util.randrange(_r)
+
+        Pub = pvk*G
+        pubkey_c = Pub.get_public_key_bytes(True)
+        addr_c = public_key_to_p2pkh(pubkey_c)
+
+        eck = ECPrivkey(number_to_string(pvk,_r))
+
+        enc = ECPubkey(pubkey_c).encrypt_message(message)
+        dec = eck.decrypt_message(enc)
+        self.assertEqual(message, dec)
+
+        dec2 = eck.decrypt_message(enc)
+        self.assertEqual(message, dec2)
+
+        signature = eck.sign_message(message, True)
+        # verify signature
+        eck.verify_message_for_address(signature, message)
+
+    def test_ecc_sanity(self):
+        G = generator()
+        n = G.order()
+        self.assertEqual(CURVE_ORDER, n)
+        inf = n * G
+        self.assertEqual(point_at_infinity(), inf)
+        self.assertTrue(inf.is_at_infinity())
+        self.assertFalse(G.is_at_infinity())
+        self.assertEqual(11 * G, 7 * G + 4 * G)
+        self.assertEqual((n + 2) * G, 2 * G)
+        self.assertEqual((n - 2) * G, -2 * G)
+        A = (n - 2) * G
+        B = (n - 1) * G
+        C = n * G
+        D = (n + 1) * G
+        self.assertFalse(A.is_at_infinity())
+        self.assertFalse(B.is_at_infinity())
+        self.assertTrue(C.is_at_infinity())
+        self.assertTrue((C * 5).is_at_infinity())
+        self.assertFalse(D.is_at_infinity())
+        self.assertEqual(inf, C)
+        self.assertEqual(inf, A + 2 * G)
+        self.assertEqual(inf, D + (-1) * G)
+        self.assertNotEqual(A, B)
+        self.assertEqual(2 * G, inf + 2 * G)
+        self.assertEqual(inf, 3 * G + (-3 * G))
 
     def test_msg_signing(self):
         msg1 = b'Chancellor on brink of second bailout for banks'
