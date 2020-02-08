@@ -162,7 +162,9 @@ class Mnemonic(object):
         i = self.mnemonic_decode(seed)
         return i % custom_entropy == 0
 
-    def make_seed(self, seed_type='standard', num_bits=132, custom_entropy=1):
+    def make_seed(self, seed_type=None, num_bits=132, custom_entropy=1):
+        if seed_type is None:
+            seed_type = 'standard'
         prefix = version.seed_prefix(seed_type)
         # increase num_bits in order to obtain a uniform distibution for the last word
         bpw = math.log(len(self.wordlist), 2)
