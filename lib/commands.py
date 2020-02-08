@@ -194,8 +194,8 @@ class Commands:
     @command('')
     def restore(self, text, passphrase=None, password=None, encrypt_file=True, wallet_path=None):
         """Restore a wallet from text. Text can be a seed phrase, a master
-        public key, a master private key, a list of bitcoin addresses
-        or bitcoin private keys.
+        public key, a master private key, a list of bitcoin cash addresses
+        or bitcoin cash private keys.
         If you want to be prompted for an argument, type '?' or ':' (concealed)
         """
         d = restore_wallet_from_text(text,
@@ -863,7 +863,7 @@ command_options = {
     'pending':     (None, "Show only pending requests."),
     'privkey':     (None, "Private key. Set to '?' to get a prompt."),
     'receiving':   (None, "Show only receiving addresses"),
-    'seed_type':   (None, "The type of seed to create, e.g. 'standard' or 'segwit'"),
+    'seed_type':   (None, "The type of seed to create, currently only 'standard' is supported"),
     'show_addresses': (None, "Show input and output addresses"),
     'show_fiat':   (None, "Show fiat value of transactions"),
     'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
