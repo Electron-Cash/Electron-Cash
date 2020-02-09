@@ -49,9 +49,24 @@ from . import rsakey
 
 from .address import Address, PublicKey
 from .bitcoin import TYPE_ADDRESS
-from .util import print_error, bh2u, bfh, PrintError, PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
+from .util import print_error, bh2u, bfh, PrintError
 from .util import FileImportFailed, FileImportFailedEncrypted
 from .transaction import Transaction
+
+def _(message): return message
+
+# status of payment requests
+PR_UNPAID  = 0
+PR_EXPIRED = 1
+PR_UNKNOWN = 2     # sent but not propagated
+PR_PAID    = 3     # send and propagated
+
+pr_tooltips = {
+    PR_UNPAID:_('Pending'),
+    PR_UNKNOWN:_('Unknown'),
+    PR_PAID:_('Paid'),
+    PR_EXPIRED:_('Expired')
+}
 
 
 REQUEST_HEADERS = {'Accept': 'application/bitcoincash-paymentrequest', 'User-Agent': 'Electron-Cash'}

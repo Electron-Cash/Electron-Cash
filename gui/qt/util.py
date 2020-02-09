@@ -26,7 +26,7 @@ else:
 
 dialogs = []
 
-from electroncash.util import PR_UNPAID, PR_PAID, PR_EXPIRED
+from electroncash.paymentrequest import PR_UNPAID, PR_PAID, PR_EXPIRED
 
 pr_icons = {
     PR_UNPAID:":icons/unpaid.svg",

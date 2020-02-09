@@ -64,8 +64,7 @@ from .mnemonic import Mnemonic
 
 
 from . import paymentrequest
-from .util import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
-from .paymentrequest import InvoiceStore
+from .paymentrequest import InvoiceStore, PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .contacts import Contacts
 from . import cashacct
 from . import slp
@@ -1327,11 +1326,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def receive_tx_callback(self, tx_hash, tx, tx_height):
         self.add_transaction(tx_hash, tx)
         self.add_unverified_tx(tx_hash, tx_height)
-        for txo in tx.outputs():
-            addr = txo[1] # address
-            if addr in self.receive_requests:
-                status, conf = self.get_request_status(addr)
-                self.network.trigger_callback('payment_received', self, addr, status)
+        if self.network and self.network.callback_listener_count("payment_received") > 0:
+            for txo in tx.outputs():
+                addr = txo[1] # address
+                if addr in self.receive_requests:
+                    status, conf = self.get_request_status(addr)
+                    self.network.trigger_callback('payment_received', self, addr, status)
 
     def receive_history_callback(self, addr, hist, tx_fees):
         with self.lock:

@@ -26,7 +26,8 @@
 from .util import *
 
 from electroncash.i18n import _
-from electroncash.util import format_time, FileImportFailed, pr_tooltips
+from electroncash.util import format_time, FileImportFailed
+from electroncash.paymentrequest import pr_tooltips
 
 
 class InvoiceList(MyTreeWidget):

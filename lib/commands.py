@@ -43,7 +43,8 @@ from .i18n import _
 from .plugins import run_hook
 from .wallet import create_new_wallet, restore_wallet_from_text
 from .transaction import Transaction, multisig_script, OPReturn
-from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes, PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
+from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes
+from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 
 known_commands = {}
 

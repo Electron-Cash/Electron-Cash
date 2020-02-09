@@ -50,20 +50,6 @@ base_unit_labels = tuple(inv_base_units[dp] for dp in sorted(inv_base_units.keys
 
 def _(message): return message
 
-# status of payment requests
-PR_UNPAID  = 0
-PR_EXPIRED = 1
-PR_UNKNOWN = 2     # sent but not propagated
-PR_PAID    = 3     # send and propagated
-
-pr_tooltips = {
-    PR_UNPAID:_('Pending'),
-    PR_UNKNOWN:_('Unknown'),
-    PR_PAID:_('Paid'),
-    PR_EXPIRED:_('Expired')
-}
-
-
 fee_levels = [_('Within 25 blocks'), _('Within 10 blocks'), _('Within 5 blocks'), _('Within 2 blocks'), _('In the next block')]
 
 del _

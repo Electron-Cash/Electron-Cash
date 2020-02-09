@@ -25,9 +25,9 @@
 
 from electroncash.address import Address
 from electroncash.i18n import _
-from electroncash.util import format_time, age, pr_tooltips
+from electroncash.util import format_time, age
 from electroncash.plugins import run_hook
-from electroncash.paymentrequest import PR_UNKNOWN
+from electroncash.paymentrequest import pr_tooltips, PR_UNKNOWN
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import QTreeWidgetItem, QMenu
