@@ -49,7 +49,7 @@ from . import rsakey
 
 from .address import Address, PublicKey
 from .bitcoin import TYPE_ADDRESS
-from .util import print_error, bh2u, bfh, PrintError
+from .util import print_error, bh2u, bfh, PrintError, PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .util import FileImportFailed, FileImportFailedEncrypted
 from .transaction import Transaction
 
@@ -65,15 +65,6 @@ def load_ca_list():
     global ca_list, ca_keyID
     if ca_list is None:
         ca_list, ca_keyID = x509.load_certificates(ca_path)
-
-
-
-# status of payment requests
-PR_UNPAID  = 0
-PR_EXPIRED = 1
-PR_UNKNOWN = 2     # sent but not propagated
-PR_PAID    = 3     # send and propagated
-
 
 
 def get_payment_request(url):

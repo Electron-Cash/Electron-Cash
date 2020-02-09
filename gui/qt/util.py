@@ -26,7 +26,7 @@ else:
 
 dialogs = []
 
-from electroncash.paymentrequest import PR_UNPAID, PR_PAID, PR_EXPIRED
+from electroncash.util import PR_UNPAID, PR_PAID, PR_EXPIRED
 
 pr_icons = {
     PR_UNPAID:":icons/unpaid.svg",
@@ -35,12 +35,6 @@ pr_icons = {
 }
 
 def _(message): return message
-
-pr_tooltips = {
-    PR_UNPAID:_('Pending'),
-    PR_PAID:_('Paid'),
-    PR_EXPIRED:_('Expired')
-}
 
 expiration_values = [
     (_('1 hour'), 60*60),

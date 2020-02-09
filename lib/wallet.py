@@ -64,7 +64,7 @@ from .mnemonic import Mnemonic
 
 
 from . import paymentrequest
-from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
+from .util import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .paymentrequest import InvoiceStore
 from .contacts import Contacts
 from . import cashacct
@@ -1327,6 +1327,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def receive_tx_callback(self, tx_hash, tx, tx_height):
         self.add_transaction(tx_hash, tx)
         self.add_unverified_tx(tx_hash, tx_height)
+        for txo in tx.outputs():
+            addr = txo[1] # address
+            if addr in self.receive_requests:
+                status, conf = self.get_request_status(addr)
+                self.network.trigger_callback('payment_received', self, addr, status)
 
     def receive_history_callback(self, addr, hist, tx_fees):
         with self.lock:
@@ -2229,13 +2234,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             expiration = 0
         conf = None
         if amount:
-            if self.up_to_date:
-                paid, conf = self.get_payment_status(address, amount)
-                status = PR_PAID if paid else PR_UNPAID
-                if status == PR_UNPAID and expiration is not None and time.time() > timestamp + expiration:
-                    status = PR_EXPIRED
-            else:
-                status = PR_UNKNOWN
+            paid, conf = self.get_payment_status(address, amount)
+            status = PR_PAID if paid else PR_UNPAID
+            if status == PR_UNPAID and expiration is not None and time.time() > timestamp + expiration:
+                status = PR_EXPIRED
         else:
             status = PR_UNKNOWN
         return status, conf
