@@ -68,6 +68,7 @@ pr_tooltips = {
     PR_EXPIRED:_('Expired')
 }
 
+del _
 
 REQUEST_HEADERS = {'Accept': 'application/bitcoincash-paymentrequest', 'User-Agent': 'Electron-Cash'}
 ACK_HEADERS = {'Content-Type':'application/bitcoincash-payment','Accept':'application/bitcoincash-paymentack','User-Agent':'Electron-Cash'}
