@@ -318,7 +318,10 @@ class Network(util.DaemonThread):
 
     def callback_listener_count(self, event):
         with self.lock:
-            return len(self.callbacks[event])
+            cblist = self.callbacks.get(event)
+            if cblist:
+                return len(cblist)
+            return 0
 
     def register_callback(self, callback, events):
         with self.lock:
