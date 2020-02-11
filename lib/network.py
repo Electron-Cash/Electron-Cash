@@ -317,11 +317,7 @@ class Network(util.DaemonThread):
         return Network.INSTANCE
 
     def callback_listener_count(self, event):
-        with self.lock:
-            cblist = self.callbacks.get(event)
-            if cblist:
-                return len(cblist)
-            return 0
+        return len(self.callbacks.get(event, []))  # we intentionally don't take any locks here as a performance optimization
 
     def register_callback(self, callback, events):
         with self.lock:
@@ -333,8 +329,10 @@ class Network(util.DaemonThread):
     def unregister_callback(self, callback):
         with self.lock:
             for callbacks in self.callbacks.values():
-                if callback in callbacks:
+                try:
                     callbacks.remove(callback)
+                except ValueError:
+                    pass
 
     def trigger_callback(self, event, *args):
         with self.lock:
