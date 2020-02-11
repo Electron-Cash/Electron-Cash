@@ -1327,10 +1327,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.add_transaction(tx_hash, tx)
         self.add_unverified_tx(tx_hash, tx_height)
         if self.network and self.network.callback_listener_count("payment_received") > 0:
-            for txo in tx.outputs():
-                addr = txo[1] # address
-                if addr in self.receive_requests:
-                    status, conf = self.get_request_status(addr)
+            for _, addr, _ in tx.outputs():
+                status = self.get_request_status(addr)  # returns PR_UNKNOWN quickly if addr has no requests, otherwise returns tuple
+                if status != PR_UNKNOWN:
+                    status = status[0]  # unpack status from tuple
                     self.network.trigger_callback('payment_received', self, addr, status)
 
     def receive_history_callback(self, addr, hist, tx_fees):
