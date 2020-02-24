@@ -272,14 +272,12 @@ class Interface(util.PrintError):
         self.host, self.port, _ = server.rsplit(':', 2)
         self.socket = socket
 
-        self.pipe = util.SocketPipe(socket, max_message_bytes=max_message_bytes)
-        self.pipe.set_timeout(0.0)  # Don't wait for data
+        self.pipe = util.JSONSocketPipe(socket, max_message_bytes=max_message_bytes)
         # Dump network messages.  Set at runtime from the console.
         self.debug = False
         self.unsent_requests = []
         self.unanswered_requests = {}
         self.last_send = time.time()
-        self.closed_remotely = False
 
         self.mode = None
 
@@ -301,13 +299,14 @@ class Interface(util.PrintError):
         return self.socket.fileno()
 
     def close(self):
-        if not self.closed_remotely:
-            try:
-                self.socket.shutdown(socket.SHUT_RDWR)
-            except socket.error:
-                pass
-        self.socket.close()
-        self.pipe.clean_up()
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        try:
+            self.socket.close()
+        except Exception:
+            pass
 
     def queue_request(self, *args):  # method, params, _id
         '''Queue a request, later to be send with send_requests when the
@@ -323,15 +322,31 @@ class Interface(util.PrintError):
 
     def send_requests(self):
         '''Sends queued requests.  Returns False on failure.'''
-        self.last_send = time.time()
-        make_dict = lambda m, p, i: {'method': m, 'params': p, 'id': i}
-        n = self.num_requests()
-        wire_requests = self.unsent_requests[0:n]
         try:
+            try:
+                self.pipe.send_flush()
+            except util.timeout:
+                if self.debug:
+                    self.print_error("still flushing send data... [{}]".format(len(self.pipe.send_buf)))
+                return True
+
+            self.last_send = time.time()
+            make_dict = lambda m, p, i: {'method': m, 'params': p, 'id': i}
+            n = self.num_requests()
+            wire_requests = self.unsent_requests[0:n]
+
             self.pipe.send_all([make_dict(*r) for r in wire_requests])
-        except (OSError, ssl.SSLError) as e:
-            self.print_error("send_requests: {}: {}".format(type(e).__name__, e))
+        except util.timeout:
+            # this is OK, the send is in the pipe and we'll flush it out
+            # eventually.
+            pass
+        except self.pipe.Closed as e:
+            self.print_error(str(e))
             return False
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr)
+            return False
+
         self.unsent_requests = self.unsent_requests[n:]
         for request in wire_requests:
             if self.debug:
@@ -363,20 +378,24 @@ class Interface(util.PrintError):
         '''
         responses = []
         while True:
+            response = None
             try:
                 response = self.pipe.get()
             except util.timeout:
                 break
-            except self.pipe.MessageSizeExceeded as e:
-                self.print_error(repr(e))
-                responses.append((None, None))  # signals Network class to close this connection
-                break
-            if not type(response) is dict:
+            except self.pipe.Closed as e:
+                self.print_error(str(e))
+            except Exception as e:
+                traceback.print_exc(file=sys.stderr)
+
+            if type(response) is not dict:
+                # time to close this connection.
+                if type(response) is not None:
+                    self.print_error("received non-object type {}".format(type(response)))
+                # signal that this connection is done.
                 responses.append((None, None))
-                if response is None:
-                    self.closed_remotely = True
-                    self.print_error("connection closed remotely")
                 break
+
             if self.debug:
                 self.print_error("<--", response)
             wire_id = response.get('id', None)
