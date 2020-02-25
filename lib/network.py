@@ -1460,7 +1460,8 @@ class Network(util.DaemonThread):
 
         assert not xout
         for interface in wout:
-            interface.send_requests()
+            if not interface.send_requests():
+                self.connection_down(interface.server)
         for interface in r_immed:
             self.process_responses(interface)
         for interface in rout:
