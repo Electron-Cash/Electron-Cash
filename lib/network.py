@@ -1422,19 +1422,32 @@ class Network(util.DaemonThread):
             self.print_error("wait_on_sockets: {} raised by select() call.. trying to recover...".format(err))
             self.find_bad_fds_and_kill()
 
+        rin = []
+        win = []
+        r_immed = []
         with self.interface_lock:
             interfaces = list(self.interfaces.values())
-            rin = [i for i in interfaces if i.fileno() > -1]
-            win = [i for i in interfaces if i.num_requests() and i.fileno() > -1]
+            for interface in interfaces:
+                if interface.fileno() < 0:
+                    continue
+                read_pending, write_pending = interface.pipe.get_selectloop_info()
+                if read_pending:
+                    r_immed.append(interface)
+                else:
+                    rin.append(interface)
+                if write_pending or interface.num_requests():
+                    win.append(interface)
 
-        # Python docs say Windows doesn't like empty selects.
-        # Sleep to prevent busy looping
-        if not win and not rin:
-            time.sleep(0.1)
-            return
+        timeout = 0 if r_immed else 0.1
 
         try:
-            rout, wout, xout = select.select(rin, win, [], 0.1)
+            # Python docs say Windows doesn't like empty selects.
+            if win or rin:
+                rout, wout, xout = select.select(rin, win, [], timeout)
+            else:
+                # Sleep to prevent busy looping
+                time.sleep(timeout)
+                rout = wout = xout = ()
         except socket.error as e:
             code = None
             if isinstance(e, OSError): # Should always be the case unless ancient python3
@@ -1457,6 +1470,8 @@ class Network(util.DaemonThread):
         assert not xout
         for interface in wout:
             interface.send_requests()
+        for interface in r_immed:
+            self.process_responses(interface)
         for interface in rout:
             self.process_responses(interface)
 
