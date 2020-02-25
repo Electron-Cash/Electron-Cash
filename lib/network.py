@@ -1393,16 +1393,6 @@ class Network(util.DaemonThread):
         # refresh network dialog
         self.notify('interfaces')
 
-    def maintain_requests(self):
-        with self.interface_lock:
-            interfaces = list(self.interfaces.values())
-        for interface in interfaces:
-            if interface.unanswered_requests and time.time() - interface.request_time > 20:
-                # The last request made is still outstanding, and was over 20 seconds ago.
-                interface.print_error("blockchain request timed out")
-                self.connection_down(interface.server)
-                continue
-
     def find_bad_fds_and_kill(self):
         bad = []
         with self.interface_lock:
@@ -1501,7 +1491,6 @@ class Network(util.DaemonThread):
         while self.is_running():
             self.maintain_sockets()
             self.wait_on_sockets()
-            self.maintain_requests()
             if self.verified_checkpoint:
                 self.run_jobs()    # Synchronizer and Verifier and Fx
             self.process_pending_sends()
