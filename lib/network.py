@@ -1435,9 +1435,10 @@ class Network(util.DaemonThread):
             if win or rin:
                 rout, wout, xout = select.select(rin, win, [], timeout)
             else:
-                # Sleep to prevent busy looping
-                time.sleep(timeout)
                 rout = wout = xout = ()
+                if timeout:
+                    # Sleep to prevent busy looping
+                    time.sleep(timeout)
         except socket.error as e:
             code = None
             if isinstance(e, OSError): # Should always be the case unless ancient python3
