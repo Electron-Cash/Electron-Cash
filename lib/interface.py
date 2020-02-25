@@ -316,9 +316,12 @@ class Interface(util.PrintError):
         self.unsent_requests.append(args)
 
     def num_requests(self):
-        '''Keep unanswered requests below 100'''
-        n = 100 - len(self.unanswered_requests)
-        return min(n, len(self.unsent_requests))
+        '''If there are more than 2000 unanswered requests, don't send
+        any more. Otherwise send more requests, but not more than 100 at a
+        time.'''
+        if len(self.unanswered_requests) >= 2000:
+            return 0
+        return min(100, len(self.unsent_requests))
 
     def send_requests(self):
         '''Sends queued requests.  Returns False on failure.'''
