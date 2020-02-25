@@ -275,6 +275,7 @@ class Interface(util.PrintError):
         self.pipe = util.JSONSocketPipe(socket, max_message_bytes=max_message_bytes)
         # Dump network messages.  Set at runtime from the console.
         self.debug = False
+        self.request_time = time.time()
         self.unsent_requests = []
         self.unanswered_requests = {}
         self.last_send = time.time()
