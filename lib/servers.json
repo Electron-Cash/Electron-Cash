@@ -156,5 +156,10 @@
         "pruning": "-",
         "s": "50002",
         "version": "1.4"
+    },
+    "germany.bitcoincashgrowth.rocks": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4"
     }
 }
