@@ -144,6 +144,11 @@
         "s": "50002",
         "version": "1.4.2"
     },
+    "bitcoincash.network": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4.1"
+    },
     "electrumx-bch.cryptonermal.net": {
         "pruning": "-",
         "s": "50002",
