@@ -25,8 +25,11 @@
 
 import binascii
 import unittest
-import random
+from random import Random
 from .. import cashaddr
+
+
+random = Random()
 
 
 BCH_PREFIX = "bitcoincash"
@@ -142,6 +145,7 @@ class TestCashAddrAddress(unittest.TestCase):
 
     def test_bad_decode_checksum(self):
         """Test whether addresses with invalid checksums fail to decode."""
+        random = Random(42)
         for bits_size in self.valid_sizes:
             size = bits_size // 8
             # Convert to a valid number of bytes for a hash
