@@ -78,8 +78,6 @@ class ASERTDaa:
         if is_testnet:
             # From ASERT spec, testnet has 1 hour half-life
             self.TAU = 3600
-            # DELETE ME XXX HACK TODO: for testing our forked testnet testing
-            self.MTP_ACTIVATION_TIME = 1597096200
 
     @staticmethod
     def bits_to_target(bits: int) -> int:  return bits_to_target(bits)
