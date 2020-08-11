@@ -23,7 +23,7 @@
 import os
 
 from collections import namedtuple
-from typing import Optional
+from typing import Optional, Union
 
 from .util import print_error
 
@@ -111,7 +111,7 @@ class ASERTDaa:
         h = hex(target)[2:]
         return '0' * (64 - len(h)) + h
 
-    def next_bits_aserti3_2d(self, anchor_bits: int, time_diff: float, height_diff: int) -> int:
+    def next_bits_aserti3_2d(self, anchor_bits: int, time_diff: Union[float, int], height_diff: int) -> int:
         """ Integer ASERTI algorithm, based on Jonathan Toomim's
         `next_bits_aserti` implementation in mining.py (see
         https://github.com/jtoomim/difficulty) """
