@@ -36,7 +36,7 @@ def _read_json_dict(filename):
 
 class AbstractNet:
     TESTNET = False
-    ASERT_DAA = ASERTDaa()
+    asert_daa = ASERTDaa()
 
 
 class MainNet(AbstractNet):
@@ -81,7 +81,7 @@ class MainNet(AbstractNet):
 
 class TestNet(AbstractNet):
     TESTNET = True
-    ASERT_DAA = ASERTDaa(is_testnet=True)
+    asert_daa = ASERTDaa(is_testnet=True)
     WIF_PREFIX = 0xef
     ADDRTYPE_P2PKH = 111
     ADDRTYPE_P2PKH_BITPAY = 111  # Unsure

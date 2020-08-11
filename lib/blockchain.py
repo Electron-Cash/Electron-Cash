@@ -440,7 +440,7 @@ class Blockchain(util.PrintError):
 
 
         # ASERTi3-2d DAA activated on Nov. 15th 2020 HF
-        if daa_mtp >= networks.net.ASERT_DAA.MTP_ACTIVATION_TIME:
+        if daa_mtp >= networks.net.asert_daa.MTP_ACTIVATION_TIME:
             header_ts = header['timestamp']
             prev_ts = prior['timestamp']
             if networks.net.TESTNET:
@@ -453,7 +453,7 @@ class Blockchain(util.PrintError):
             anchor_bits = 0x1d00923b
             anchor_prev_time = 1597096679
 
-            return networks.net.ASERT_DAA.next_bits_aserti3_2d(anchor_bits, prev_ts - anchor_prev_time, prevheight - anchor_height)
+            return networks.net.asert_daa.next_bits_aserti3_2d(anchor_bits, prev_ts - anchor_prev_time, prevheight - anchor_height)
 
 
         # Mon Nov 13 19:06:40 2017 DAA HF
