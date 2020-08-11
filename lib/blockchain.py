@@ -432,7 +432,8 @@ class Blockchain(util.PrintError):
         if networks.net.asert_daa.anchor is not None:
             # Checkpointed (hard-coded) value exists, just use that
             return networks.net.asert_daa.anchor
-        if self._cached_asert_anchor is not None:
+        if (self._cached_asert_anchor is not None
+            and self._cached_asert_anchor.height <= prevheader['block_height']):
             return self._cached_asert_anchor
         # ****
         # This may be slow -- we really should be leveraging the hard-coded
