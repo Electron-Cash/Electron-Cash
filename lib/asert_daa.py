@@ -23,6 +23,18 @@
 
 from .util import print_error
 
+def bits_to_target(bits: int) -> int:
+    size = bits >> 24
+    assert size <= 0x1d
+
+    word = bits & 0x00ffffff
+    assert 0x8000 <= word <= 0x7fffff
+
+    if size <= 3:
+        return word >> (8 * (3 - size))
+    else:
+        return word << (8 * (size - 3))
+
 
 class ASERTDaa:
     """ Parameters and methods for the ASERT DAA. Instances of these live in
@@ -38,25 +50,17 @@ class ASERTDaa:
     # POW Limit
     MAX_BITS = 0x1d00ffff
 
-    @staticmethod
-    def bits_to_target(bits: int) -> int:
-        size = bits >> 24
-        assert size <= 0x1d
-
-        word = bits & 0x00ffffff
-        assert 0x8000 <= word <= 0x7fffff
-
-        if size <= 3:
-            return word >> (8 * (3 - size))
-        else:
-            return word << (8 * (size - 3))
-
     MAX_TARGET = bits_to_target(MAX_BITS)
 
     def __init__(self, is_testnet=False):
         if is_testnet:
             # From ASERT spec, testnet has 1 hour half-life
             self.TAU = 3600
+            # DELETE ME XXX HACK TODO: for testing our forked testnet testing
+            self.MTP_ACTIVATION_TIME = 1597096200
+
+    @staticmethod
+    def bits_to_target(bits: int) -> int:  return bits_to_target(bits)
 
     def target_to_bits(self, target: int) -> int:
         assert target > 0
@@ -80,7 +84,7 @@ class ASERTDaa:
 
     @staticmethod
     def bits_to_work(bits: int) -> int:
-        return (2 << 255) // (ASERTDaa.bits_to_target(bits) + 1)
+        return (2 << 255) // (bits_to_target(bits) + 1)
 
     @staticmethod
     def target_to_hex(target: int) -> str:

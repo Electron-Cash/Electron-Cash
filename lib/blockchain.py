@@ -433,13 +433,30 @@ class Blockchain(util.PrintError):
             raise Exception("get_bits missing header {} with chunk {!r}".format(height - 1, chunk))
         bits = prior['bits']
 
-        #NOV 13 HF DAA
+        # NOV 13 HF DAA and/or ASERT DAA
 
         prevheight = height -1
         daa_mtp = self.get_median_time_past(prevheight, chunk)
 
-        #if (daa_mtp >= 1509559291):  #leave this here for testing
-        if (daa_mtp >= 1510600000):
+        if daa_mtp >= networks.net.ASERT_DAA.MTP_ACTIVATION_TIME:
+            header_ts = header['timestamp']
+            prev_ts = prior['timestamp']
+            # ASERTi3-2d DAA activated on Nov. 15th 2020 HF
+            if networks.net.TESTNET:
+                # testnet 20 minute rule
+                if header_ts - prev_ts > 20*60:
+                    return MAX_BITS
+
+            # XXX DELME TODO TESTNG - HARDCODED for testing
+            anchor_height = 1400614
+            anchor_bits = 0x1d00923b
+            anchor_prev_time = 1597096679
+
+            return networks.net.ASERT_DAA.next_bits_aserti3_2d(anchor_bits, prev_ts - anchor_prev_time, (height-1) - anchor_height)
+
+
+        # Mon Nov 13 19:06:40 2017 DAA HF
+        if daa_mtp >= 1510600000:
 
             if networks.net.TESTNET:
                 # testnet 20 minute rule
