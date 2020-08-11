@@ -21,6 +21,9 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from collections import namedtuple
+from typing import Optional
+
 from .util import print_error
 
 def bits_to_target(bits: int) -> int:
@@ -35,6 +38,8 @@ def bits_to_target(bits: int) -> int:
     else:
         return word << (8 * (size - 3))
 
+class Anchor(namedtuple("Anchor", "height bits prev_time")):
+    pass
 
 class ASERTDaa:
     """ Parameters and methods for the ASERT DAA. Instances of these live in
@@ -51,6 +56,8 @@ class ASERTDaa:
     MAX_BITS = 0x1d00ffff
 
     MAX_TARGET = bits_to_target(MAX_BITS)
+
+    anchor: Optional[Anchor] = None
 
     def __init__(self, is_testnet=False):
         if is_testnet:

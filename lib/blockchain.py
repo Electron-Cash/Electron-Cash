@@ -25,9 +25,10 @@ import os
 import sys
 import threading
 
-
-from . import util
+from . import asert_daa
 from . import networks
+from . import util
+
 from .bitcoin import *
 
 class VerifyError(Exception):
@@ -420,6 +421,32 @@ class Blockchain(util.PrintError):
 
         return blocks1['block_height']
 
+    def get_asert_anchor(self, prevheader, mtp, chunk=None):
+        # XXX DELME TODO TESTNG - HARDCODED for testing
+        return asert_daa.Anchor(1400614,     # anchor: height
+                                0x1d00923b,  # anchor: bits
+                                1597096679)  # anchor: *previous* block ts
+
+        # **** DO NOT USE THE BELOW CODE! ****
+        # The below is terrible and slow. Code is left here
+        # to illustrate the concept of what we want to do.
+        # **** DO NOT USE THE BELOW CODE! ****
+        anchor = prevheader
+        while mtp >= networks.net.asert_daa.MTP_ACTIVATION_TIME:
+            ht = anchor['block_height']
+            # This is the first block we've seen for this DAA with
+            # mtp >= activation time, so figure out the anchor params
+            prev = self.read_header(ht - 1, chunk)
+            if prev is None:
+                self.print_error("find_asert_anchor missing header {}".format(ht - 1))
+                return None
+            prev_mtp = self.get_median_time_past(ht - 1, chunk)
+            if prev_mtp < networks.net.asert_daa.MTP_ACTIVATION_TIME:
+                # Ok, use this as anchor
+                bits = anchor['bits']
+                return asert_daa.Anchor(ht, bits, prev['timestamp'])
+            mtp = prev_mtp
+
     def get_bits(self, header, chunk=None):
         '''Return bits for the given height.'''
         # Difficulty adjustment interval?
@@ -448,12 +475,15 @@ class Blockchain(util.PrintError):
                 if header_ts - prev_ts > 20*60:
                     return MAX_BITS
 
-            # XXX DELME TODO TESTNG - HARDCODED for testing
-            anchor_height = 1400614
-            anchor_bits = 0x1d00923b
-            anchor_prev_time = 1597096679
+            if networks.net.asert_daa.anchor is None:
+                networks.net.asert_daa.anchor = self.get_asert_anchor(prior, daa_mtp, chunk)
+                
+            anchor = networks.net.asert_daa.anchor
+            assert anchor is not None, "Failed to find ASERT anchor block"
 
-            return networks.net.asert_daa.next_bits_aserti3_2d(anchor_bits, prev_ts - anchor_prev_time, prevheight - anchor_height)
+            return networks.net.asert_daa.next_bits_aserti3_2d(anchor.bits,
+                                                               prev_ts - anchor.prev_time,
+                                                               prevheight - anchor.height)
 
 
         # Mon Nov 13 19:06:40 2017 DAA HF
