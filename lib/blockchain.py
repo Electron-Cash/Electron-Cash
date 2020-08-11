@@ -25,6 +25,8 @@ import os
 import sys
 import threading
 
+from typing import Optional
+
 from . import asert_daa
 from . import networks
 from . import util
@@ -421,16 +423,21 @@ class Blockchain(util.PrintError):
 
         return blocks1['block_height']
 
+    _cached_asert_anchor: Optional[asert_daa.Anchor] = None  # cached Anchor, per-Blockchain instance
     def get_asert_anchor(self, prevheader, mtp, chunk=None):
         # XXX DELME TODO TESTNG - HARDCODED for testing
-        return asert_daa.Anchor(1400614,     # anchor: height
-                                0x1d00923b,  # anchor: bits
-                                1597096679)  # anchor: *previous* block ts
-
-        # **** DO NOT USE THE BELOW CODE! ****
-        # The below is terrible and slow. Code is left here
-        # to illustrate the concept of what we want to do.
-        # **** DO NOT USE THE BELOW CODE! ****
+        #return asert_daa.Anchor(1400614,     # anchor: height
+        #                        0x1d00923b,  # anchor: bits
+        #                        1597096679)  # anchor: *previous* block ts
+        if networks.net.asert_daa.anchor is not None:
+            return networks.net.asert_daa.anchor
+        if self._cached_asert_anchor is not None:
+            return self._cached_asert_anchor
+        # ****
+        # This may be slow -- we really should be leveraging the hard-coded
+        # checkpointed value. TODO: add hard-coded value to networks.py after
+        # Nov. 15th 2020 HF to ASERT DAA
+        # ****
         anchor = prevheader
         while mtp >= networks.net.asert_daa.MTP_ACTIVATION_TIME:
             ht = anchor['block_height']
@@ -438,14 +445,16 @@ class Blockchain(util.PrintError):
             # mtp >= activation time, so figure out the anchor params
             prev = self.read_header(ht - 1, chunk)
             if prev is None:
-                self.print_error("find_asert_anchor missing header {}".format(ht - 1))
+                self.print_error("get_asert_anchor missing header {}".format(ht - 1))
                 return None
             prev_mtp = self.get_median_time_past(ht - 1, chunk)
             if prev_mtp < networks.net.asert_daa.MTP_ACTIVATION_TIME:
                 # Ok, use this as anchor
                 bits = anchor['bits']
-                return asert_daa.Anchor(ht, bits, prev['timestamp'])
+                self._cached_asert_anchor = asert_daa.Anchor(ht, bits, prev['timestamp'])
+                return self._cached_asert_anchor
             mtp = prev_mtp
+            anchor = prev
 
     def get_bits(self, header, chunk=None):
         '''Return bits for the given height.'''
@@ -475,11 +484,8 @@ class Blockchain(util.PrintError):
                 if header_ts - prev_ts > 20*60:
                     return MAX_BITS
 
-            if networks.net.asert_daa.anchor is None:
-                networks.net.asert_daa.anchor = self.get_asert_anchor(prior, daa_mtp, chunk)
-                
-            anchor = networks.net.asert_daa.anchor
-            assert anchor is not None, "Failed to find ASERT anchor block"
+            anchor = self.get_asert_anchor(prior, daa_mtp, chunk)
+            assert anchor is not None, "Failed to find ASERT anchor block for chain {!r}".format(self)
 
             return networks.net.asert_daa.next_bits_aserti3_2d(anchor.bits,
                                                                prev_ts - anchor.prev_time,
