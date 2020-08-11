@@ -20,6 +20,7 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import os
 
 from collections import namedtuple
 from typing import Optional
@@ -38,6 +39,20 @@ def bits_to_target(bits: int) -> int:
     else:
         return word << (8 * (size - 3))
 
+def _get_asert_activation_mtp():
+    """ Returns 1605441600 (Nov 15, 2020 12:00:00 UTC) or whatever override may
+    be set by the env variable ASERT_MTP """
+    default_mtp = 1605441600  # Nov 15, 2020 12:00:00 UTC
+    mtp = os.environ.get('ASERT_MTP', default_mtp)
+    try: mtp = int(mtp)
+    except: pass
+    if not isinstance(mtp, int) or mtp <= 1510600000:
+        print_error("Error: Environment variable ASERT_MTP ignored because it is invalid: {}".format(str(mtp)))
+        mtp = default_mtp
+    if mtp != default_mtp:
+        print_error("ASERT_MTP of {} will be used".format(mtp))
+    return mtp
+
 class Anchor(namedtuple("Anchor", "height bits prev_time")):
     pass
 
@@ -45,7 +60,7 @@ class ASERTDaa:
     """ Parameters and methods for the ASERT DAA. Instances of these live in
     networks.TestNet, networks.MainNet as part of the chain params. """
 
-    MTP_ACTIVATION_TIME = 1605441600  # Nov 15, 2020 12:00:00 UTC
+    MTP_ACTIVATION_TIME = _get_asert_activation_mtp()  # Normally Nov. 15th, 2020 UTC 12:00:00
 
     IDEAL_BLOCK_TIME = 10 * 60  # 10 mins
     TAU = 2 * 24 * 3600  # for mainnet, testnet has 3600 (1 hour) half-life
@@ -141,4 +156,3 @@ class ASERTDaa:
             return self.MAX_BITS
 
         return self.target_to_bits(target)
-

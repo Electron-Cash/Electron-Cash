@@ -425,15 +425,11 @@ class Blockchain(util.PrintError):
 
     _cached_asert_anchor: Optional[asert_daa.Anchor] = None  # cached Anchor, per-Blockchain instance
     def get_asert_anchor(self, prevheader, mtp, chunk=None):
-        # XXX DELME TODO TESTNG - HARDCODED for testing
-        #return asert_daa.Anchor(1400614,     # anchor: height
-        #                        0x1d00923b,  # anchor: bits
-        #                        1597096679)  # anchor: *previous* block ts
         if networks.net.asert_daa.anchor is not None:
             # Checkpointed (hard-coded) value exists, just use that
             return networks.net.asert_daa.anchor
         if (self._cached_asert_anchor is not None
-            and self._cached_asert_anchor.height <= prevheader['block_height']):
+                and self._cached_asert_anchor.height <= prevheader['block_height']):
             return self._cached_asert_anchor
         # ****
         # This may be slow -- we really should be leveraging the hard-coded
