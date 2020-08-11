@@ -430,6 +430,7 @@ class Blockchain(util.PrintError):
         #                        0x1d00923b,  # anchor: bits
         #                        1597096679)  # anchor: *previous* block ts
         if networks.net.asert_daa.anchor is not None:
+            # Checkpointed (hard-coded) value exists, just use that
             return networks.net.asert_daa.anchor
         if self._cached_asert_anchor is not None:
             return self._cached_asert_anchor
@@ -439,17 +440,17 @@ class Blockchain(util.PrintError):
         # Nov. 15th 2020 HF to ASERT DAA
         # ****
         anchor = prevheader
-        while mtp >= networks.net.asert_daa.MTP_ACTIVATION_TIME:
+        activation_mtp = networks.net.asert_daa.MTP_ACTIVATION_TIME
+        while mtp >= activation_mtp:
             ht = anchor['block_height']
-            # This is the first block we've seen for this DAA with
-            # mtp >= activation time, so figure out the anchor params
             prev = self.read_header(ht - 1, chunk)
             if prev is None:
                 self.print_error("get_asert_anchor missing header {}".format(ht - 1))
                 return None
             prev_mtp = self.get_median_time_past(ht - 1, chunk)
-            if prev_mtp < networks.net.asert_daa.MTP_ACTIVATION_TIME:
-                # Ok, use this as anchor
+            if prev_mtp < activation_mtp:
+                # Ok, use this as anchor -- since it is the first in the chain
+                # after activation.
                 bits = anchor['bits']
                 self._cached_asert_anchor = asert_daa.Anchor(ht, bits, prev['timestamp'])
                 return self._cached_asert_anchor
