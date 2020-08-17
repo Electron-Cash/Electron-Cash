@@ -63,7 +63,7 @@ class ASERTDaa:
     MTP_ACTIVATION_TIME = _get_asert_activation_mtp()  # Normally Nov. 15th, 2020 UTC 12:00:00
 
     IDEAL_BLOCK_TIME = 10 * 60  # 10 mins
-    TAU = 2 * 24 * 3600  # for mainnet, testnet has 3600 (1 hour) half-life
+    HALF_LIFE = 2 * 24 * 3600  # for mainnet, testnet has 3600 (1 hour) half-life
     # Integer implementation uses these for fixed point math
     RBITS = 16  # number of bits after the radix for fixed-point math
     RADIX = 1 << RBITS
@@ -77,7 +77,7 @@ class ASERTDaa:
     def __init__(self, is_testnet=False):
         if is_testnet:
             # From ASERT spec, testnet has 1 hour half-life
-            self.TAU = 3600
+            self.HALF_LIFE = 3600
 
     @staticmethod
     def bits_to_target(bits: int) -> int:  return bits_to_target(bits)
@@ -121,14 +121,14 @@ class ASERTDaa:
         # Ultimately, we want to approximate the following ASERT formula, using
         # only integer (fixed-point) math:
         #     new_target = old_target * 2^((time_diff -
-        #     IDEAL_BLOCK_TIME*(height_diff+1)) / TAU)
+        #     IDEAL_BLOCK_TIME*(height_diff+1)) / HALF_LIFE)
 
         # First, we'll calculate the exponent, using floor division. The
         # assertion checks a type constraint of the C++ implementation which
         # uses a 64-bit signed integer for the exponent. If inputs violate that,
         # then the implementation will diverge.
         assert(abs(time_diff - self.IDEAL_BLOCK_TIME * (height_diff+1)) < (1<<(63-self.RBITS)))
-        exponent = int(((time_diff - self.IDEAL_BLOCK_TIME*(height_diff+1)) * self.RADIX) / self.TAU)
+        exponent = int(((time_diff - self.IDEAL_BLOCK_TIME*(height_diff+1)) * self.RADIX) / self.HALF_LIFE)
 
         # Next, we use the 2^x = 2 * 2^(x-1) identity to shift our exponent into the (0, 1] interval.
         shifts = exponent >> self.RBITS
