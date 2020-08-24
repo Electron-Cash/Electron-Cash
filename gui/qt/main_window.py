@@ -260,6 +260,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     strongSelf.gui_object.lin_win_maybe_show_highdpi_caveat_msg(strongSelf)
             QTimer.singleShot(0, callback)
 
+    def changeEvent(self, event):
+        """
+        This function hides windows on minimizing if the user enabled it.
+        """
+        if event.type() == QEvent.WindowStateChange:
+            if (self.windowState() & Qt.WindowMinimized) == Qt.WindowMinimized:
+                if bool(self.config.get('minimize_to_tray', False)):
+                    self.hide()
+        super().changeEvent(event)
+
     def on_history(self, event, *args):
         # NB: event should always be 'on_history'
         if not args or args[0] is self.wallet:
@@ -345,6 +355,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def bring_to_top(self):
         self.show()
+        # Make sure the window is not minimized
+        self.setWindowState(self.windowState() & ~Qt.WindowMinimized)
         self.raise_()
 
     def on_error(self, exc_info):
@@ -4397,6 +4409,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.gui_object.set_auto_update_check(v == Qt.Checked)
         updatecheck_cb.stateChanged.connect(on_set_updatecheck)
         gui_widgets.append((updatecheck_cb, None))
+
+        minimize_to_tray_cb = QCheckBox(_("Minimize to system tray"))
+        minimize_to_tray_cb.setChecked(bool(self.config.get('minimize_to_tray', False)))
+        minimize_to_tray_cb.setToolTip(_("Enable this option to minimize windows into the system tray area."))
+        def on_minimize_to_tray_toggle():
+            self.config.set_key('minimize_to_tray', minimize_to_tray_cb.isChecked())
+        minimize_to_tray_cb.stateChanged.connect(on_minimize_to_tray_toggle)
+        gui_widgets.append((minimize_to_tray_cb, None))
 
 
         notify_tx_cb = QCheckBox(_('Notify when receiving funds'))
