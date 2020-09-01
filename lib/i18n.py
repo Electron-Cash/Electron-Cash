@@ -64,7 +64,18 @@ def set_language(x):
 
     if not x:
         # User hasn't selected a language so we default to the system language
+        # IFF that language is in the languages_ok_for_new_installs_as_default
+        # set, otherwise user will just get untranslated (English) text.
         x = get_system_language_match()
+        if x.startswith('es_'):
+            # HACK FIXME:
+            # Hard-code & force all Spanish to map to es_AR on new installs,
+            # which is the best (most complete) Spanish transaltion we have.
+            x = 'es_AR'
+        if x not in languages_ok_for_new_installs_as_default:
+            # If it's not a language in the accept set, will default to
+            # untranslated strings (which are obviously English). See #1551.
+            x = None
     elif x not in languages:
         # Attempt to match passed-in language with a known one if not exact
         # match.
@@ -73,6 +84,12 @@ def set_language(x):
     if x:
         language = gettext.translation('electron-cash', LOCALE_DIR, fallback=True, languages=[x])
         return x  # indicate to caller what code was actually used, if anything.
+
+def current_language() -> str:
+    ''' Returns the currently set language as a language code eg 'de_DE' or
+    the empty string '' if no language is set. '''
+    code = language and (language.info() or {}).get('language')
+    return code or ''
 
 def get_system_language_match() -> str:
     """
@@ -109,6 +126,13 @@ def match_language(language_code: str) -> str:
             return code
 
     return None
+
+# This is the set of languages that we consider 'relatively complete' and
+# acceptable to use as the default language for the app on first-run if no
+# language has been configured in the config file AND if the system is already
+# set to this language.  Otherwise we default to en_US on new installs if
+# the system language doesn't appear in this set.
+languages_ok_for_new_installs_as_default = { 'en_US', 'es_AR', 'de_DE', 'ro_RO' }
 
 LanguageDef = namedtuple(
     'LanguageDef', ['name', 'matches', 'excludes'])
