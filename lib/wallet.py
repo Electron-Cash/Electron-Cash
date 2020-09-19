@@ -1442,8 +1442,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         with self.lock:
             for addr in itertools.chain(list(self.txi.get(txid, {}).keys()), list(self.txo.get(txid, {}).keys())):
                 cur_hist = self._history.get(addr, list())
-                cur_hist.append((txid, 0))
-                self._history[addr] = cur_hist
+                if not txid in itertools.chain(*cur_hist):
+                    cur_hist.append((txid, 0))
+                    self._history[addr] = cur_hist
 
     def get_history(self, domain=None, *, reverse=False):
         # get domain
