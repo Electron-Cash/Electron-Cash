@@ -540,10 +540,10 @@ class Commands:
         if not unsigned:
             run_hook('sign_tx', self.wallet, tx)
             self.wallet.sign_transaction(tx, password)
-        if addtransaction:
-            self.wallet.add_transaction(tx.txid(), tx)
-            self.wallet.add_tx_to_history(tx.txid())
-            self.wallet.save_transactions()
+            if addtransaction:
+                self.wallet.add_transaction(tx.txid(), tx)
+                self.wallet.add_tx_to_history(tx.txid())
+                self.wallet.save_transactions()
         return tx
 
     @command('wp')
