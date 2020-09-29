@@ -350,7 +350,7 @@ class Interface(util.PrintError):
             pass
 
     def queue_request(self, *args):  # method, params, _id
-        '''Queue a request, later to be send with send_requests when the
+        '''Queue a request, later to be sent with send_requests when the
         socket is available for writing.
         '''
         self.request_time = time.time()

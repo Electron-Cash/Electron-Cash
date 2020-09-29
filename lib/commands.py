@@ -914,10 +914,11 @@ arg_types = {
 config_variables = {
 
     'addrequest': {
-        'requests_dir': 'directory where a bip70 file will be written.',
-        'ssl_privkey': 'Path to your SSL private key, needed to sign the request.',
+        'requests_dir': 'Directory where BIP70 payment request files will be written.',
+        'ssl_privkey': 'Path to your SSL private key, needed to sign payment requests.',
         'ssl_chain': 'Chain of SSL certificates, needed for signed requests. Put your certificate at the top and the root CA at the end',
         'url_rewrite': 'Parameters passed to str.replace(), in order to create the r= part of bitcoincash: URIs. Example: \"(\'file:///var/www/\',\'https://electron-cash.org/\')\"',
+        'payment_url': 'URL where wallets will send signed payments (optional but recommended)',
     },
     'listrequests':{
         'url_rewrite': 'Parameters passed to str.replace(), in order to create the r= part of bitcoincash: URIs. Example: \"(\'file:///var/www/\',\'https://electron-cash.org/\')\"',
