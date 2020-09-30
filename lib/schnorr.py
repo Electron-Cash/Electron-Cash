@@ -118,7 +118,7 @@ def nonce_function_rfc6979(order, privkeybytes, msg32, algo16=b'', ndata=b''):
     return k
 
 
-def sign(privkey, message_hash, ndata=None):
+def sign(privkey, message_hash, *, ndata=None):
     '''Create a Schnorr signature.
 
     Returns a 64-long bytes object (the signature), or raise ValueError

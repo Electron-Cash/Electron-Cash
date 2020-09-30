@@ -31,6 +31,7 @@
 import copy
 import errno
 import json
+import inspect
 import os
 import queue
 import random
@@ -2239,7 +2240,17 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         for k in self.get_keystores():
             try:
                 if k.can_sign(tx):
-                    k.sign_transaction(tx, password, use_cache=use_cache, ndata=ndata)
+                    if ndata:  # used for reusable paycodes
+                        # test if keystore sign_transaction method knows about the `ndata` kwarg
+                        if 'ndata' in inspect.signature(k.sign_transaction, follow_wrapped=True).parameters:
+                            # keystore understands the optional `ndata` kwarg
+                            k.sign_transaction(tx, password, use_cache=use_cache, ndata=ndata)
+                        else:
+                            # keystore does not understand `ndata` (possibly because hw wallet)
+                            raise BaseException("Keystore does not understand ndata parameter.  Possibly wrong wallet type attemping special operation.")
+                            continue  
+                    else:  # regular normal operation
+                        k.sign_transaction(tx, password, use_cache=use_cache)
             except UserCancelled:
                 continue
 

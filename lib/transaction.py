@@ -935,9 +935,9 @@ class Transaction:
         return sig
 
     @staticmethod
-    def _schnorr_sign(pubkey, sec, pre_hash, ndata=None): 
+    def _schnorr_sign(pubkey, sec, pre_hash, *, ndata=None): 
         pubkey = bytes.fromhex(pubkey)
-        sig = schnorr.sign(sec, pre_hash, ndata)
+        sig = schnorr.sign(sec, pre_hash, ndata=ndata)
         assert schnorr.verify(pubkey, sig, pre_hash)  # verify what we just signed
         return sig
 
@@ -970,7 +970,7 @@ class Transaction:
         nHashType = 0x00000041 # hardcoded, perhaps should be taken from unsigned input dict
         pre_hash = Hash(bfh(self.serialize_preimage(i, nHashType, use_cache=use_cache)))
         if self._sign_schnorr:
-            sig = self._schnorr_sign(pubkey, sec, pre_hash, ndata)
+            sig = self._schnorr_sign(pubkey, sec, pre_hash, ndata=ndata)
         else:
             sig = self._ecdsa_sign(sec, pre_hash)
         reason = []
