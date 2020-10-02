@@ -131,7 +131,7 @@ def sign(privkey, message_hash, *, ndata=None):
     message) you want to sign
     '''
    
-    if not ndata is None:
+    if ndata is not None:
        assert len(bytearray(ndata)) == 32
 
     if not isinstance(privkey, bytes) or len(privkey) != 32:
@@ -151,14 +151,14 @@ def sign(privkey, message_hash, *, ndata=None):
             # just leave it as a vague exception.
             raise ValueError('could not sign')
         return bytes(sig)
-    else:      
+    else:
         # pure python fallback:
         G = ecdsa.SECP256k1.generator
         order = G.order()
         fieldsize = G.curve().p()
 
         # For pure python (not libsecp256k1), convert an empty ndata to bytes as the required format for concatenation inside the nonce function.
-        if ndata == None:
+        if ndata is None:
             ndata = b''
             
         secexp = int.from_bytes(privkey, 'big')

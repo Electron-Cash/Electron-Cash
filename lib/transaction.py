@@ -511,7 +511,7 @@ class Transaction:
                        for sig in self._inputs[input_idx].get('signatures', []))
         return False
 
-    def rpa_paycode_swap_dummy_for_destination(self,rpa_dummy_address, rpa_destination_address):
+    def rpa_paycode_swap_dummy_for_destination(self, rpa_dummy_address, rpa_destination_address):
         # This method was created for RPA - reusable payment address.  
         # It swaps out a dummy destination address for the rpa-generated address.
         # WARNING: This is not recommended for use outside of RPA since it could
