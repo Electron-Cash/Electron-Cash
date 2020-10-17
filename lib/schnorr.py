@@ -132,7 +132,7 @@ def sign(privkey, message_hash, *, ndata=None):
     '''
    
     if ndata is not None:
-       assert len(bytearray(ndata)) == 32
+       assert len(ndata) == 32
 
     if not isinstance(privkey, bytes) or len(privkey) != 32:
         raise ValueError('privkey must be a bytes object of length 32')

@@ -2247,8 +2247,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             k.sign_transaction(tx, password, use_cache=use_cache, ndata=ndata)
                         else:
                             # keystore does not understand `ndata` (possibly because hw wallet)
-                            raise BaseException("Keystore does not understand ndata parameter.  Possibly wrong wallet type attemping special operation.")
-                            continue  
+                            raise RuntimeError("Keystore does not understand ndata parameter.  Possibly wrong wallet type attemping special operation.")
                     else:  # regular normal operation
                         k.sign_transaction(tx, password, use_cache=use_cache)
             except UserCancelled:

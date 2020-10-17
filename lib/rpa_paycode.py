@@ -8,14 +8,17 @@
 This implements the functionality for RPA (Reusable Payment Address) aka Paycodes
 '''
 
-from . import rpaaddr
-from . import bitcoin
-from . import transaction
+
 from . import address
-from decimal import Decimal as PyDecimal
-from .bitcoin import COIN, TYPE_ADDRESS, sha256 
+from . import bitcoin
+from . import rpaaddr
+from . import transaction
+
 from .address import Address, AddressError, Base58, PublicKey
+from .bitcoin import COIN, TYPE_ADDRESS, sha256 
 from .transaction import Transaction
+
+from decimal import Decimal as PyDecimal
 
 def satoshis(amount):
     # satoshi conversion must not be performed by the parser
@@ -64,10 +67,10 @@ def mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, noche
 
 def calculate_paycode_shared_secret(private_key, public_key, outpoint):
     
-    # private key is expected to be an integer.
-    # public_key is expected to be bytes.
-    # outpoint is expected to be a string.
-    # returns the paycode shared secret as bytes
+    """private key is expected to be an integer.
+    public_key is expected to be bytes.
+    outpoint is expected to be a string.
+    returns the paycode shared secret as bytes"""
         
     from fastecdsa import keys, curve
     from fastecdsa.point import Point 
@@ -100,8 +103,8 @@ def calculate_paycode_shared_secret(private_key, public_key, outpoint):
 
 def generate_address_from_pubkey_and_secret(parent_pubkey, secret):
   
-    # parent_pubkey and secret are expected to be bytes
-    # This function generates a receiving address based on CKD.
+    """parent_pubkey and secret are expected to be bytes
+    This function generates a receiving address based on CKD."""
         
     new_pubkey = bitcoin.CKD_pub(parent_pubkey, secret, 0)[0]
         
@@ -121,8 +124,8 @@ def generate_address_from_pubkey_and_secret(parent_pubkey, secret):
          
 def generate_privkey_from_secret(parent_privkey, secret):
   
-    # parent_privkey and secret are expected to be bytes
-    # This function generates a receiving address based on CKD.
+    """parent_privkey and secret are expected to be bytes
+    This function generates a receiving address based on CKD."""
         
     new_privkey = bitcoin.CKD_priv(parent_privkey, secret, 0)[0].hex()
     return new_privkey   

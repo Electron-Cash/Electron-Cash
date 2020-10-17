@@ -552,13 +552,13 @@ class Commands:
         return rpa_paycode.rpa_generate_paycode(self.wallet)
 
     @command('wp')
-    def rpa_generate_transaction_from_paycode(self, amount,  paycode=None, fee= None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
-              op_return=None, op_return_raw=None):
+    def rpa_generate_transaction_from_paycode(self, amount, paycode=None, fee= None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
+                                              op_return=None, op_return_raw=None):
         # WARNING: Amount is in full Bitcoin Cash units
         return rpa_paycode.rpa_generate_transaction_from_paycode(self.wallet, self.config, amount, paycode)
             
     @command('wp')
-    def rpa_extract_private_key_from_transaction(self,raw_tx, password=None):     
+    def rpa_extract_private_key_from_transaction(self, raw_tx, password=None):     
         return rpa_paycode.rpa_extract_private_key_from_transaction(self.wallet, raw_tx, password)
         
     @command('wp')
