@@ -143,12 +143,6 @@
         "s": "50002",
         "version": "1.4.1"
     },
-    "electrumx-bch.cryptonermal.net": {
-        "pruning": "-",
-        "s": "50002",
-        "t": "50001",
-        "version": "1.4.2"
-    },
     "fulcrum.devops.cash": {
         "pruning": "-",
         "s": "50002",
