@@ -134,7 +134,9 @@ class ElectrumGui(QObject, PrintError):
         self._wallet_password_cache = Weak.KeyDictionary()
         # /
         self.update_checker = UpdateChecker()
-        self.update_checker_timer = QTimer(self); self.update_checker_timer.timeout.connect(self.on_auto_update_timeout); self.update_checker_timer.setSingleShot(False)
+        self.update_checker_timer = QTimer(self)
+        self.update_checker_timer.timeout.connect(self.on_auto_update_timeout)
+        self.update_checker_timer.setSingleShot(False)
         self.update_checker.got_new_version.connect(self.on_new_version)
         # init tray
         self.dark_icon = self.config.get("dark_icon", False)
@@ -723,7 +725,7 @@ class ElectrumGui(QObject, PrintError):
         self.update_available_signal.emit(True)
         self.notify(_("A new version of Electron Cash is available: {}").format(newver))
 
-    def show_update_checker(self, parent, *, skip_check = False):
+    def show_update_checker(self, parent, *, skip_check=False):
         if self.warn_if_no_network(parent):
             return
         self.update_checker.show()
@@ -735,19 +737,23 @@ class ElectrumGui(QObject, PrintError):
         if not self.daemon.network:
             # auto-update-checking never is done in offline mode
             self.print_error("Offline mode; update check skipped")
-        elif not self.update_checker.did_check_recently():  # make sure auto-check doesn't happen right after a manual check.
+        elif not self.update_checker.did_check_recently():
+            # make sure auto-check doesn't happen right after a manual check.
             self.update_checker.do_check()
         if self.update_checker_timer.first_run:
-            self._start_auto_update_timer(first_run = False)
+            self._start_auto_update_timer(first_run=False)
 
-    def _start_auto_update_timer(self, *, first_run = False):
+    def _start_auto_update_timer(self, *, first_run=False):
         self.update_checker_timer.first_run = bool(first_run)
         if first_run:
-            interval = 10.0*1e3 # do it very soon (in 10 seconds)
+            # do it very soon (in 10 seconds)
+            interval = 10.0 * 1e3
         else:
-            interval = 4.0*3600.0*1e3 # once every 4 hours (in ms)
+            # once every 4 hours (in ms)
+            interval = 4.0 * 3600.0 * 1e3
         self.update_checker_timer.start(interval)
-        self.print_error("Auto update check: interval set to {} seconds".format(interval//1e3))
+        self.print_error(
+            f"Auto update check: interval set to {interval // 1e3} seconds")
 
     def _stop_auto_update_timer(self):
         self.update_checker_timer.stop()
