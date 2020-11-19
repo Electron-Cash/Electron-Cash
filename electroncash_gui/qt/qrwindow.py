@@ -31,12 +31,13 @@ from electroncash_gui.qt.qrcodewidget import QRCodeWidget, save_to_file, copy_to
 from .util import WWLabel, Buttons, MessageBoxMixin
 from electroncash.i18n import _
 from electroncash.util import Weak
+from electroncash.constants import PROJECT_NAME
 
 class QR_Window(QWidget, MessageBoxMixin):
 
     def __init__(self):
         super().__init__() # Top-level window. Parent needs to hold a reference to us and clean us up appropriately.
-        self.setWindowTitle('Electron Cash - ' + _('Payment Request'))
+        self.setWindowTitle(f'{PROJECT_NAME} - ' + _('Payment Request'))
         self.label = ''
         self.amount = 0
         self.setFocusPolicy(Qt.NoFocus)

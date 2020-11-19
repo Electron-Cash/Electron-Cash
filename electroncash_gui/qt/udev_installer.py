@@ -36,6 +36,8 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButt
 from electroncash.util import _, PrintError
 from electroncash.plugins import Plugins
 from electroncash_gui.qt import WindowModalDialog
+from electroncash.constants import PROJECT_NAME
+
 
 class InstallHardwareWalletSupportDialog(PrintError, WindowModalDialog):
     UDEV_RULES_FILE='/etc/udev/rules.d/20-electron-cash-hw-wallets.rules'
@@ -63,9 +65,15 @@ class InstallHardwareWalletSupportDialog(PrintError, WindowModalDialog):
 
         info_label = QLabel()
         info_label.setText(
-            _('This tool installs hardware wallet "udev rules" on your system.') + ' ' +
-            _('Correct udev rules are required in order for a hardware wallet to be accessed by Electron Cash.') + '\n\n' +
-            _('Note: Installing udev rules requires root access via "sudo", so make sure you are in the sudoers file and/or have Administrator rights on this system!')
+            _('This tool installs hardware wallet "udev rules" on your '
+              'system.') +
+            ' ' +
+            _(f'Correct udev rules are required in order for a hardware wallet'
+              f' to be accessed by {PROJECT_NAME}.') +
+            '\n\n' +
+            _('Note: Installing udev rules requires root access via "sudo", '
+              'so make sure you are in the sudoers file and/or have '
+              'Administrator rights on this system!')
             )
         info_label.setWordWrap(True)
 
@@ -153,7 +161,7 @@ class InstallHardwareWalletSupportDialog(PrintError, WindowModalDialog):
 
         ids_set = self.device_manager.recognised_hardware.union(self.ADDITIONAL_HARDWARE_IDS)
         lines = [line_format.format(ids[0], ids[1]) for ids in ids_set]
-        return '# Electron Cash hardware wallet rules file\n' + '\n'.join(lines) + '\n'
+        return f'# {PROJECT_NAME} hardware wallet rules file\n' + '\n'.join(lines) + '\n'
 
     def _runScriptAsRoot(self, script: str) -> bool:
         assert script

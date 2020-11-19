@@ -7,6 +7,7 @@ import stat
 from . import util
 from copy import deepcopy
 from .util import user_dir, make_dir, print_error, PrintError
+from .constants import SCRIPT_NAME
 
 from .bitcoin import MAX_FEE_RATE, FEE_TARGETS
 
@@ -88,7 +89,7 @@ class SimpleConfig(PrintError):
     def electrum_path(self):
         # Read electrum_cash_path from command line
         # Otherwise use the user's default data directory.
-        path = self.get('electron_cash_path')
+        path = self.get('electrum_bcha_path')
         if path is None:
             path = self.user_dir()
 
@@ -106,7 +107,7 @@ class SimpleConfig(PrintError):
         obsolete_file = os.path.join(path, 'recent_servers')
         if os.path.exists(obsolete_file):
             os.remove(obsolete_file)
-        self.print_error("electron-cash directory", path)
+        self.print_error(f"{SCRIPT_NAME} directory", path)
         return path
 
     def rename_config_keys(self, config, keypairs, deprecation_warning=False):

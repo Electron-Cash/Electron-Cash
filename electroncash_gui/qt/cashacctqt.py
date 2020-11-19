@@ -44,6 +44,7 @@ from electroncash import web
 from electroncash.address import Address, UnknownAddress
 from electroncash.i18n import _, ngettext
 from electroncash.wallet import Abstract_Wallet
+from electroncash.constants import PROJECT_NAME
 
 
 class VerifyingDialog(WaitingDialog):
@@ -165,8 +166,8 @@ def resolve_cashacct(parent : MessageBoxMixin, name : str, wallet : Abstract_Wal
         name = wallet.cashacct.fmt_info(info, mch)
         if not isinstance(info.address, Address):
             raise Bad(_("Unsupported payment data type.") + "\n\n"
-                      + _("The Cash Account {name} uses an account type that "
-                          "is not supported by Electron Cash.").format(name=name))
+                      + _(f"The Cash Account {name} uses an account type that "
+                          f"is not supported by {PROJECT_NAME}."))
         return info, name
     except Bad as e:
         parent.show_error(str(e))
@@ -399,7 +400,7 @@ class InfoGroupBox(PrintError, QGroupBox):
             if not isinstance(info.address, Address):
                 rb.setDisabled(True)
                 is_valid = False
-                rb.setToolTip(_('Electron Cash currently only supports Cash Account types 1 & 2'))
+                rb.setToolTip(_(f'{PROJECT_NAME} currently only supports Cash Account types 1 & 2'))
             elif wallet.is_mine(info.address):
                 is_mine = True
                 is_change = wallet.is_change(info.address)
@@ -584,7 +585,10 @@ def lookup_cash_account_dialog(
 
 
     #acct.setFixedWidth(280)
-    label = HelpLabel(_("&Cash Account Name"), _("Enter a Cash Account name of the form Name#123.45, and Electron Cash will search for the contact and present you with its resolved address."))
+    label = HelpLabel(_("&Cash Account Name"),
+                      _(f"Enter a Cash Account name of the form Name#123.45, "
+                        f"and {PROJECT_NAME} will search for the contact and "
+                        f"present you with its resolved address."))
     label.setBuddy(acct)
     search = QPushButton(_("Lookup"))
     search.setEnabled(False)
@@ -779,8 +783,8 @@ def cash_account_detail_dialog(parent : MessageBoxMixin,  # Should be an Electru
     # file assumes info.address is an Address.
     if not isinstance(info.address, Address):
         parent.show_error(_("Unsupported payment data type.") + "\n\n"
-                          + _("The Cash Account {name} uses an account type that "
-                              "is not supported by Electron Cash.").format(name=ca_string))
+                          + _(f"The Cash Account {ca_string} uses an account "
+                              f"type that is not supported by {PROJECT_NAME}."))
         return False
 
     title = title or _("Cash Account Details")

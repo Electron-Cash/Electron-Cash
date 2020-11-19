@@ -38,6 +38,7 @@ from functools import wraps
 from . import bitcoin
 from . import rpa
 from . import util
+from .constants import PROJECT_NAME, SCRIPT_NAME
 from .address import Address, AddressError
 from .bitcoin import hash_160, COIN, TYPE_ADDRESS
 from .i18n import _
@@ -98,7 +99,8 @@ def command(s):
             if c.requires_network and network is None:
                 raise BaseException("Daemon offline")  # Same wording as in daemon.py.
             if c.requires_wallet and wallet is None:
-                raise BaseException("Wallet not loaded. Use 'electron-cash daemon load_wallet'")
+                raise BaseException(f"Wallet not loaded. Use '{SCRIPT_NAME}"
+                                    f" daemon load_wallet'")
             if c.requires_password and password is None and wallet.storage.get('use_encryption') \
                and not kwargs.get("unsigned"):
                 return {'error': 'Password required' }
@@ -393,7 +395,9 @@ class Commands:
     @command('')
     def dumpprivkeys(self):
         """Deprecated."""
-        return "This command is deprecated. Use a pipe instead: 'electron-cash listaddresses | electron-cash getprivatekeys - '"
+        return f"This command is deprecated. Use a pipe instead: " \
+               f"'{SCRIPT_NAME} listaddresses | {SCRIPT_NAME} " \
+               f"getprivatekeys - '"
 
     @command('')
     def validateaddress(self, address):
@@ -1000,7 +1004,7 @@ def add_network_options(parser):
 def add_global_options(parser):
     group = parser.add_argument_group('global options')
     group.add_argument("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Show debugging information")
-    group.add_argument("-D", "--dir", dest="electron_cash_path", help="electron cash directory")
+    group.add_argument("-D", "--dir", dest="electrum_bcha_path", help=f"{PROJECT_NAME} directory")
     group.add_argument("-P", "--portable", action="store_true", dest="portable", default=False, help="Use local 'electron_cash_data' directory")
     group.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
     group.add_argument("-wp", "--walletpassword", dest="wallet_password", default=None, help="Supply wallet password")
@@ -1011,11 +1015,11 @@ def add_global_options(parser):
 def get_parser():
     # create main parser
     parser = argparse.ArgumentParser(
-        epilog="Run 'electron-cash help <command>' to see the help for a command")
+        epilog=f"Run '{SCRIPT_NAME} help <command>' to see the help for a command")
     add_global_options(parser)
     subparsers = parser.add_subparsers(dest='cmd', metavar='<command>')
     # gui
-    parser_gui = subparsers.add_parser('gui', description="Run Electron Cash's Graphical User Interface.", help="Run GUI (default)")
+    parser_gui = subparsers.add_parser('gui', description=f"Run {PROJECT_NAME}'s Graphical User Interface.", help="Run GUI (default)")
     parser_gui.add_argument("url", nargs='?', default=None, help="bitcoin URI (or bip70 file)")
     parser_gui.add_argument("-g", "--gui", dest="gui", help="select graphical user interface", choices=['qt', 'text', 'stdio'])
     parser_gui.add_argument("-o", "--offline", action="store_true", dest="offline", default=False, help="Run offline")

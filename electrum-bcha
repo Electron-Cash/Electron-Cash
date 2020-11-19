@@ -40,8 +40,8 @@ if sys.platform == "win32" and hasattr(sys, 'frozen') and hasattr(sys, '_MEIPASS
 os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
 if sys.version_info < (3, 6):
-    sys.exit("*** Electron Cash support for Python 3.5 has been discontinued.\n"
-             "*** Please run Electron Cash with Python 3.6 or above.")
+    sys.exit(f"*** {PROJECT_NAME} support for Python 3.5 has been discontinued.\n"
+             f"*** Please run {PROJECT_NAME} with Python 3.6 or above.")
 
 # from https://gist.github.com/tito/09c42fb4767721dc323d
 import threading
@@ -108,6 +108,8 @@ from electroncash.mnemonic import Mnemonic, Mnemonic_Electrum
 from electroncash.winconsole import create_or_attach_console  # Import ok on other platforms, won't be called.
 import electroncash_plugins
 import electroncash.web as web
+from electroncash.constants import SCRIPT_NAME, PROJECT_NAME
+
 
 # get password routine
 def prompt_password(prompt, confirm=True):
@@ -204,7 +206,7 @@ def init_daemon(config_options):
     storage = WalletStorage(config.get_wallet_path())
     if not storage.file_exists():
         print_msg("Error: Wallet file not found.")
-        print_msg("Type 'electron-cash create' to create a new wallet, or provide a path to a wallet with the -w option")
+        print_msg(f"Type '{SCRIPT_NAME} create' to create a new wallet, or provide a path to a wallet with the -w option")
         sys.exit(0)
     if storage.is_encrypted():
         if 'wallet_password' in config_options:
@@ -242,7 +244,7 @@ def init_cmdline(config_options, server):
 
     if cmd.requires_wallet and not storage.file_exists():
         print_msg("Error: Wallet file not found.")
-        print_msg("Type 'electron-cash create' to create a new wallet, or provide a path to a wallet with the -w option")
+        print_msg(f"Type '{SCRIPT_NAME} create' to create a new wallet, or provide a path to a wallet with the -w option")
         sys.exit(0)
 
     # important warning
@@ -322,7 +324,7 @@ if __name__ == '__main__':
     # On windows, allocate a console if needed
     if sys.platform.startswith('win'):
         require_console = '-v' in sys.argv or '--verbose' in sys.argv
-        console_title = _("Electron Cash - Verbose Output") if require_console else None
+        console_title = _(f"{PROJECT_NAME} - Verbose Output") if require_console else None
         # Attempt to attach to ancestor process console. If create=True we will
         # create a new conole window if no ancestor process console exists.
         # (Presumably if user ran with -v, they expect console output).
@@ -375,7 +377,7 @@ if __name__ == '__main__':
         config_options['portable'] = False
 
     if config_options.get('portable'):
-        config_options['electron_cash_path'] = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'electron_cash_data')
+        config_options['electrum_bcha_path'] = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'electrum_bcha_data')
 
     set_verbosity(config_options.get('verbose'))
 
@@ -472,7 +474,7 @@ if __name__ == '__main__':
         else:
             cmd = known_commands[cmdname]
             if cmd.requires_network:
-                print_msg("Daemon not running; try 'electron-cash daemon start'")
+                print_msg(f"Daemon not running; try '{SCRIPT_NAME} daemon start'")
                 sys.exit(1)
             else:
                 init_plugins(config, 'cmdline')

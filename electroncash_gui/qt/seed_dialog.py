@@ -28,6 +28,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from electroncash.i18n import _
 from electroncash import mnemonic
+from electroncash.constants import PROJECT_NAME
 
 from .util import *
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
@@ -207,7 +208,8 @@ class KeysLayout(QVBoxLayout):
 class SeedDialog(WindowModalDialog):
 
     def __init__(self, parent, seed, passphrase, derivation=None, seed_type=None):
-        WindowModalDialog.__init__(self, parent, ('Electron Cash - ' + _('Seed')))
+        WindowModalDialog.__init__(self, parent,
+                                   (f'{PROJECT_NAME} - ' + _('Seed')))
         self.setMinimumWidth(400)
         vbox = QVBoxLayout(self)
         title =  _("Your wallet generation seed is:")

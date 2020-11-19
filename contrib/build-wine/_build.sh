@@ -234,14 +234,14 @@ build_the_app() {
         find -exec touch -d '2000-11-11T11:11:11+00:00' {} +
         popd  # go back to $here
 
-        cp -r "$here"/../electrum-locale/locale $WINEPREFIX/drive_c/electroncash/electroncash/
+        cp -rv "$here"/../electrum-locale/locale $WINEPREFIX/drive_c/electrumbcha/electroncash/
 
         # Install frozen dependencies
         info "Installing frozen dependencies ..."
         $PYTHON -m pip install --no-warn-script-location -r "$here"/../deterministic-build/requirements.txt || fail "Failed to install requirements"
         $PYTHON -m pip install --no-warn-script-location -r "$here"/../deterministic-build/requirements-hw.txt || fail "Failed to install requirements-hw"
 
-        pushd $WINEPREFIX/drive_c/electroncash
+        pushd $WINEPREFIX/drive_c/electrumbcha
         $PYTHON setup.py install || fail "Failed setup.py install"
         popd
 

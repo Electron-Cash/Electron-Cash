@@ -10,7 +10,7 @@ for i, x in enumerate(sys.argv):
 else:
     raise BaseException('no name')
 
-home = 'C:\\electroncash\\'
+home = 'C:\\electrumbcha\\'
 
 # see https://github.com/pyinstaller/pyinstaller/issues/2005
 hiddenimports = []
@@ -65,7 +65,7 @@ datas += collect_data_files('keepkeylib')
 datas += collect_data_files('mnemonic')  # wordlists used by keepkeylib from lib mnemonic
 
 # We don't put these files in to actually include them in the script but to make the Analysis method scan them for imports
-a = Analysis([home+'electron-cash',
+a = Analysis([home+'electrum-bcha',
               home+'electroncash_gui/qt/main_window.py',
               home+'electroncash_gui/qt/qrreader/camera_dialog.py',
               home+'electroncash_gui/text.py',

@@ -46,6 +46,7 @@ from . import util
 from . import transaction
 from . import x509
 from . import rsakey
+from .constants import PROJECT_NAME
 
 from .address import Address, PublicKey
 from .bitcoin import TYPE_ADDRESS
@@ -299,7 +300,7 @@ class PaymentRequest:
         paymnt.transactions.append(bfh(raw_tx))
         ref_out = paymnt.refund_to.add()
         ref_out.script = bfh(transaction.Transaction.pay_script(refund_addr))
-        paymnt.memo = "Paid using Electron Cash"
+        paymnt.memo = f"Paid using {PROJECT_NAME}"
         pm = paymnt.SerializeToString()
         payurl = urllib.parse.urlparse(pay_det.payment_url)
         try:

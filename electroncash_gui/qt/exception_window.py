@@ -39,6 +39,7 @@ from electroncash.i18n import _
 import sys
 from electroncash import PACKAGE_VERSION
 from electroncash.util import print_error, finalization_print_error
+from electroncash.constants import PROJECT_NAME
 from .main_window import ElectrumWindow
 from .util import destroyed_print_error
 
@@ -50,13 +51,13 @@ issue_template = """<h2>Traceback</h2>
 
 <h2>Additional information</h2>
 <ul>
-  <li>Electron Cash version: {app_version}</li>
+  <li>%s version: {app_version}</li>
   <li>Python version: {python_version}</li>
   <li>Operating system: {os}</li>
   <li>Wallet type: {wallet_type}</li>
   <li>Locale: {locale}</li>
 </ul>
-"""
+""" % PROJECT_NAME
 report_server = "https://crashhub.electroncash.org/crash"
 
 
@@ -67,7 +68,7 @@ class Exception_Window(QWidget):
         super().__init__(None) # Top-level window. Note PyQt top level windows are kept alive by strong references, hence _active_window
         self.exc_args = (exctype, value, tb)
         self.config = config
-        self.setWindowTitle('Electron Cash - ' + _('An Error Occurred'))
+        self.setWindowTitle(f'{PROJECT_NAME} - ' + _('An Error Occurred'))
         self.setMinimumSize(600, 300)
 
         main_box = QVBoxLayout()
@@ -75,7 +76,7 @@ class Exception_Window(QWidget):
 
         heading = QLabel('<h2>' + _('Sorry!') + '</h2>')
         main_box.addWidget(heading)
-        l = QLabel(_('Something went wrong running Electron Cash.'))
+        l = QLabel(_(f'Something went wrong running {PROJECT_NAME}.'))
         l.setWordWrap(True)
         main_box.addWidget(l)
 

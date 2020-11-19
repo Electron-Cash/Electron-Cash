@@ -12,6 +12,8 @@ from .util import *
 from electroncash.i18n import _
 from electroncash import util, bitcoin, address
 
+from electroncash.constants import PROJECT_NAME
+
 class Bip38Importer(WindowModalDialog, util.PrintError):
     ''' A drop-in GUI element for implementing a BIP38 import dialog.
     For each of the passed-in bip38 keys, it will prompt the user to enter their
@@ -45,7 +47,7 @@ class Bip38Importer(WindowModalDialog, util.PrintError):
         decrypted or a user cancel.
         '''
         if not title:
-            title = 'Electron Cash - ' + _('BIP38 Import')
+            title = f'{PROJECT_NAME} - ' + _('BIP38 Import')
         WindowModalDialog.__init__(self, parent=parent, title=title)
         if not bitcoin.is_bip38_available():
             raise RuntimeError('Bip38Importer: bip38 decoding is not available')

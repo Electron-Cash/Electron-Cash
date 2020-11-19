@@ -29,6 +29,7 @@ from electroncash.address import Address
 from electroncash.contacts import Contact, contact_types
 from electroncash.plugins import run_hook
 from electroncash.util import FileImportFailed, PrintError, finalization_print_error
+from electroncash.constants import PROJECT_NAME
 # TODO: whittle down these * imports to what we actually use when done with
 # our changes to this class -Calin
 from PyQt5.QtGui import *
@@ -131,7 +132,9 @@ class ContactList(PrintError, MyTreeWidget):
             num = self.parent.contacts.import_file(filename)
             self.parent.show_message(_("{} contacts successfully imported.").format(num))
         except Exception as e:
-            self.parent.show_error(_("Electron Cash was unable to import your contacts.") + "\n" + repr(e))
+            self.parent.show_error(
+                _(f"{PROJECT_NAME} was unable to import your contacts.")
+                + "\n" + repr(e))
         self.on_update()
 
     def export_contacts(self):
@@ -144,7 +147,9 @@ class ContactList(PrintError, MyTreeWidget):
                 num = self.parent.contacts.export_file(fileName)
                 self.parent.show_message(_("{} contacts exported to '{}'").format(num, fileName))
         except Exception as e:
-            self.parent.show_error(_("Electron Cash was unable to export your contacts.") + "\n" + repr(e))
+            self.parent.show_error(
+                _(f"{PROJECT_NAME} was unable to export your contacts.")
+                + "\n" + repr(e))
 
     def find_item(self, key: Contact) -> QTreeWidgetItem:
         ''' Rather than store the item reference in a lambda, we store its key.

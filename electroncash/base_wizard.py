@@ -34,6 +34,7 @@ from . import util
 from .wallet import (ImportedAddressWallet, ImportedPrivkeyWallet,
                      Standard_Wallet, Multisig_Wallet, wallet_types)
 from .i18n import _
+from .constants import PROJECT_NAME
 
 
 class BaseWizard(util.PrintError):
@@ -466,5 +467,5 @@ class BaseWizard(util.PrintError):
             self.wallet.synchronize()
             self.wallet.storage.write()
             self.terminate()
-        msg = _("Electron Cash is generating your addresses, please wait.")
+        msg = _(f"{PROJECT_NAME} is generating your addresses, please wait.")
         self.waiting_dialog(task, msg)

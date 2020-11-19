@@ -3,7 +3,7 @@ include README.rst
 include electron-cash.conf.sample
 include electron-cash.desktop
 include *.py
-include electron-cash
+include electrum-bcha
 include contrib/requirements/requirements.txt
 include contrib/requirements/requirements-hw.txt
 recursive-include electroncash *.py

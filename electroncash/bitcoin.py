@@ -35,6 +35,7 @@ import pyaes
 
 from typing import Tuple
 
+from .constants import PROJECT_NAME
 from . import networks
 from .util import (bfh, bh2u, to_string, print_error, InvalidPassword,
                    assert_bytes, to_bytes, inv_dict, profiler)
@@ -49,8 +50,9 @@ except AssertionError:
     pass
 else:
     import sys
-    sys.exit('Electron Cash uses "assert" statements for its normal control flow.\n'
-             'Please run this application without the python "-O" (optimize) flag.')
+    sys.exit(f'{PROJECT_NAME} uses "assert" statements for its normal control'
+             f' flow.\nPlease run this application without the python "-O" '
+             f'(optimize) flag.')
 # /End -O check
 
 do_monkey_patching_of_python_ecdsa_internals_with_libsecp256k1()

@@ -39,6 +39,7 @@ from typing import Callable, Optional
 
 from . import bitcoin
 from . import version
+from .constants import PROJECT_NAME, SCRIPT_NAME
 from .i18n import _
 from .util import (print_error, print_stderr, make_dir, profiler, user_dir,
                    DaemonThread, PrintError, ThreadJob, UserCancelled)
@@ -611,7 +612,7 @@ def run_hook(name, *args, **kwargs):
         return results[0]
 
 def daemon_command(func):
-    """ Method decorator for BasePlugin subclasses to add a remote command
+    f""" Method decorator for BasePlugin subclasses to add a remote command
     to the daemon. Usage:
 
         class MyPlugin(BasePlugin):
@@ -624,7 +625,7 @@ def daemon_command(func):
 
     These can then be invoked as:
 
-        ./electron-cash daemon myplugin_action1 arg arg arg ...
+        ./{SCRIPT_NAME} daemon myplugin_action1 arg arg arg ...
 
     Here `config` is *not* the usual global config but also includes the options
     from the command line client:
@@ -911,11 +912,11 @@ class DeviceMgr(ThreadJob):
         # The user input has wrong PIN or passphrase, or cancelled input,
         # or it is not pairable
         raise DeviceUnpairableError(
-            _('Electron Cash cannot pair with your {}.\n\n'
+            _(f'{PROJECT_NAME} cannot pair with your {plugin.device}.\n\n'
               'Before you request bitcoins to be sent to addresses in this '
               'wallet, ensure you can pair with your device, or that you have '
               'its seed (and passphrase, if any).  Otherwise all bitcoins you '
-              'receive will be unspendable.').format(plugin.device))
+              'receive will be unspendable.'))
 
     def unpaired_device_infos(self, handler, plugin, devices=None):
         '''Returns a list of DeviceInfo objects: one for each connected,

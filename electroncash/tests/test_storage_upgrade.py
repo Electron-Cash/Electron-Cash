@@ -260,7 +260,7 @@ class TestStorageUpgrade(WalletTestCase):
         from ..simple_config import SimpleConfig
 
         cls.electron_cash_path = tempfile.mkdtemp()
-        config = SimpleConfig({'electron_cash_path': cls.electron_cash_path})
+        config = SimpleConfig({'electrum_bcha_path': cls.electron_cash_path})
 
         gui_name = 'cmdline'
         # TODO it's probably wasteful to load all plugins... only need Trezor

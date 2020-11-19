@@ -38,6 +38,7 @@ from electroncash.util import print_error, Weak, PrintError, in_main_thread
 from electroncash.network import serialize_server, deserialize_server, get_eligible_servers
 from electroncash.plugins import run_hook
 from electroncash.tor import TorController
+from electroncash.constants import PROJECT_NAME
 
 from .util import *
 from .utils import UserPortValidator
@@ -410,22 +411,33 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.autoconnect_cb.clicked.connect(self.update)
 
         msg = ' '.join([
-            _("If auto-connect is enabled, Electron Cash will always use a server that is on the longest blockchain."),
-            _("If it is disabled, you have to choose a server you want to use. Electron Cash will warn you if your server is lagging.")
+            _(f"If auto-connect is enabled, {PROJECT_NAME} will always use a "
+              f"server that is on the longest blockchain."),
+            _("If it is disabled, you have to choose a server you want to use."
+              f" {PROJECT_NAME} will warn you if your server is lagging.")
         ])
         grid.addWidget(self.autoconnect_cb, 0, 0, 1, 3)
         grid.addWidget(HelpButton(msg), 0, 4)
 
         self.preferred_only_cb = QCheckBox(_("Connect only to preferred servers"))
         self.preferred_only_cb.setEnabled(self.config.is_modifiable('whitelist_servers_only'))
-        self.preferred_only_cb.setToolTip(_("If enabled, restricts Electron Cash to connecting to servers only marked as 'preferred'."))
+        self.preferred_only_cb.setToolTip(
+            _(f"If enabled, restricts {PROJECT_NAME} to connecting to "
+              f"servers only marked as 'preferred'."))
 
         self.preferred_only_cb.clicked.connect(self.set_whitelisted_only) # re-set the config key and notify network.py
 
         msg = '\n\n'.join([
-            _("If 'Connect only to preferred servers' is enabled, Electron Cash will only connect to servers marked as 'preferred' servers ({}).").format(ServerFlag.Symbol[ServerFlag.Preferred]),
-            _("This feature was added in response to the potential for a malicious actor to deny service via launching many servers (aka a sybil attack)."),
-            _("If unsure, most of the time it's safe to leave this option disabled. However leaving it enabled is safer (if a little bit discouraging to new server operators wanting to populate their servers).")
+            _(f"If 'Connect only to preferred servers' is enabled, "
+              f"{PROJECT_NAME} will only connect to servers marked as "
+              f"'preferred' servers ({ServerFlag.Symbol[ServerFlag.Preferred]})."),
+            _("This feature was added in response to the potential for a "
+              "malicious actor to deny service via launching many servers "
+              "(aka a sybil attack)."),
+            _("If unsure, most of the time it's safe to leave this option "
+              "disabled. However leaving it enabled is safer (if a little "
+              "bit discouraging to new server operators wanting to populate "
+              "their servers).")
         ])
         grid.addWidget(self.preferred_only_cb, 1, 0, 1, 3)
         grid.addWidget(HelpButton(msg), 1, 4)
@@ -450,9 +462,14 @@ class NetworkChoiceLayout(QObject, PrintError):
         grid.addWidget(label, 6, 0, 1, 4)
         msg = ' '.join([
             _("Preferred servers ({}) are servers you have designated as reliable and/or trustworthy.").format(ServerFlag.Symbol[ServerFlag.Preferred]),
-            _("Initially, the preferred list is the hard-coded list of known-good servers vetted by the Electron Cash developers."),
-            _("You can add or remove any server from this list and optionally elect to only connect to preferred servers."),
-            "\n\n"+_("Banned servers ({}) are servers deemed unreliable and/or untrustworthy, and so they will never be connected-to by Electron Cash.").format(ServerFlag.Symbol[ServerFlag.Banned])
+            _("Initially, the preferred list is the hard-coded list of "
+              f"known-good servers vetted by the {PROJECT_NAME} developers."),
+            _("You can add or remove any server from this list and"
+              " optionally elect to only connect to preferred servers."),
+            "\n\n" +
+            _(f"Banned servers ({ServerFlag.Symbol[ServerFlag.Banned]}) "
+              "are servers deemed unreliable and/or untrustworthy, and "
+              f"so they will never be connected-to by {PROJECT_NAME}")
         ])
         grid.addWidget(HelpButton(msg), 6, 4)
 
@@ -539,7 +556,10 @@ class NetworkChoiceLayout(QObject, PrintError):
         grid.addWidget(HelpButton(tor_proxy_help), 3, 4)
         # Proxy settings
         grid.addWidget(self.proxy_cb, 4, 0, 1, 3)
-        grid.addWidget(HelpButton(_('Proxy settings apply to all connections: with Electron Cash servers, but also with third-party services.')), 4, 4)
+        grid.addWidget(HelpButton(
+            _(f'Proxy settings apply to all connections: with {PROJECT_NAME}'
+              f' servers, but also with third-party services.')),
+            4, 4)
         grid.addWidget(self.proxy_mode, 6, 1)
         grid.addWidget(self.proxy_host, 6, 2)
         grid.addWidget(self.proxy_port, 6, 3)
@@ -550,8 +570,10 @@ class NetworkChoiceLayout(QObject, PrintError):
         # Blockchain Tab
         grid = QGridLayout(blockchain_tab)
         msg =  ' '.join([
-            _("Electron Cash connects to several nodes in order to download block headers and find out the longest blockchain."),
-            _("This blockchain is used to verify the transactions sent by your transaction server.")
+            _(f"{PROJECT_NAME} connects to several nodes in order to "
+              f"download block headers and find out the longest blockchain."),
+            _("This blockchain is used to verify the transactions sent by "
+              "your transaction server.")
         ])
         self.status_label = QLabel('')
         self.status_label.setTextInteractionFlags(self.status_label.textInteractionFlags() | Qt.TextSelectableByMouse)
@@ -561,7 +583,8 @@ class NetworkChoiceLayout(QObject, PrintError):
 
         self.server_label = QLabel('')
         self.server_label.setTextInteractionFlags(self.server_label.textInteractionFlags() | Qt.TextSelectableByMouse)
-        msg = _("Electron Cash sends your wallet addresses to a single server, in order to receive your transaction history.")
+        msg = _(f"{PROJECT_NAME} sends your wallet addresses to a single "
+                f"server, in order to receive your transaction history.")
         grid.addWidget(QLabel(_('Server') + ':'), 1, 0)
         grid.addWidget(self.server_label, 1, 1, 1, 3)
         grid.addWidget(HelpButton(msg), 1, 4)
@@ -610,7 +633,9 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.tor_custom_port_cb.setEnabled(avalable and self.tor_enabled.isChecked())
         self.tor_socks_port.setEnabled(avalable and self.tor_custom_port_cb.isChecked())
 
-        tor_enabled_tooltip = [_("This will start a private instance of the Tor proxy controlled by Electron Cash.")]
+        tor_enabled_tooltip = [
+            _(f"This will start a private instance of the Tor proxy "
+              f"controlled by {PROJECT_NAME}.")]
         if not avalable:
             tor_enabled_tooltip.insert(0, _("This feature is unavailable because no Tor binary was found."))
         tor_enabled_tooltip_text = ' '.join(tor_enabled_tooltip)

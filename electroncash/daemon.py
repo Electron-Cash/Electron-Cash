@@ -27,6 +27,8 @@ import os
 import time
 import sys
 
+from .constants import PROJECT_NAME, SCRIPT_NAME
+
 # from jsonrpc import JSONRPCResponseManager
 import jsonrpclib
 from .jsonrpc import VerifyingJSONRPCServer
@@ -70,7 +72,7 @@ def get_fd_or_server(config):
             sys.exit(f"Unable to create lockfile due to file system permission problems: {e}")
         except NotADirectoryError as e:
             lockdir = os.path.dirname(lockfile)
-            sys.exit(f"Electron Cash directory location at {lockdir} is not a directory. Error was: {e}")
+            sys.exit(f"{PROJECT_NAME} directory location at {lockdir} is not a directory. Error was: {e}")
         except OSError as e:
             ''' Unable to create -- this is normal if there was a pre-existing lockfile '''
             latest_exc = e
@@ -245,7 +247,7 @@ class Daemon(DaemonThread):
             else:
                 response = "error: current GUI does not support multiple windows"
         else:
-            response = "Error: Electron Cash is running in daemon mode. Please stop the daemon first."
+            response = f"Error: {PROJECT_NAME} is running in daemon mode. Please stop the daemon first."
         return response
 
     def load_wallet(self, path, password):
@@ -303,7 +305,8 @@ class Daemon(DaemonThread):
             path = config.get_wallet_path()
             wallet = self.wallets.get(path)
             if wallet is None:
-                return {'error': 'Wallet "%s" is not loaded. Use "electron-cash daemon load_wallet"'%os.path.basename(path) }
+                wallet_name = os.path.basename(path)
+                return {'error': f'Wallet "{wallet_name}" is not loaded. Use "{SCRIPT_NAME} daemon load_wallet"'}
         else:
             wallet = None
         # arguments passed to function
