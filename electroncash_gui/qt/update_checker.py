@@ -42,6 +42,7 @@ from electroncash.util import PrintError, print_error
 from .util import *
 
 
+
 class UpdateChecker(QWidget, PrintError):
     """A window that checks for updates.
 
