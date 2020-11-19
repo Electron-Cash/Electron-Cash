@@ -25,17 +25,21 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import base64
+import requests
+import sys
+import threading
+import time
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
-from electroncash.util import PrintError, print_error
-from electroncash.i18n import _
 from electroncash import version, bitcoin, address
-from electroncash.networks import MainNet
 from electroncash.constants import PROJECT_NAME
+from electroncash.i18n import _
+from electroncash.networks import MainNet
+from electroncash.util import PrintError, print_error
 from .util import *
-import base64, sys, requests, threading, time
 
 
 class UpdateChecker(QWidget, PrintError):
