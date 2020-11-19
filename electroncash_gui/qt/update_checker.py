@@ -77,7 +77,6 @@ class UpdateChecker(QWidget, PrintError):
     """[0 -> 100] range"""
 
     # Release URL
-    url = "https://raw.github.com/Electron-Cash/Electron-Cash/master/contrib/update_checker/releases.json"
     download_url = "https://electroncash.org/#download"
 
     VERSION_ANNOUNCEMENT_SIGNING_ADDRESSES = (
@@ -347,10 +346,14 @@ class UpdateChecker(QWidget, PrintError):
 
 
 class _Req(threading.Thread, PrintError):
+    """Thread to get the list of releases from a JSON file on the github
+    repository.
+    """
+    url = "https://raw.github.com/Electron-Cash/Electron-Cash/master/contrib/update_checker/releases.json"
+
     def __init__(self, checker):
         super().__init__(daemon=True)
         self.checker = checker
-        self.url = self.checker.url
         self.aborted = False
         self.json = None
         self.start()
@@ -380,5 +383,5 @@ class _Req(threading.Thread, PrintError):
 
         if response.status_code != 200:
             raise RuntimeError(response.status_code, response.text)
-        self.print_error("got response {} bytes".format(len(response.text)))
+        self.print_error(f"got response {len(response.text)} bytes")
         return response.json(), response.url
