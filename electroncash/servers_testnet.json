@@ -32,5 +32,9 @@
         "s": "60002",
         "t": "60001",
         "display": "tbch.loping.net"
+    },
+    "telectrum.bitcoincash.org": {
+        "s": "60002",
+        "t": "60001"
     }
 }
