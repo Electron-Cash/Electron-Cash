@@ -1,5 +1,5 @@
-# Electron Cash - lightweight Bitcoin Cash client
-# Copyright (C) 2020 The Electron Cash Developers
+# Electrum ABC - lightweight ABC client
+# Copyright (C) 2020 The Electron Cash developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files

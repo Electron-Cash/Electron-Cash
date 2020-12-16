@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 #
-# Electron Cash - lightweight Bitcoin Cash client
-# Copyright (C) 2019 Calin Culianu <calin.culianu@gmail.com>
+# Electrum ABC - lightweight ABC client
+# Copyright (C) 2020 The Electrum ABC developers
+# Copyright (C) 2019-2020 Calin Culianu <calin.culianu@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files

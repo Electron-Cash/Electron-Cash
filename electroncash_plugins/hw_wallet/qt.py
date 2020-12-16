@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- mode: python3 -*-
 #
-# Electrum - lightweight Bitcoin client
+# Electrum ABC - lightweight ABC client
+# Copyright (C) 2020 The Electrum ABC developers
 # Copyright (C) 2016  The Electrum developers
 #
 # Permission is hereby granted, free of charge, to any person

@@ -1,6 +1,7 @@
-# Electron Cash - lightweight Bitcoin client
-# Copyright (C) 2019 Axel Gembe <derago@gmail.com>
-# Copyright (C) 2019 Calin Culianu <calin.culianu@gmail.com>
+# Electrum ABC - lightweight ABC client
+# Copyright (C) 2020 The Electrum ABC Developers
+# Copyright (C) 2019-2020 Axel Gembe <derago@gmail.com>
+# Copyright (C) 2019-2020 Calin Culianu <calin.culianu@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files

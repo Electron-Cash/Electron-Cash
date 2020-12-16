@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python3 -*-
 #
-# Electrum - lightweight Bitcoin client
+# Electrum ABC - lightweight ABC client
+# Copyright (C) 2020 The Electrum ABC developers
 # Copyright (C) 2016 Thomas Voegtlin
 #
 # Permission is hereby granted, free of charge, to any person
