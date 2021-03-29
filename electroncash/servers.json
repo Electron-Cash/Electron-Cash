@@ -118,8 +118,8 @@
     },
     "electrs.electroncash.de": {
         "pruning": "-",
-	"s": "40002",
-	"version": "1.4"
+        "s": "40002",
+        "version": "1.4"
     },
     "jktsologn7uprtwn7gsgmwuddj6rxsqmwc2vaug7jwcwzm2bxqnfpwad.onion": {
         "pruning": "-",
