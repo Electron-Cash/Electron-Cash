@@ -26,93 +26,127 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+# pylint: disable=C0103
+# pylint: enable=C0103
+"""
+Electron Cash - lightweight Bitcoin Cash client
+"""
+import getpass
 import os
 import sys
+import threading
+
+import electroncash.web as web
+from electroncash import (
+    Network,
+    SimpleConfig,
+    daemon,
+    keystore,
+    networks,
+    util,
+)
+from electroncash.commands import (
+    Commands,
+    config_variables,
+    get_parser,
+    known_commands,
+)
+from electroncash.i18n import _
+from electroncash.mnemonic import Mnemonic, Mnemonic_Electrum
+from electroncash.plugins import Plugins
+from electroncash.storage import WalletStorage
+from electroncash.util import (
+    InvalidPassword,
+    json_decode,
+    json_encode,
+    print_msg,
+    print_stderr,
+    set_verbosity,
+)
+from electroncash.wallet import (
+    ImportedAddressWallet,
+    ImportedPrivkeyWallet,
+    Wallet,
+)
+
+# Import ok on other platforms, won't be called.
+from electroncash.winconsole import create_or_attach_console
 
 # Workaround for PyQt5 5.12.3
 # see https://github.com/pyinstaller/pyinstaller/issues/4293
-if sys.platform == "win32" and hasattr(sys, 'frozen') and hasattr(sys, '_MEIPASS'):
-    os.environ['PATH'] = sys._MEIPASS + ";" + os.environ['PATH']
+if sys.platform == "win32" and hasattr(sys, "frozen") and hasattr(sys, "_MEIPASS"):
+    path = sys._MEIPASS + ";" + os.environ["PATH"]  # pylint: disable=no-member,W0212
+    os.environ["PATH"] = path
 
 # Note CashShuffle's .proto files have namespace conflicts with keepkey
 # This is a workaround to force the python implementation versus the C++
 # implementation which does more intelligent things with protobuf namespaces
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 if sys.version_info < (3, 6):
-    sys.exit("*** Electron Cash support for Python 3.5 has been discontinued.\n"
-             "*** Please run Electron Cash with Python 3.6 or above.")
+    sys.exit(
+        "*** Electron Cash support for Python 3.5 has been discontinued.\n"
+        "*** Please run Electron Cash with Python 3.6 or above."
+    )
 
 # from https://gist.github.com/tito/09c42fb4767721dc323d
-import threading
 try:
-    import jnius
-except:
-    jnius = None
+    import jnius  # pylint: disable=E0401
+except ImportError:
+    jnius = None  # pylint: disable=C0103
 if jnius:
     orig_thread_run = threading.Thread.run
-    def thread_check_run(*args, **kwargs):
+
+    def thread_check_run(*thread_args, **thread_kwargs):
+        " Detect when a thread exits to prevent Android crash "
         try:
-            return orig_thread_run(*args, **kwargs)
+            return orig_thread_run(*thread_args, **thread_kwargs)
         finally:
             jnius.detach()
+
     threading.Thread.run = thread_check_run
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-is_bundle = getattr(sys, 'frozen', False)
-is_local = not is_bundle and os.path.exists(os.path.join(script_dir, "electron-cash.desktop"))
-is_android = 'ANDROID_DATA' in os.environ
+IS_BUNDLE = getattr(sys, "frozen", False)
+IS_LOCAL = not IS_BUNDLE and os.path.exists(
+    os.path.join(script_dir, "electron-cash.desktop")
+)
+is_android = "ANDROID_DATA" in os.environ
 
-if is_local:
-    sys.path.insert(0, os.path.join(script_dir, 'packages'))
+if IS_LOCAL:
+    sys.path.insert(0, os.path.join(script_dir, "packages"))
 
 
 def check_imports():
-    # pure-python dependencies need to be imported here for pyinstaller
+    """ pure-python dependencies need to be imported here for pyinstaller """
     try:
-        import dns
-        import pyaes
-        import ecdsa
-        import requests
-        import qrcode
-        import google.protobuf
-        import jsonrpclib
-    except ImportError as e:
-        sys.exit("Error: %s. Try 'sudo pip install <module-name>'"%str(e))
-    # the following imports are for pyinstaller
-    from google.protobuf import descriptor
-    from google.protobuf import message
-    from google.protobuf import reflection
-    from google.protobuf import descriptor_pb2
-    from jsonrpclib import SimpleJSONRPCServer
+        import dns  # pylint: disable=C0415,W0611
+        import ecdsa  # pylint: disable=C0415,W0611
+        import google.protobuf  # pylint: disable=C0415,W0611
+        import jsonrpclib  # pylint: disable=C0415,W0611
+        import pyaes  # pylint: disable=C0415,W0611
+        import qrcode  # pylint: disable=C0415,W0611
+        import requests  # pylint: disable=C0415
+    except ImportError as i_e:
+        sys.exit("Error: %s. Try 'sudo pip install <module-name>'" % str(i_e))
+    from google.protobuf import descriptor  # pylint: disable=C0415,W0611
+    from google.protobuf import descriptor_pb2  # pylint: disable=C0415,W0611
+    from google.protobuf import message  # pylint: disable=C0415,W0611
+    from google.protobuf import reflection  # pylint: disable=C0415,W0611
+    from jsonrpclib import SimpleJSONRPCServer  # pylint: disable=C0415,W0611
+
     # make sure that certificates are here
-    assert os.path.exists(requests.utils.DEFAULT_CA_BUNDLE_PATH)
+    certs = requests.utils.DEFAULT_CA_BUNDLE_PATH
+    if not os.path.exists(certs):
+        raise AssertionError("Certificates not found")
 
 
 if not is_android:  # Avoid unnecessarily slowing down app startup.
     check_imports()
 
 
-from electroncash import bitcoin, util
-from electroncash import SimpleConfig, Network
-from electroncash import networks
-from electroncash.wallet import Wallet, ImportedPrivkeyWallet, ImportedAddressWallet
-from electroncash.storage import WalletStorage
-from electroncash.util import (print_msg, print_stderr, json_encode, json_decode,
-                               set_verbosity, InvalidPassword)
-from electroncash.i18n import _
-from electroncash.commands import get_parser, known_commands, Commands, config_variables
-from electroncash import daemon
-from electroncash import keystore
-from electroncash.mnemonic import Mnemonic, Mnemonic_Electrum
-from electroncash.winconsole import create_or_attach_console  # Import ok on other platforms, won't be called.
-import electroncash_plugins
-import electroncash.web as web
-
-
 def prompt_password(prompt, confirm=True):
     """ Get password routine """
-    import getpass
     password = getpass.getpass(prompt, stream=None)
     if password and confirm:
         password2 = getpass.getpass("Confirm: ")
@@ -125,7 +159,7 @@ def prompt_password(prompt, confirm=True):
 
 def run_non_rpc(simple_config):
     """ Run non RPC commands """
-    cmd_name = simple_config.get('cmd')
+    cmd_name = simple_config.get("cmd")
 
     storage = WalletStorage(simple_config.get_wallet_path())
     if storage.file_exists():
@@ -136,9 +170,9 @@ def run_non_rpc(simple_config):
             "Password (hit return if you do not wish to encrypt your wallet):"
         )
 
-    if cmd_name == 'restore':
+    if cmd_name == "restore":
         wallet = restore_wallet(simple_config, password_dialog, storage)
-    elif cmd_name == 'create':
+    elif cmd_name == "create":
         wallet = create_wallet(simple_config, password_dialog, storage)
     else:
         raise RuntimeError(f"run_non_rpc called with invalid cmd: {cmd_name}")
@@ -150,8 +184,8 @@ def run_non_rpc(simple_config):
 
 def restore_wallet(simple_config, password_dialog, storage):
     " Restore an existing wallet "
-    text = simple_config.get('text').strip()
-    passphrase = simple_config.get('passphrase', '')
+    text = simple_config.get("text").strip()
+    passphrase = simple_config.get("passphrase", "")
     password = password_dialog() if keystore.is_private(text) else None
     if keystore.is_address_list(text):
         wallet = ImportedAddressWallet.from_text(storage, text)
@@ -168,17 +202,17 @@ def restore_wallet(simple_config, password_dialog, storage):
             sys.exit("Error: Seed or key not recognized")
         if password:
             k.update_password(None, password)
-        storage.put('keystore', k.dump())
-        storage.put('wallet_type', 'standard')
-        storage.put('use_encryption', bool(password))
-        seed_type = getattr(k, 'seed_type', None)
+        storage.put("keystore", k.dump())
+        storage.put("wallet_type", "standard")
+        storage.put("use_encryption", bool(password))
+        seed_type = getattr(k, "seed_type", None)
         if seed_type:
             # save to top-level storage too so it doesn't get lost if user
             # switches EC versions
-            storage.put('seed_type', seed_type)
+            storage.put("seed_type", seed_type)
         storage.write()
         wallet = Wallet(storage)
-    if not simple_config.get('offline'):
+    if not simple_config.get("offline"):
         network = Network(simple_config)
         network.start()
         wallet.start_threads(network)
@@ -201,23 +235,23 @@ def restore_wallet(simple_config, password_dialog, storage):
 def create_wallet(simple_config, password_dialog, storage):
     " Create a new wallet "
     password = password_dialog()
-    passphrase = simple_config.get('passphrase', '')
-    seed_type = simple_config.get('seed_type', 'bip39')
-    if seed_type == 'bip39':
-        seed = Mnemonic('en').make_seed()
-    elif seed_type in ['electrum', 'standard']:
-        seed_type = 'electrum'
-        seed = Mnemonic_Electrum('en').make_seed()
+    passphrase = simple_config.get("passphrase", "")
+    seed_type = simple_config.get("seed_type", "bip39")
+    if seed_type == "bip39":
+        seed = Mnemonic("en").make_seed()
+    elif seed_type in ["electrum", "standard"]:
+        seed_type = "electrum"
+        seed = Mnemonic_Electrum("en").make_seed()
     else:
         raise RuntimeError("Unknown seed_type " + str(seed_type))
     k = keystore.from_seed(seed, passphrase, seed_type=seed_type)
-    storage.put('seed_type', seed_type)
-    storage.put('keystore', k.dump())
-    storage.put('wallet_type', 'standard')
+    storage.put("seed_type", seed_type)
+    storage.put("keystore", k.dump())
+    storage.put("wallet_type", "standard")
     wallet = Wallet(storage)
-    wallet.update_password(None, password, True)
-    wallet.synchronize()
-    print_msg("Your wallet generation seed is:\n    \"%s\"" % seed)
+    wallet.update_password(None, password, True)  # pylint: disable=no-member
+    wallet.synchronize()  # pylint: disable=no-member
+    print_msg('Your wallet generation seed is:\n    "%s"' % seed)
     print_msg("Wallet seed format:", seed_type)
     if k.has_derivation() and seed_type != "electrum":
         print_msg("Your wallet derivation path is:", str(k.derivation))
@@ -229,41 +263,48 @@ def create_wallet(simple_config, password_dialog, storage):
 
 
 def init_daemon(config_options):
+    """ Initialze the daemon """
     config = SimpleConfig(config_options)
     storage = WalletStorage(config.get_wallet_path())
     if not storage.file_exists():
         print_msg("Error: Wallet file not found.")
-        print_msg("Type 'electron-cash create' to create a new wallet, or provide a path to a wallet with the -w option")
+        print_msg(
+            "Type 'electron-cash create' to create a new wallet, "
+            "or provide a path to a wallet with the -w option"
+        )
         sys.exit(0)
     if storage.is_encrypted():
-        if 'wallet_password' in config_options:
-            print_msg('Warning: unlocking wallet with commandline argument \"--walletpassword\"')
-            password = config_options['wallet_password']
-        elif config.get('password'):
-            password = config.get('password')
+        if "wallet_password" in config_options:
+            print_msg(
+                'Warning: unlocking wallet with commandline argument "--walletpassword"'
+            )
+            password = config_options["wallet_password"]
+        elif config.get("password"):
+            password = config.get("password")
         else:
-            password = prompt_password('Password:', False)
+            password = prompt_password("Password:", False)
             if not password:
                 print_msg("Error: Password required")
                 sys.exit(1)
     else:
         password = None
-    config_options['password'] = password
+    config_options["password"] = password
 
 
 def init_cmdline(config_options, server):
+    """ Initialze command line """
     config = SimpleConfig(config_options)
-    cmdname = config.get('cmd')
+    cmdname = config.get("cmd")
     cmd = known_commands[cmdname]
 
-    if cmdname == 'signtransaction' and config.get('privkey'):
+    if cmdname == "signtransaction" and config.get("privkey"):
         cmd.requires_wallet = False
         cmd.requires_password = False
 
-    if cmdname in ['payto', 'paytomany'] and config.get('unsigned'):
+    if cmdname in ["payto", "paytomany"] and config.get("unsigned"):
         cmd.requires_password = False
 
-    if cmdname in ['payto', 'paytomany'] and config.get('broadcast'):
+    if cmdname in ["payto", "paytomany"] and config.get("broadcast"):
         cmd.requires_network = True
 
     # instanciate wallet for command-line
@@ -271,41 +312,50 @@ def init_cmdline(config_options, server):
 
     if cmd.requires_wallet and not storage.file_exists():
         print_msg("Error: Wallet file not found.")
-        print_msg("Type 'electron-cash create' to create a new wallet, or provide a path to a wallet with the -w option")
+        print_msg(
+            "Type 'electron-cash create' to create a new wallet, "
+            "or provide a path to a wallet with the -w option"
+        )
         sys.exit(0)
 
     # important warning
-    if cmd.name in ['getprivatekeys']:
+    if cmd.name in ["getprivatekeys"]:
         print_stderr("WARNING: ALL your private keys are secret.")
         print_stderr("Exposing a single private key can compromise your entire wallet!")
-        print_stderr("In particular, DO NOT use 'redeem private key' services proposed by third parties.")
+        print_stderr(
+            "In particular, DO NOT use 'redeem private key' services proposed "
+            "by third parties."
+        )
 
+    is_storage_pw_req = storage.get("use_encryption") or storage.is_encrypted()
     # commands needing password
-    if (cmd.requires_wallet and storage.is_encrypted() and server is None)\
-       or (cmd.requires_password and (storage.get('use_encryption') or storage.is_encrypted())):
-        if config.get('password'):
-            password = config.get('password')
+    if (cmd.requires_wallet and storage.is_encrypted() and server is None) or (
+        cmd.requires_password and is_storage_pw_req
+    ):
+        if config.get("password"):
+            password = config.get("password")
         else:
-            password = prompt_password('Password:', False)
+            password = prompt_password("Password:", False)
             if not password:
                 print_msg("Error: Password required")
                 sys.exit(1)
     else:
         password = None
 
-    config_options['password'] = password
+    config_options["password"] = password
 
-    if cmd.name == 'password':
-        new_password = prompt_password('New password:')
-        config_options['new_password'] = new_password
+    if cmd.name == "password":
+        new_password = prompt_password("New password:")
+        config_options["new_password"] = new_password
 
     return cmd, password
 
 
 def run_offline_command(config, config_options):
-    cmdname = config.get('cmd')
+    """Run command that doesn't require network"""
+    cmdname = config.get("cmd")
     cmd = known_commands[cmdname]
-    password = config_options.get('password')
+    password = config_options.get("password")
     if cmd.requires_wallet:
         storage = WalletStorage(config.get_wallet_path())
         if storage.is_encrypted():
@@ -313,10 +363,12 @@ def run_offline_command(config, config_options):
         wallet = Wallet(storage)
     else:
         wallet = None
-    # check password
-    if cmd.requires_password and storage.get('use_encryption'):
+    is_wallet_pw_req = (
+        wallet is not None and cmd.requires_password and storage.get("use_encryption")
+    )
+    if is_wallet_pw_req:
         try:
-            seed = wallet.check_password(password)
+            wallet.check_password(password)
         except InvalidPassword:
             print_msg("Error: This password does not decode this wallet.")
             sys.exit(1)
@@ -325,12 +377,16 @@ def run_offline_command(config, config_options):
     # arguments passed to function
     args = [config.get(x) for x in cmd.params]
     # decode json arguments
-    if cmdname not in ('setconfig',):
+    if cmdname not in ("setconfig",):
         args = list(map(json_decode, args))
     # options
     kwargs = {}
-    for x in cmd.options:
-        kwargs[x] = (config_options.get(x) if x in ['password', 'new_password'] else config.get(x))
+    for cmd_option in cmd.options:
+        kwargs[cmd_option] = (
+            config_options.get(cmd_option)
+            if cmd_option in ["password", "new_password"]
+            else config.get(cmd_option)
+        )
     cmd_runner = Commands(config, wallet, None)
     func = getattr(cmd_runner, cmd.name)
     result = func(*args, **kwargs)
@@ -341,7 +397,7 @@ def run_offline_command(config, config_options):
 
 
 def init_plugins(config, gui_name):
-    from electroncash.plugins import Plugins
+    """Initialze plugins"""
     return Plugins(config, gui_name)
 
 
@@ -383,6 +439,8 @@ def run_start(config, config_options, subcommand):
         daemon_thread = daemon.Daemon(config, file_desc, False, plugins)
         daemon_thread.start()
         if config.get("websocket_server"):
+            # The websockets module relies on an optional module that isn't
+            # always available: SimpleWebSocketServer
             from electroncash import websockets  # pylint: disable=C0415
             websockets.WebSocketServer(config, daemon_thread.network).start()
         if config.get("requests_dir"):
@@ -390,7 +448,8 @@ def run_start(config, config_options, subcommand):
             if not os.path.exists(requests_path):
                 print("Requests directory not configured.")
                 print(
-                    "You can configure it using https://github.com/spesmilo/electrum-merchant"
+                    "You can configure it using "
+                    "https://github.com/spesmilo/electrum-merchant"
                 )
                 sys.exit(1)
         daemon_thread.join()
@@ -450,10 +509,7 @@ def process_config_options(args):
 
     # fixme: this can probably be achieved with a runtime hook (pyinstaller)
     try:
-        tmp_folder = os.path.join(
-                sys._MEIPASS,  # pylint: disable=W0212
-                "is_portable"
-        )
+        tmp_folder = os.path.join(sys._MEIPASS, "is_portable")  # pylint: disable=W0212
         config_options["portable"] = is_bundle and os.path.exists(tmp_folder)
     except AttributeError:
         config_options["portable"] = False
@@ -512,8 +568,8 @@ def main():
     util.setup_thread_excepthook()
 
     # On windows, allocate a console if needed
-    if sys.platform.startswith('win'):
-        require_console = '-v' in sys.argv or '--verbose' in sys.argv
+    if sys.platform.startswith("win"):
+        require_console = "-v" in sys.argv or "--verbose" in sys.argv
         console_title = _("Electron Cash - Verbose Output") if require_console else None
         # Attempt to attach to ancestor process console. If create=True we will
         # create a new console window if no ancestor process console exists.
@@ -527,24 +583,24 @@ def main():
         create_or_attach_console(create=require_console, title=console_title)
 
     # on osx, delete Process Serial Number arg generated for apps launched in Finder
-    sys.argv = list(filter(lambda x: not x.startswith('-psn'), sys.argv))
+    sys.argv = list(filter(lambda x: not x.startswith("-psn"), sys.argv))
 
     # old 'help' syntax
-    if len(sys.argv) > 1 and sys.argv[1] == 'help':
-        sys.argv.remove('help')
-        sys.argv.append('-h')
+    if len(sys.argv) > 1 and sys.argv[1] == "help":
+        sys.argv.remove("help")
+        sys.argv.append("-h")
 
     # read arguments from stdin pipe and prompt
     for i, arg in enumerate(sys.argv):
-        if arg == '-':
+        if arg == "-":
             if sys.stdin.isatty():
-                raise BaseException('Cannot get argument from stdin')
+                raise BaseException("Cannot get argument from stdin")
             sys.argv[i] = sys.stdin.read()
             break
-        if arg == '?':
+        if arg == "?":
             sys.argv[i] = input("Enter argument:")
-        elif arg == ':':
-            sys.argv[i] = prompt_password('Enter argument (will not echo):', False)
+        elif arg == ":":
+            sys.argv[i] = prompt_password("Enter argument (will not echo):", False)
 
     # parse command line
     parser = get_parser()
@@ -554,10 +610,10 @@ def main():
 
     # todo: defer this to gui
     config = SimpleConfig(config_options)
-    cmdname = config.get('cmd')
+    cmdname = config.get("cmd")
 
     # run non-RPC commands separately
-    if cmdname in ['create', 'restore']:
+    if cmdname in ["create", "restore"]:
         run_non_rpc(config)
         sys.exit(0)
 
@@ -573,5 +629,5 @@ def main():
     sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
