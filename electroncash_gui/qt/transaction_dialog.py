@@ -48,13 +48,7 @@ from .util import *
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
 
-if False:
-    # NB: on Qt for Windows the 'ⓢ' symbol looks aliased and bad. So we do this
-    # for windows.
-    SCHNORR_SIGIL = "(S)"
-else:
-    # On Linux & macOS it looks fine so we go with the more fancy unicode
-    SCHNORR_SIGIL = "ⓢ"
+SCHNORR_SIGIL = "ⓢ"
 
 def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False):
     d = TxDialog(tx, parent, desc, prompt_if_unsaved)
