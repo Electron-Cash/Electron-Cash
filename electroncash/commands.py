@@ -23,6 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from .transaction import tx_from_str
 import argparse
 import ast
 import base64
@@ -51,7 +52,7 @@ known_commands = {}
 
 def satoshis(amount):
     # satoshi conversion must not be performed by the parser
-    return int(COIN*PyDecimal(amount)) if amount not in ['!', None] else amount
+    return int(COIN * PyDecimal(amount)) if amount not in ['!', None] else amount
 
 
 class Command:
@@ -88,6 +89,7 @@ def command(s):
         global known_commands
         name = func.__name__
         known_commands[name] = Command(func, s)
+
         @wraps(func)
         def func_wrapper(*args, **kwargs):
             c = known_commands[func.__name__]
@@ -100,7 +102,7 @@ def command(s):
                 raise BaseException("Wallet not loaded. Use 'electron-cash daemon load_wallet'")
             if c.requires_password and password is None and wallet.storage.get('use_encryption') \
                and not kwargs.get("unsigned"):
-                return {'error': 'Password required' }
+                return {'error': 'Password required'}
             return func(*args, **kwargs)
         return func_wrapper
     return decorator
@@ -108,7 +110,7 @@ def command(s):
 
 class Commands:
 
-    def __init__(self, config, wallet, network, callback = None):
+    def __init__(self, config, wallet, network, callback=None):
         self.config = config
         self.wallet = wallet
         self.network = network
@@ -140,15 +142,21 @@ class Commands:
             See issue #638 """
         def DoChk(v):
             def ChkList(l):
-                for i in range(0,len(l)): l[i] = DoChk(l[i]) # recurse
+                for i in range(0, len(l)):
+                    l[i] = DoChk(l[i])  # recurse
                 return l
+
             def EncodeNamedTupleObject(nt):
-                if hasattr(nt, 'to_ui_string'): return nt.to_ui_string()
+                if hasattr(nt, 'to_ui_string'):
+                    return nt.to_ui_string()
                 return nt
 
-            if isinstance(v, tuple): v = EncodeNamedTupleObject(v)
-            elif isinstance(v, list): v = ChkList(v) # may recurse
-            elif isinstance(v, dict): v = Commands._EnsureDictNamedTuplesAreJSONSafe(v) # recurse
+            if isinstance(v, tuple):
+                v = EncodeNamedTupleObject(v)
+            elif isinstance(v, list):
+                v = ChkList(v)  # may recurse
+            elif isinstance(v, dict):
+                v = Commands._EnsureDictNamedTuplesAreJSONSafe(v)  # recurse
             return v
 
         for k in d.keys():
@@ -165,8 +173,8 @@ class Commands:
         except Exception as e:
             raise AddressError(f'Invalid address: {address}') from e
         return {
-            'cashaddr' : addr.to_full_string(Address.FMT_CASHADDR),
-            'legacy'   : addr.to_full_string(Address.FMT_LEGACY),
+            'cashaddr': addr.to_full_string(Address.FMT_CASHADDR),
+            'legacy': addr.to_full_string(Address.FMT_LEGACY),
         }
 
     @command('')
@@ -215,7 +223,7 @@ class Commands:
         b = self.wallet.storage.is_encrypted()
         self.wallet.update_password(password, new_password, b)
         self.wallet.storage.write()
-        return {'password':self.wallet.has_password()}
+        return {'password': self.wallet.has_password()}
 
     @command('w')
     def get(self, key):
@@ -233,7 +241,7 @@ class Commands:
             value = json_decode(value)
             try:
                 value = ast.literal_eval(value)
-            except:
+            except BaseException:
                 pass
         return value
 
@@ -285,7 +293,7 @@ class Commands:
         l = self.wallet.get_utxos(exclude_frozen=False)
         for i in l:
             v = i["value"]
-            i["value"] = str(PyDecimal(v)/COIN) if v is not None else None
+            i["value"] = str(PyDecimal(v) / COIN) if v is not None else None
             i["address"] = i["address"].to_ui_string()
         return l
 
@@ -323,7 +331,11 @@ class Commands:
                 txin['num_sig'] = 1
 
         outputs = [(TYPE_ADDRESS, Address.from_string(x['address']), int(x['value'])) for x in outputs]
-        tx = Transaction.from_io(inputs, outputs, locktime=locktime, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
+        tx = Transaction.from_io(
+            inputs,
+            outputs,
+            locktime=locktime,
+            sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
         tx.sign(keypairs)
         return tx.as_dict()
 
@@ -334,7 +346,7 @@ class Commands:
         if privkey:
             txin_type, privkey2, compressed = bitcoin.deserialize_privkey(privkey)
             pubkey = bitcoin.public_key_from_private_key(privkey2, compressed)
-            tx.sign({pubkey:(privkey2, compressed)})
+            tx.sign({pubkey: (privkey2, compressed)})
         else:
             self.wallet.sign_transaction(tx, password)
         return tx.as_dict()
@@ -357,7 +369,7 @@ class Commands:
         assert isinstance(pubkeys, list), (type(num), type(pubkeys))
         redeem_script = multisig_script(pubkeys, num)
         address = bitcoin.hash160_to_p2sh(hash_160(bfh(redeem_script)))
-        return {'address':address, 'redeemScript':redeem_script}
+        return {'address': address, 'redeemScript': redeem_script}
 
     @command('w')
     def freeze(self, address):
@@ -409,11 +421,11 @@ class Commands:
     def getbalance(self):
         """Return the balance of your wallet. """
         c, u, x = self.wallet.get_balance()
-        out = {"confirmed": str(PyDecimal(c)/COIN)}
+        out = {"confirmed": str(PyDecimal(c) / COIN)}
         if u:
-            out["unconfirmed"] = str(PyDecimal(u)/COIN)
+            out["unconfirmed"] = str(PyDecimal(u) / COIN)
         if x:
-            out["unmatured"] = str(PyDecimal(x)/COIN)
+            out["unmatured"] = str(PyDecimal(x) / COIN)
         return out
 
     @command('n')
@@ -423,8 +435,8 @@ class Commands:
         """
         sh = Address.from_string(address).to_scripthash_hex()
         out = self.network.synchronous_get(('blockchain.scripthash.get_balance', [sh]))
-        out["confirmed"] =  str(PyDecimal(out["confirmed"])/COIN)
-        out["unconfirmed"] =  str(PyDecimal(out["unconfirmed"])/COIN)
+        out["confirmed"] = str(PyDecimal(out["confirmed"]) / COIN)
+        out["unconfirmed"] = str(PyDecimal(out["unconfirmed"]) / COIN)
         return out
 
     @command('n')
@@ -535,7 +547,7 @@ class Commands:
 
         coins = self.wallet.get_spendable_coins(domain, self.config)
         tx = self.wallet.make_unsigned_transaction(coins, final_outputs, self.config, fee, change_addr)
-        if locktime != None:
+        if locktime is not None:
             tx.locktime = locktime
         if not unsigned:
             run_hook('sign_tx', self.wallet, tx)
@@ -552,15 +564,26 @@ class Commands:
         """Create a transaction. """
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
-        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, unsigned, password, locktime, op_return, op_return_raw, addtransaction=addtransaction)
+        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, unsigned,
+                        password, locktime, op_return, op_return_raw, addtransaction=addtransaction)
         return tx.as_dict()
 
     @command('wp')
-    def paytomany(self, outputs, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None, addtransaction=False):
+    def paytomany(self, outputs, fee=None, from_addr=None, change_addr=None, nocheck=False,
+                  unsigned=False, password=None, locktime=None, addtransaction=False):
         """Create a multi-output transaction. """
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
-        tx = self._mktx(outputs, tx_fee, change_addr, domain, nocheck, unsigned, password, locktime, addtransaction=addtransaction)
+        tx = self._mktx(
+            outputs,
+            tx_fee,
+            change_addr,
+            domain,
+            nocheck,
+            unsigned,
+            password,
+            locktime,
+            addtransaction=addtransaction)
         return tx.as_dict()
 
     @command('w')
@@ -569,14 +592,15 @@ class Commands:
         t0 = time.time()
         year, show_addresses, show_fiat, use_net, timeout = (
             int(year), bool(show_addresses), bool(show_fiat), bool(use_net),
-            float(timeout) )
-        def time_remaining(): return max(timeout - (time.time()-t0), 0)
-        kwargs = { 'show_addresses'   : show_addresses,
-                   'fee_calc_timeout' : timeout,
-                   'download_inputs'  : use_net,        }
+            float(timeout))
+
+        def time_remaining(): return max(timeout - (time.time() - t0), 0)
+        kwargs = {'show_addresses': show_addresses,
+                  'fee_calc_timeout': timeout,
+                  'download_inputs': use_net, }
         if year:
             start_date = datetime.datetime(year, 1, 1)
-            end_date = datetime.datetime(year+1, 1, 1)
+            end_date = datetime.datetime(year + 1, 1, 1)
             kwargs['from_timestamp'] = time.mktime(start_date.timetuple())
             kwargs['to_timestamp'] = time.mktime(end_date.timetuple())
         if show_fiat:
@@ -588,8 +612,10 @@ class Commands:
                     is the only thing the FX thread calls if you pass it a
                     'network' object. We use it to get notified of when FX
                     history has been downloaded. '''
+
                     def __init__(self, q):
                         self.q = q
+
                     def trigger_callback(self, *args, **kwargs):
                         self.q.put(True)
                 q = queue.Queue()
@@ -602,9 +628,12 @@ class Commands:
                 # block, so we ensure at least 1ms timeout.
                 # we also limit waiting for fx to 10 seconds in case it had
                 # errors.
-                try: q.get(timeout=min(max(time_remaining()/2.0, 0.001), 10.0))
-                except queue.Empty: pass
-                kwargs['fee_calc_timeout'] = time_remaining()  # since we blocked above, recompute time_remaining for kwargs
+                try:
+                    q.get(timeout=min(max(time_remaining() / 2.0, 0.001), 10.0))
+                except queue.Empty:
+                    pass
+                # since we blocked above, recompute time_remaining for kwargs
+                kwargs['fee_calc_timeout'] = time_remaining()
         return self.wallet.export_history(**kwargs)
 
     @command('w')
@@ -634,7 +663,8 @@ class Commands:
         return results
 
     @command('w')
-    def listaddresses(self, receiving=False, change=False, labels=False, frozen=False, unused=False, funded=False, balance=False):
+    def listaddresses(self, receiving=False, change=False, labels=False,
+                      frozen=False, unused=False, funded=False, balance=False):
         """List wallet addresses. Returns the list of all addresses in your wallet. Use optional arguments to filter the results."""
         out = []
         for addr in self.wallet.get_addresses():
@@ -677,7 +707,7 @@ class Commands:
         if not isinstance(pubkey, (str, bytes, bytearray)) or not isinstance(message, (str, bytes, bytearray)):
             raise ValueError("pubkey and message text must both be strings")
         message = to_bytes(message)
-        res =  bitcoin.encrypt_message(message, pubkey)
+        res = bitcoin.encrypt_message(message, pubkey)
         if isinstance(res, (bytes, bytearray)):
             # prevent "JSON serializable" errors in case this came from
             # cmdline. See #1270
@@ -716,8 +746,8 @@ class Commands:
             raise BaseException("Request not found")
         return self._format_request(r)
 
-    #@command('w')
-    #def ackrequest(self, serialized):
+    # @command('w')
+    # def ackrequest(self, serialized):
     #    """<Not implemented>"""
     #    pass
 
@@ -734,7 +764,7 @@ class Commands:
         else:
             f = None
         if f is not None:
-            out = list(filter(lambda x: x.get('status')==f, out))
+            out = list(filter(lambda x: x.get('status') == f, out))
         return list(map(self._format_request, out))
 
     @command('w')
@@ -756,16 +786,24 @@ class Commands:
         addr = self.wallet.get_unused_address()
         if addr is None:
             if not self.wallet.is_deterministic():
-                self.wallet.print_error("Unable to find an unused address. Please use a deteministic wallet to proceed, then run with the --force option to create new addresses.")
+                self.wallet.print_error(
+                    "Unable to find an unused address. Please use a deteministic wallet to proceed, then run with the --force option to create new addresses.")
                 return False
             if force:
                 addr = self.wallet.create_new_address(False)
             else:
-                self.wallet.print_error("Unable to find an unused address. Try running with the --force option to create new addresses.")
+                self.wallet.print_error(
+                    "Unable to find an unused address. Try running with the --force option to create new addresses.")
                 return False
         amount = satoshis(amount)
         expiration = int(expiration) if expiration else None
-        req = self.wallet.make_payment_request(addr, amount, memo, expiration, payment_url = payment_url, index_url = index_url)
+        req = self.wallet.make_payment_request(
+            addr,
+            amount,
+            memo,
+            expiration,
+            payment_url=payment_url,
+            index_url=index_url)
         self.wallet.add_payment_request(req, self.config)
         out = self.wallet.get_payment_request(addr, self.config)
         return self._format_request(out)
@@ -798,8 +836,8 @@ class Commands:
         """Watch an address. Everytime the address changes, a http POST is sent to the URL."""
         def callback(x):
             import urllib.request
-            headers = {'content-type':'application/json'}
-            data = {'address':address, 'status':x.get('result')}
+            headers = {'content-type': 'application/json'}
+            data = {'address': address, 'status': x.get('result')}
             serialized_data = util.to_bytes(json.dumps(data))
             try:
                 req = urllib.request.Request(URL, serialized_data, headers)
@@ -827,6 +865,7 @@ class Commands:
         # for the python console
         return sorted(known_commands.keys())
 
+
 param_descriptions = {
     'wallet_path': 'Wallet path(create/restore commands)',
     'privkey': 'Private key. Type \'?\' to get a prompt.',
@@ -849,52 +888,53 @@ param_descriptions = {
 
 command_options = {
     'addtransaction': (None, 'Whether transaction is to be used for broadcasting afterwards. Adds transaction to the wallet'),
-    'balance':     ("-b", "Show the balances of listed addresses"),
-    'change':      (None, "Show only change addresses"),
+    'balance': ("-b", "Show the balances of listed addresses"),
+    'change': (None, "Show only change addresses"),
     'change_addr': ("-c", "Change address. Default is a spare address, or the source address if it's not in the wallet"),
-    'domain':      ("-D", "List of addresses"),
-    'encrypt_file':(None, "Whether the file on disk should be encrypted with the provided password"),
-    'entropy':     (None, "Custom entropy"),
-    'expiration':  (None, "Time in seconds"),
-    'expired':     (None, "Show only expired requests."),
-    'fee':         ("-f", "Transaction fee (in BCH)"),
-    'force':       (None, "Create new address beyond gap limit, if no more addresses are available."),
-    'from_addr':   ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
-    'frozen':      (None, "Show only frozen addresses"),
-    'funded':      (None, "Show only funded addresses"),
-    'imax':        (None, "Maximum number of inputs"),
-    'index_url':   (None, 'Override the URL where you would like users to be shown the BIP70 Payment Request'),
-    'labels':      ("-l", "Show the labels of listed addresses"),
-    'language':    ("-L", "Default language for wordlist"),
-    'locktime':    (None, "Set locktime block number"),
-    'memo':        ("-m", "Description of the request"),
-    'nbits':       (None, "Number of bits of entropy"),
-    'new_password':(None, "New Password"),
-    'nocheck':     (None, "Do not verify aliases"),
-    'op_return':   (None, "Specify string data to add to the transaction as an OP_RETURN output"),
+    'domain': ("-D", "List of addresses"),
+    'encrypt_file': (None, "Whether the file on disk should be encrypted with the provided password"),
+    'entropy': (None, "Custom entropy"),
+    'expiration': (None, "Time in seconds"),
+    'expired': (None, "Show only expired requests."),
+    'fee': ("-f", "Transaction fee (in BCH)"),
+    'force': (None, "Create new address beyond gap limit, if no more addresses are available."),
+    'from_addr': ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
+    'frozen': (None, "Show only frozen addresses"),
+    'funded': (None, "Show only funded addresses"),
+    'imax': (None, "Maximum number of inputs"),
+    'index_url': (None, 'Override the URL where you would like users to be shown the BIP70 Payment Request'),
+    'labels': ("-l", "Show the labels of listed addresses"),
+    'language': ("-L", "Default language for wordlist"),
+    'locktime': (None, "Set locktime block number"),
+    'memo': ("-m", "Description of the request"),
+    'nbits': (None, "Number of bits of entropy"),
+    'new_password': (None, "New Password"),
+    'nocheck': (None, "Do not verify aliases"),
+    'op_return': (None, "Specify string data to add to the transaction as an OP_RETURN output"),
     'op_return_raw': (None, 'Specify raw hex data to add to the transaction as an OP_RETURN output (0x6a aka the OP_RETURN byte will be auto-prepended for you so do not include it)'),
-    'paid':        (None, "Show only paid requests."),
-    'passphrase':  (None, "Seed extension"),
-    'password':    ("-W", "Password"),
+    'paid': (None, "Show only paid requests."),
+    'passphrase': (None, "Seed extension"),
+    'password': ("-W", "Password"),
     'payment_url': (None, 'Optional URL where you would like users to POST the BIP70 Payment message'),
-    'pending':     (None, "Show only pending requests."),
-    'privkey':     (None, "Private key. Set to '?' to get a prompt."),
-    'receiving':   (None, "Show only receiving addresses"),
-    'seed_type':   (None, "The type of seed to create, currently: 'electrum' and 'bip39' is supported. Default 'bip39'."),
+    'pending': (None, "Show only pending requests."),
+    'privkey': (None, "Private key. Set to '?' to get a prompt."),
+    'receiving': (None, "Show only receiving addresses"),
+    'seed_type': (None, "The type of seed to create, currently: 'electrum' and 'bip39' is supported. Default 'bip39'."),
     'show_addresses': (None, "Show input and output addresses"),
-    'show_fiat':   (None, "Show fiat value of transactions"),
-    'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
-    'unsigned':    ("-u", "Do not sign transaction"),
-    'unused':      (None, "Show only unused addresses"),
-    'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates."),
+    'show_fiat': (None, "Show fiat value of transactions"),
+    'timeout': (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
+    'unsigned': ("-u", "Do not sign transaction"),
+    'unused': (None, "Show only unused addresses"),
+    'use_net': (None, "Go out to network for accurate fiat value and/or fee calculations for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates."),
     'wallet_path': (None, "Wallet path(create/restore commands)"),
-    'year':        (None, "Show history for a given year"),
+    'year': (None, "Show history for a given year"),
 }
 
 
 # don't use floats because of rounding errors
-from .transaction import tx_from_str
-json_loads = lambda x: json.loads(x, parse_float=lambda x: str(PyDecimal(x)))
+def json_loads(x): return json.loads(x, parse_float=lambda x: str(PyDecimal(x)))
+
+
 arg_types = {
     'num': int,
     'nbits': int,
@@ -919,10 +959,11 @@ config_variables = {
         'ssl_chain': 'Chain of SSL certificates, needed for signed requests. Put your certificate at the top and the root CA at the end',
         'url_rewrite': 'Parameters passed to str.replace(), in order to create the r= part of bitcoincash: URIs. Example: \"(\'file:///var/www/\',\'https://electron-cash.org/\')\"',
     },
-    'listrequests':{
+    'listrequests': {
         'url_rewrite': 'Parameters passed to str.replace(), in order to create the r= part of bitcoincash: URIs. Example: \"(\'file:///var/www/\',\'https://electron-cash.org/\')\"',
     }
 }
+
 
 def set_default_subparser(self, name, args=None):
     """see http://stackoverflow.com/questions/5176691/argparse-how-to-specify-a-default-subcommand"""
@@ -944,6 +985,7 @@ def set_default_subparser(self, name, args=None):
                 sys.argv.insert(1, name)
             else:
                 args.insert(0, name)
+
 
 argparse.ArgumentParser.set_default_subparser = set_default_subparser
 
@@ -973,26 +1015,50 @@ def subparser_call(self, parser, namespace, values, option_string=None):
         vars(namespace).setdefault(_UNRECOGNIZED_ARGS_ATTR, [])
         getattr(namespace, _UNRECOGNIZED_ARGS_ATTR).extend(arg_strings)
 
+
 argparse._SubParsersAction.__call__ = subparser_call
 
 
 def add_network_options(parser):
-    parser.add_argument("-1", "--oneserver", action="store_true", dest="oneserver", default=False, help="connect to one server only")
-    parser.add_argument("-s", "--server", dest="server", default=None, help="set server host:port:protocol, where protocol is either t (tcp) or s (ssl)")
-    parser.add_argument("-p", "--proxy", dest="proxy", default=None, help="set proxy [type:]host[:port], where type is socks4,socks5 or http")
-    parser.add_argument("-x", "--disable_preferred_servers_only", action='store_false', dest="whitelist_servers_only", default=None, help="Disables 'preferred servers only' for this session. This must be used in conjunction with --server or --oneserver for them to work if they are outside the whitelist in servers.json (or the user-specified whitelist).")
+    parser.add_argument(
+        "-1",
+        "--oneserver",
+        action="store_true",
+        dest="oneserver",
+        default=False,
+        help="connect to one server only")
+    parser.add_argument("-s", "--server", dest="server", default=None,
+                        help="set server host:port:protocol, where protocol is either t (tcp) or s (ssl)")
+    parser.add_argument("-p", "--proxy", dest="proxy", default=None,
+                        help="set proxy [type:]host[:port], where type is socks4,socks5 or http")
+    parser.add_argument(
+        "-x",
+        "--disable_preferred_servers_only",
+        action='store_false',
+        dest="whitelist_servers_only",
+        default=None,
+        help="Disables 'preferred servers only' for this session. This must be used in conjunction with --server or --oneserver for them to work if they are outside the whitelist in servers.json (or the user-specified whitelist).")
+
 
 def add_global_options(parser):
     group = parser.add_argument_group('global options')
-    group.add_argument("-v", "--verbose", action="store_true", dest="verbose", default=False, help="Show debugging information")
+    group.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        dest="verbose",
+        default=False,
+        help="Show debugging information")
     group.add_argument("-D", "--dir", dest="electron_cash_path", help="electron cash directory")
-    group.add_argument("-P", "--portable", action="store_true", dest="portable", default=False, help="Use local 'electron_cash_data' directory")
+    group.add_argument("-P", "--portable", action="store_true", dest="portable",
+                       default=False, help="Use local 'electron_cash_data' directory")
     group.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
     group.add_argument("-wp", "--walletpassword", dest="wallet_password", default=None, help="Supply wallet password")
     group.add_argument("--testnet", action="store_true", dest="testnet", default=False, help="Use Testnet")
     group.add_argument("--testnet4", action="store_true", dest="testnet4", default=False, help="Use Testnet4")
     group.add_argument("--scalenet", action="store_true", dest="scalenet", default=False, help="Use Scalenet")
     group.add_argument("--taxcoin", action="store_true", dest="taxcoin", default=False, help="Use TaxCoin (ABC)")
+
 
 def get_parser():
     # create main parser
@@ -1001,28 +1067,58 @@ def get_parser():
     add_global_options(parser)
     subparsers = parser.add_subparsers(dest='cmd', metavar='<command>')
     # gui
-    parser_gui = subparsers.add_parser('gui', description="Run Electron Cash's Graphical User Interface.", help="Run GUI (default)")
+    parser_gui = subparsers.add_parser(
+        'gui',
+        description="Run Electron Cash's Graphical User Interface.",
+        help="Run GUI (default)")
     parser_gui.add_argument("url", nargs='?', default=None, help="bitcoin URI (or bip70 file)")
-    parser_gui.add_argument("-g", "--gui", dest="gui", help="select graphical user interface", choices=['qt', 'text', 'stdio'])
+    parser_gui.add_argument(
+        "-g",
+        "--gui",
+        dest="gui",
+        help="select graphical user interface",
+        choices=[
+            'qt',
+            'text',
+            'stdio'])
     parser_gui.add_argument("-o", "--offline", action="store_true", dest="offline", default=False, help="Run offline")
     parser_gui.add_argument("-m", action="store_true", dest="hide_gui", default=False, help="hide GUI on startup")
     parser_gui.add_argument("-L", "--lang", dest="language", default=None, help="default language used in GUI")
     if sys.platform in ('windows', 'win32'):
         # Hack to support forcing QT_OPENGL env var. See #1255. This allows us
         # to perhaps add a custom installer shortcut to force software rendering
-        parser_gui.add_argument("-O", "--qt_opengl", dest="qt_opengl", default=None, help="(Windows only) If using Qt gui, override the QT_OPENGL env-var with this value (angle,software,desktop are possible overrides)")
+        parser_gui.add_argument(
+            "-O",
+            "--qt_opengl",
+            dest="qt_opengl",
+            default=None,
+            help="(Windows only) If using Qt gui, override the QT_OPENGL env-var with this value (angle,software,desktop are possible overrides)")
     if sys.platform not in ('darwin',):
         # Qt High DPI scaling can not be disabled on macOS since it is never
         # explicitly enabled on macOS! (see gui/qt/__init__.py)
-        parser_gui.add_argument("--qt_disable_highdpi", action="store_true", dest="qt_disable_highdpi", default=None, help="(Linux & Windows only) If using Qt gui, disable high DPI scaling")
-    parser_gui.add_argument("-R", "--relax_warnings", action="store_true", dest="relaxwarn", default=False, help="Disables certain warnings that might be annoying during development and/or testing")
+        parser_gui.add_argument(
+            "--qt_disable_highdpi",
+            action="store_true",
+            dest="qt_disable_highdpi",
+            default=None,
+            help="(Linux & Windows only) If using Qt gui, disable high DPI scaling")
+    parser_gui.add_argument(
+        "-R",
+        "--relax_warnings",
+        action="store_true",
+        dest="relaxwarn",
+        default=False,
+        help="Disables certain warnings that might be annoying during development and/or testing")
     add_network_options(parser_gui)
     add_global_options(parser_gui)
     # daemon
     parser_daemon = subparsers.add_parser('daemon', help="Run Daemon")
-    parser_daemon.add_argument("subcommand", nargs='?', help="start, stop, status, load_wallet, close_wallet. Other commands may be added by plugins.")
+    parser_daemon.add_argument(
+        "subcommand",
+        nargs='?',
+        help="start, stop, status, load_wallet, close_wallet. Other commands may be added by plugins.")
     parser_daemon.add_argument("subargs", nargs='*', metavar='arg', help="additional arguments (used by plugins)")
-    #parser_daemon.set_defaults(func=run_daemon)
+    # parser_daemon.set_defaults(func=run_daemon)
     add_network_options(parser_daemon)
     add_global_options(parser_daemon)
     # commands
@@ -1035,7 +1131,7 @@ def get_parser():
         for optname, default in zip(cmd.options, cmd.defaults):
             a, help = command_options[optname]
             b = '--' + optname
-            action = "store_true" if type(default) is bool else 'store'
+            action = "store_true" if isinstance(default, bool) else 'store'
             args = (a, b) if a else (b,)
             if action == 'store':
                 _type = arg_types.get(optname, str)

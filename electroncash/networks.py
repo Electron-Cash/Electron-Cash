@@ -27,13 +27,15 @@ import pkgutil
 
 from .asert_daa import ASERTDaa, Anchor
 
+
 def _read_json_dict(filename):
     try:
         data = pkgutil.get_data(__name__, filename)
         r = json.loads(data.decode('utf-8'))
-    except:
+    except BaseException:
         r = {}
     return r
+
 
 class AbstractNet:
     TESTNET = False
@@ -102,7 +104,7 @@ class TestNet(AbstractNet):
     CASHADDR_PREFIX = "bchtest"
     HEADERS_URL = "http://bitcoincash.com/files/testnet_headers"  # Unused
     GENESIS = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
-    DEFAULT_PORTS = {'t':'51001', 's':'51002'}
+    DEFAULT_PORTS = {'t': '51001', 's': '51002'}
     DEFAULT_SERVERS = _read_json_dict('servers_testnet.json')  # DO NOT MODIFY IN CLIENT CODE
     TITLE = 'Electron Cash Testnet'
     BASE_UNITS = {'tBCH': 8, 'mtBCH': 5, 'tbits': 2}
@@ -152,13 +154,11 @@ class TestNet4(TestNet):
     asert_daa.anchor = Anchor(height=16844, bits=486604799, prev_time=1605451779)
 
 
-
 class ScaleNet(TestNet):
     GENESIS = "00000000e6453dc2dfe1ffa19023f86002eb11dbb8e87d0291a4599f0430be52"
     TITLE = 'Electron Cash Scalenet'
     BASE_UNITS = {'sBCH': 8, 'msBCH': 5, 'sbits': 2}
     DEFAULT_UNIT = "tBCH"
-
 
     HEADERS_URL = "http://bitcoincash.com/files/scalenet_headers"  # Unused
 
@@ -175,7 +175,6 @@ class ScaleNet(TestNet):
     VERIFICATION_BLOCK_HEIGHT = 2016
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
-
 
 
 class TaxCoinNet(AbstractNet):
@@ -284,9 +283,10 @@ class NetworkConstants:
 
     We have transitioned away from this class. All new code should use the
     'net' global variable above instead. '''
+
     def __getattribute__(self, name):
         return getattr(net, name)
 
     def __setattr__(self, name, value):
-        raise RuntimeError('NetworkConstants does not support setting attributes! ({}={})'.format(name,value))
+        raise RuntimeError('NetworkConstants does not support setting attributes! ({}={})'.format(name, value))
         #setattr(net, name, value)

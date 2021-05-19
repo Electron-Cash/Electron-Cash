@@ -43,6 +43,7 @@ TX_ICONS = [
     "confirmed.svg",
 ]
 
+
 class HistoryList(MyTreeWidget):
     filter_columns = [2, 3, 4]  # Date, Description, Amount
     filter_data_columns = [0]  # Allow search on tx_hash (string)
@@ -69,17 +70,18 @@ class HistoryList(MyTreeWidget):
         self.cleaned_up = True
 
     def refresh_headers(self):
-        headers = ['', '', _('Date'), _('Description') , _('Amount'), _('Balance')]
+        headers = ['', '', _('Date'), _('Description'), _('Amount'), _('Balance')]
         fx = self.parent.fx
         if fx and fx.show_history():
-            headers.extend(['%s '%fx.ccy + _('Amount'), '%s '%fx.ccy + _('Balance')])
+            headers.extend(['%s ' % fx.ccy + _('Amount'), '%s ' % fx.ccy + _('Balance')])
         self.update_headers(headers)
 
     def get_domain(self):
         '''Replaced in address_dialog.py'''
         return self.wallet.get_addresses()
 
-    @rate_limited(1.0, classlevel=True, ts_after=True) # We rate limit the history list refresh no more than once every second, app-wide
+    # We rate limit the history list refresh no more than once every second, app-wide
+    @rate_limited(1.0, classlevel=True, ts_after=True)
     def update(self):
         if self.cleaned_up:
             # short-cut return if window was closed and wallet is stopped
@@ -115,11 +117,12 @@ class HistoryList(MyTreeWidget):
         h = self.wallet.get_history(self.get_domain(), reverse=True)
         sels = self.selectedItems()
         current_tx = sels[0].data(0, Qt.UserRole) if sels else None
-        del sels #  make sure not to hold stale ref to C++ list of items which will be deleted in clear() call below
+        del sels  # make sure not to hold stale ref to C++ list of items which will be deleted in clear() call below
         self.clear()
         self.has_unknown_balances = False
         fx = self.parent.fx
-        if fx: fx.history_used_spot = False
+        if fx:
+            fx.history_used_spot = False
         for h_item in h:
             tx_hash, height, conf, timestamp, value, balance = h_item
             label = self.wallet.get_label(tx_hash)
@@ -148,15 +151,16 @@ class HistoryList(MyTreeWidget):
                     text = fx.historical_value_str(amount, date)
                     entry.append(text)
             item = SortableTreeWidgetItem(entry)
-            if icon: item.setIcon(0, icon)
+            if icon:
+                item.setIcon(0, icon)
             item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
             item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             if has_invoice:
                 item.setIcon(3, self.invoiceIcon)
             for i in range(len(entry)):
-                if i>3:
+                if i > 3:
                     item.setTextAlignment(i, Qt.AlignRight | Qt.AlignVCenter)
-                if i!=2:
+                if i != 2:
                     item.setFont(i, self.monospaceFont)
             if value and value < 0:
                 item.setForeground(3, self.withdrawalBrush)
@@ -206,7 +210,8 @@ class HistoryList(MyTreeWidget):
             item.setHidden(True)
 
     def update_item(self, tx_hash, height, conf, timestamp):
-        if not self.wallet: return # can happen on startup if this is called before self.on_update()
+        if not self.wallet:
+            return  # can happen on startup if this is called before self.on_update()
         item = self._item_cache.get(tx_hash)
         if item:
             idx = self.invisibleRootItem().indexOfChild(item)
@@ -220,7 +225,8 @@ class HistoryList(MyTreeWidget):
                 self.invisibleRootItem().takeChild(idx)
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
             icon = self._get_icon_for_status(status)
-            if icon: item.setIcon(0, icon)
+            if icon:
+                item.setIcon(0, icon)
             item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             item.setText(2, status_str)
             if idx > -1:
@@ -250,17 +256,21 @@ class HistoryList(MyTreeWidget):
         tx_URL = web.BE_URL(self.config, 'tx', tx_hash)
         height, conf, timestamp = self.wallet.get_tx_height(tx_hash)
         tx = self.wallet.transactions.get(tx_hash)
-        if not tx: return # this happens sometimes on wallet synch when first starting up.
+        if not tx:
+            return  # this happens sometimes on wallet synch when first starting up.
         is_unconfirmed = height <= 0
         pr_key = self.wallet.invoices.paid.get(tx_hash)
 
         menu = QMenu()
 
-        menu.addAction(_("&Copy {}").format(column_title), lambda: self.parent.app.clipboard().setText(column_data.strip()))
+        menu.addAction(
+            _("&Copy {}").format(column_title),
+            lambda: self.parent.app.clipboard().setText(
+                column_data.strip()))
         if column in self.editable_columns:
             # We grab a fresh reference to the current item, as it has been deleted in a reported issue.
             menu.addAction(_("&Edit {}").format(column_title),
-                lambda: self.currentItem() and self.editItem(self.currentItem(), column))
+                           lambda: self.currentItem() and self.editItem(self.currentItem(), column))
         label = self.wallet.get_label(tx_hash) or None
         menu.addAction(_("&Details"), lambda: self.parent.show_transaction(tx, label))
         if pr_key:

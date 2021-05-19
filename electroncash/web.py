@@ -21,7 +21,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import decimal # Qt 5.12 also exports Decimal, so take the package name
+import decimal  # Qt 5.12 also exports Decimal, so take the package name
 import os
 import re
 import shutil
@@ -42,19 +42,19 @@ DEFAULT_EXPLORER = "Blockchair.com"
 mainnet_block_explorers = {
     'Bitcoin.com': ('https://explorer.bitcoin.com/bch',
                     Address.FMT_CASHADDR,
-                    {'tx': 'tx', 'addr': 'address', 'block' : 'block'}),
+                    {'tx': 'tx', 'addr': 'address', 'block': 'block'}),
     'Blockchair.com': ('https://blockchair.com/bitcoin-cash',
                        Address.FMT_CASHADDR,
-                       {'tx': 'transaction', 'addr': 'address', 'block' : 'block'}),
+                       {'tx': 'transaction', 'addr': 'address', 'block': 'block'}),
     'BTC.com': ('https://bch.btc.com',
-                       Address.FMT_CASHADDR,
-                       {'tx': '', 'addr': '', 'block' : 'block'}),
+                Address.FMT_CASHADDR,
+                {'tx': '', 'addr': '', 'block': 'block'}),
     'ViaBTC.com': ('https://explorer.viawallet.com/bch',
                    Address.FMT_CASHADDR,
-                   {'tx': 'tx', 'addr': 'address', 'block' : 'block'}),
+                   {'tx': 'tx', 'addr': 'address', 'block': 'block'}),
     'BlockExplorer.one': ('https://blockexplorer.one/bch/mainnet',
-                   Address.FMT_CASHADDR,
-                   {'tx': 'tx', 'addr': 'address', 'block' : 'blockHash'}),
+                          Address.FMT_CASHADDR,
+                          {'tx': 'tx', 'addr': 'address', 'block': 'blockHash'}),
     'electroncash.de': ('https://explorer.electroncash.de',
                         Address.FMT_CASHADDR,
                         {'tx': 'tx', 'addr': 'address', 'block': 'block-height'}),
@@ -72,12 +72,12 @@ mainnet_block_explorers = {
 DEFAULT_EXPLORER_TESTNET = 'Bitcoin.com'
 
 testnet_block_explorers = {
-    'Bitcoin.com'   : ('https://explorer.bitcoin.com/tbch',
-                       Address.FMT_LEGACY,  # For some reason testnet expects legacy and fails on bchtest: addresses.
-                       {'tx': 'tx', 'addr': 'address', 'block' : 'block'}),
+    'Bitcoin.com': ('https://explorer.bitcoin.com/tbch',
+                    Address.FMT_LEGACY,  # For some reason testnet expects legacy and fails on bchtest: addresses.
+                    {'tx': 'tx', 'addr': 'address', 'block': 'block'}),
     'BlockExplorer.one': ('https://blockexplorer.one/bch/testnet',
-                   Address.FMT_CASHADDR,
-                   {'tx': 'tx', 'addr': 'address', 'block' : 'blockHash'}),
+                          Address.FMT_CASHADDR,
+                          {'tx': 'tx', 'addr': 'address', 'block': 'blockHash'}),
     'electroncash.de': ('https://testnet-explorer.electroncash.de',
                         Address.FMT_CASHADDR,
                         {'tx': 'tx', 'addr': 'address', 'block': 'block-height'}),
@@ -116,6 +116,7 @@ taxcoin_block_explorers = {
                       {'tx': 'tx', 'addr': 'address', 'block': 'block-height'}),
 }
 
+
 def BE_info():
     if networks.net is networks.TestNet:
         return testnet_block_explorers
@@ -127,11 +128,13 @@ def BE_info():
         return taxcoin_block_explorers
     return mainnet_block_explorers
 
+
 def BE_tuple(config):
     infodict = BE_info()
     return (infodict.get(BE_from_config(config))
-            or infodict.get(BE_default_explorer()) # In case block explorer in config is bad/no longer valid
-           )
+            or infodict.get(BE_default_explorer())  # In case block explorer in config is bad/no longer valid
+            )
+
 
 def BE_default_explorer():
     if networks.net is networks.TestNet:
@@ -144,8 +147,10 @@ def BE_default_explorer():
         return DEFAULT_EXPLORER_TAXCOIN
     return DEFAULT_EXPLORER
 
+
 def BE_from_config(config):
     return config.get('block_explorer', BE_default_explorer())
+
 
 def BE_URL(config, kind, item):
     be_tuple = BE_tuple(config)
@@ -160,13 +165,16 @@ def BE_URL(config, kind, item):
         item = item.to_string(addr_fmt)
     return "/".join(part for part in (url_base, kind_str, item) if part)
 
+
 def BE_sorted_list():
     return sorted(BE_info())
+
 
 def _strip_cashacct_str(s: str) -> str:
     '''Strips emojis and ';' characters from a cashacct string
     of the form name#number[.123]'''
     return cashacct.CashAcct.strip_emoji(s).replace(';', '').strip()
+
 
 def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, net=None):
     is_cashacct = bool(isinstance(addr, str) and cashacct.CashAcct.parse_string(addr))
@@ -180,9 +188,9 @@ def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, net
         scheme, path = addr.to_URI_components(net=net)
     query = []
     if amount:
-        query.append('amount=%s'%format_satoshis_plain(amount))
+        query.append('amount=%s' % format_satoshis_plain(amount))
     if message:
-        query.append('message=%s'%urllib.parse.quote(message))
+        query.append('message=%s' % urllib.parse.quote(message))
     if op_return:
         query.append(f'op_return={str(op_return)}')
     if op_return_raw:
@@ -192,18 +200,22 @@ def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, net
                                  query='&'.join(query), fragment='')
     return urllib.parse.urlunparse(p)
 
+
 def urlencode(s):
     ''' URL Encode; encodes a url or a uri fragment by %-quoting special chars'''
     return urllib.parse.quote(s)
+
 
 def urldecode(url):
     ''' Inverse of urlencode '''
     return urllib.parse.unquote(url)
 
-def parseable_schemes(net = None) -> tuple:
+
+def parseable_schemes(net=None) -> tuple:
     if net is None:
         net = networks.net
     return (net.CASHADDR_PREFIX, cashacct.URI_SCHEME)
+
 
 class ExtraParametersInURIWarning(RuntimeWarning):
     ''' Raised by parse_URI to indicate the parsing succeeded but that
@@ -211,13 +223,16 @@ class ExtraParametersInURIWarning(RuntimeWarning):
     args[0] is the function return value (dict of parsed args).
     args[1:] are the URL parameters that were not understood (unknown params)'''
 
+
 class DuplicateKeyInURIError(RuntimeError):
     ''' Raised on duplicate param keys in URI.
     args[0] is a translated error message suitable for the UI
     args[1:] is the list of duplicate keys. '''
 
+
 class BadSchemeError(RuntimeError):
     ''' Raised if the scheme is bad/unknown for a URI. '''
+
 
 class BadURIParameter(ValueError):
     ''' Raised if:
@@ -228,6 +243,7 @@ class BadURIParameter(ValueError):
 
         args[0] is the bad argument name e.g. 'amount'
         args[1] is the underlying Exception that was raised (if any, may be missing). '''
+
 
 def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
     """ If strict=True, may raise ExtraParametersInURIWarning (see docstring
@@ -286,12 +302,17 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
                 # some other source.  The below call is safe and won't raise.
                 address = urldecode(address)
             if not cashacct.CashAcct.parse_string(address):
-                raise BadURIParameter('address', ValueError(_("{acct_name} is not a valid cashacct string").format(acct_name=address)))
+                raise BadURIParameter(
+                    'address', ValueError(
+                        _("{acct_name} is not a valid cashacct string").format(
+                            acct_name=address)))
             address = _strip_cashacct_str(address)
         else:
             # validate
-            try: Address.from_string(address, net=net)
-            except Exception as e: raise BadURIParameter('address', e) from e
+            try:
+                Address.from_string(address, net=net)
+            except Exception as e:
+                raise BadURIParameter('address', e) from e
         out['address'] = address
 
     if 'amount' in out:
@@ -315,14 +336,20 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
     elif 'memo' in out:
         out['message'] = out['memo']
     if 'time' in out:
-        try: out['time'] = int(out['time'])
-        except ValueError as e: raise BadURIParameter('time', e) from e
+        try:
+            out['time'] = int(out['time'])
+        except ValueError as e:
+            raise BadURIParameter('time', e) from e
     if 'exp' in out:
-        try: out['exp'] = int(out['exp'])
-        except ValueError as e: raise BadURIParameter('exp', e) from e
+        try:
+            out['exp'] = int(out['exp'])
+        except ValueError as e:
+            raise BadURIParameter('exp', e) from e
     if 'sig' in out:
-        try: out['sig'] = bh2u(bitcoin.base_decode(out['sig'], None, base=58))
-        except Exception as e: raise BadURIParameter('sig', e) from e
+        try:
+            out['sig'] = bh2u(bitcoin.base_decode(out['sig'], None, base=58))
+        except Exception as e:
+            raise BadURIParameter('sig', e) from e
     if 'op_return_raw' in out and 'op_return' in out:
         if strict:
             # these two args cannot both appear together
@@ -331,8 +358,10 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
 
     if 'op_return_raw' in out:
         # validate op_return_raw arg
-        try: bfh(out['op_return_raw'])
-        except Exception as e: raise BadURIParameter('op_return_raw', e) from e
+        try:
+            bfh(out['op_return_raw'])
+        except Exception as e:
+            raise BadURIParameter('op_return_raw', e) from e
 
     r = out.get('r')
     sig = out.get('sig')
@@ -340,7 +369,9 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
     is_pr = bool(r or (name and sig))
 
     if is_pr and is_cashacct:
-        raise ValueError(_("'{uri_scheme}' payment requests are not currently supported").format(uri_scheme=cashacct.URI_SCHEME))
+        raise ValueError(
+            _("'{uri_scheme}' payment requests are not currently supported").format(
+                uri_scheme=cashacct.URI_SCHEME))
 
     if on_pr and is_pr:
         def get_payment_request_thread():
@@ -351,7 +382,7 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
                     request = pr.PaymentRequest(s)
                 else:
                     request = pr.get_payment_request(r)
-            except:
+            except BaseException:
                 ''' May happen if the values in the request are such
                 that they cannot be serialized to a protobuf. '''
                 einfo = sys.exc_info()
@@ -368,11 +399,24 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
         t = threading.Thread(target=get_payment_request_thread, daemon=True)
         t.start()
     if strict:
-        accept_keys = {'r', 'sig', 'name', 'address', 'amount', 'label', 'message', 'memo', 'op_return', 'op_return_raw', 'time', 'exp'}
+        accept_keys = {
+            'r',
+            'sig',
+            'name',
+            'address',
+            'amount',
+            'label',
+            'message',
+            'memo',
+            'op_return',
+            'op_return_raw',
+            'time',
+            'exp'}
         extra_keys = set(out.keys()) - accept_keys
         if extra_keys:
             raise ExtraParametersInURIWarning(out, *tuple(extra_keys))
     return out
+
 
 def check_www_dir(rdir):
     if not os.path.exists(rdir):

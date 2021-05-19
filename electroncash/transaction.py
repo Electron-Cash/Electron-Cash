@@ -24,7 +24,6 @@
 # SOFTWARE.
 
 
-
 # Note: The deserialization code originally comes from ABE.
 
 from .util import print_error, profiler
@@ -50,8 +49,10 @@ NO_SIGNATURE = 'ff'
 class SerializationError(Exception):
     """ Thrown when there's a problem deserializing or serializing """
 
+
 class InputValueMissing(ValueError):
     """ thrown when the value of an input is needed but not present """
+
 
 class BCDataStream(object):
     def __init__(self):
@@ -91,7 +92,7 @@ class BCDataStream(object):
 
     def read_bytes(self, length):
         try:
-            result = self.input[self.read_cursor:self.read_cursor+length]
+            result = self.input[self.read_cursor:self.read_cursor + length]
             self.read_cursor += length
             return result
         except IndexError:
@@ -167,18 +168,20 @@ def long_hex(bytes):
     return bytes.encode('hex_codec')
 
 # This function comes from bitcointools, bct-LICENSE.txt.
+
+
 def short_hex(bytes):
     t = bytes.encode('hex_codec')
     if len(t) < 11:
         return t
-    return t[0:4]+"..."+t[-4:]
+    return t[0:4] + "..." + t[-4:]
 
 
 def match_decoded(decoded, to_match):
     if len(decoded) != len(to_match):
-        return False;
+        return False
     for i in range(len(decoded)):
-        if to_match[i] == opcodes.OP_PUSHDATA4 and decoded[i][0] <= opcodes.OP_PUSHDATA4 and decoded[i][0]>0:
+        if to_match[i] == opcodes.OP_PUSHDATA4 and decoded[i][0] <= opcodes.OP_PUSHDATA4 and decoded[i][0] > 0:
             continue  # Opcodes below OP_PUSHDATA4 all just push data onto stack, and are equivalent.
         if to_match[i] != decoded[i][0]:
             return False
@@ -188,11 +191,13 @@ def match_decoded(decoded, to_match):
 def parse_sig(x_sig):
     return [None if x == NO_SIGNATURE else x for x in x_sig]
 
+
 def safe_parse_pubkey(x):
     try:
         return xpubkey_to_pubkey(x)
-    except:
+    except BaseException:
         return x
+
 
 def parse_scriptSig(d, _bytes):
     try:
@@ -202,7 +207,7 @@ def parse_scriptSig(d, _bytes):
         print_error("cannot find address in input script", bh2u(_bytes))
         return
 
-    match = [ opcodes.OP_PUSHDATA4 ]
+    match = [opcodes.OP_PUSHDATA4]
     if match_decoded(decoded, match):
         item = decoded[0][1]
         # payto_pubkey
@@ -216,14 +221,14 @@ def parse_scriptSig(d, _bytes):
     # non-generated TxIn transactions push a signature
     # (seventy-something bytes) and then their public key
     # (65 bytes) onto the stack:
-    match = [ opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4 ]
+    match = [opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4]
     if match_decoded(decoded, match):
         sig = bh2u(decoded[0][1])
         x_pubkey = bh2u(decoded[1][1])
         try:
             signatures = parse_sig([sig])
             pubkey, address = xpubkey_to_address(x_pubkey)
-        except:
+        except BaseException:
             print_error("cannot find address in input script", bh2u(_bytes))
             return
         d['type'] = 'p2pkh'
@@ -235,7 +240,7 @@ def parse_scriptSig(d, _bytes):
         return
 
     # p2sh transaction, m of n
-    match = [ opcodes.OP_0 ] + [ opcodes.OP_PUSHDATA4 ] * (len(decoded) - 1)
+    match = [opcodes.OP_0] + [opcodes.OP_PUSHDATA4] * (len(decoded) - 1)
     if not match_decoded(decoded, match):
         print_error("cannot find address in input script", bh2u(_bytes))
         return
@@ -258,7 +263,7 @@ def parse_redeemScript(s):
     n = dec2[-2][0] - opcodes.OP_1 + 1
     op_m = opcodes.OP_1 + m - 1
     op_n = opcodes.OP_1 + n - 1
-    match_multisig = [ op_m ] + [opcodes.OP_PUSHDATA4]*n + [ op_n, opcodes.OP_CHECKMULTISIG ]
+    match_multisig = [op_m] + [opcodes.OP_PUSHDATA4] * n + [op_n, opcodes.OP_CHECKMULTISIG]
     if not match_decoded(dec2, match_multisig):
         # causes exception in caller when mismatched
         print_error("cannot find address in input script", bh2u(s))
@@ -268,6 +273,7 @@ def parse_redeemScript(s):
     redeemScript = Script.multisig_script(m, [bytes.fromhex(p)
                                               for p in pubkeys])
     return m, n, x_pubkeys, pubkeys, redeemScript
+
 
 def get_address_from_output_script(_bytes):
     scriptlen = len(_bytes)
@@ -280,7 +286,7 @@ def get_address_from_output_script(_bytes):
         # Pay-to-pubkey-hash
         return TYPE_ADDRESS, Address.from_P2PKH_hash(_bytes[3:23])
 
-    if scriptlen == 35 and _bytes[0] == 33 and _bytes[1] in (2,3) and _bytes[34] == opcodes.OP_CHECKSIG:
+    if scriptlen == 35 and _bytes[0] == 33 and _bytes[1] in (2, 3) and _bytes[34] == opcodes.OP_CHECKSIG:
         # Pay-to-pubkey (compressed)
         return TYPE_PUBKEY, PublicKey.from_pubkey(_bytes[1:34])
 
@@ -303,7 +309,7 @@ def parse_input(vds):
     d['prevout_n'] = prevout_n
     d['sequence'] = sequence
     d['address'] = UnknownAddress()
-    if prevout_hash == '00'*32:
+    if prevout_hash == '00' * 32:
         d['type'] = 'coinbase'
         d['scriptSig'] = bh2u(scriptSig)
     else:
@@ -317,7 +323,9 @@ def parse_input(vds):
         try:
             parse_scriptSig(d, scriptSig)
         except Exception as e:
-            print_error('{}: Failed to parse tx input {}:{}, probably a p2sh (non multisig?). Exception was: {}'.format(__name__, prevout_hash, prevout_n, repr(e)))
+            print_error(
+                '{}: Failed to parse tx input {}:{}, probably a p2sh (non multisig?). Exception was: {}'.format(
+                    __name__, prevout_hash, prevout_n, repr(e)))
             # that whole heuristic codepath is fragile; just ignore it when it dies.
             # failing tx examples:
             # 1c671eb25a20aaff28b2fa4254003c201155b54c73ac7cf9c309d835deed85ee
@@ -360,17 +368,14 @@ def deserialize(raw):
 # pay & redeem scripts
 
 
-
 def multisig_script(public_keys, m):
     n = len(public_keys)
     assert n <= 15
     assert m <= n
     op_m = format(opcodes.OP_1 + m - 1, 'x')
     op_n = format(opcodes.OP_1 + n - 1, 'x')
-    keylist = [op_push(len(k)//2) + k for k in public_keys]
+    keylist = [op_push(len(k) // 2) + k for k in public_keys]
     return op_m + ''.join(keylist) + op_n + 'ae'
-
-
 
 
 class Transaction:
@@ -411,7 +416,7 @@ class Transaction:
         #
         # It is also used to store the 'fetched_inputs' which are asynchronously
         # retrieved inputs (by retrieving prevout_hash tx's), see
-        #`fetch_input_data`.
+        # `fetch_input_data`.
         #
         # Values in this dict are advisory only and may or may not always be
         # there!
@@ -580,7 +585,7 @@ class Transaction:
                 siglen = 0x41
             else:
                 siglen = 0x48
-            sig_list = [ "00" * siglen ] * num_sig
+            sig_list = ["00" * siglen] * num_sig
         else:
             pubkeys, x_pubkeys = self.get_sorted_pubkeys(txin)
             x_signatures = txin['signatures']
@@ -634,7 +639,6 @@ class Transaction:
         signatures = list(filter(None, x_signatures))
         return len(signatures) == num_sig
 
-
     @classmethod
     def get_preimage_script(self, txin):
         _type = txin['type']
@@ -661,26 +665,26 @@ class Transaction:
         # Prev hash and index
         s = self.serialize_outpoint(txin)
         # Script length, script, sequence
-        s += var_int(len(script)//2)
+        s += var_int(len(script) // 2)
         s += script
         s += int_to_hex(txin.get('sequence', 0xffffffff - 1), 4)
         # offline signing needs to know the input value
         if ('value' in txin
             and txin.get('scriptSig') is None
-            and not (estimate_size or self.is_txin_complete(txin))):
+                and not (estimate_size or self.is_txin_complete(txin))):
             s += int_to_hex(txin['value'], 8)
         return s
 
     def BIP_LI01_sort(self):
         # See https://github.com/kristovatlas/rfc/blob/master/bips/bip-li01.mediawiki
-        self._inputs.sort(key = lambda i: (i['prevout_hash'], i['prevout_n']))
-        self._outputs.sort(key = lambda o: (o[2], self.pay_script(o[1])))
+        self._inputs.sort(key=lambda i: (i['prevout_hash'], i['prevout_n']))
+        self._outputs.sort(key=lambda o: (o[2], self.pay_script(o[1])))
 
     def serialize_output(self, output):
         output_type, addr, amount = output
         s = int_to_hex(amount, 8)
         script = self.pay_script(addr)
-        s += var_int(len(script)//2)
+        s += var_int(len(script) // 2)
         s += script
         return s
 
@@ -698,8 +702,10 @@ class Transaction:
         has mutated the transaction after computing its signatures and would
         like to explicitly delete the cached common sighash. See
         `calc_common_sighash` below. '''
-        try: del self._cached_sighash_tup
-        except AttributeError: pass
+        try:
+            del self._cached_sighash_tup
+        except AttributeError:
+            pass
 
     def calc_common_sighash(self, use_cache=False):
         """ Calculate the common sighash components that are used by
@@ -742,7 +748,7 @@ class Transaction:
         self._cached_sighash_tup = meta, res
         return res
 
-    def serialize_preimage(self, i, nHashType=0x00000041, use_cache = False):
+    def serialize_preimage(self, i, nHashType=0x00000041, use_cache=False):
         """ See `.calc_common_sighash` for explanation of use_cache feature """
         if (nHashType & 0xff) != 0x41:
             raise ValueError("other hashtypes not supported; submit a PR to fix this!")
@@ -761,9 +767,10 @@ class Transaction:
             raise InputValueMissing
         nSequence = int_to_hex(txin.get('sequence', 0xffffffff - 1), 4)
 
-        hashPrevouts, hashSequence, hashOutputs = self.calc_common_sighash(use_cache = use_cache)
+        hashPrevouts, hashSequence, hashOutputs = self.calc_common_sighash(use_cache=use_cache)
 
-        preimage = nVersion + bh2u(hashPrevouts) + bh2u(hashSequence) + outpoint + scriptCode + amount + nSequence + bh2u(hashOutputs) + nLocktime + nHashType
+        preimage = nVersion + bh2u(hashPrevouts) + bh2u(hashSequence) + outpoint + scriptCode + \
+            amount + nSequence + bh2u(hashOutputs) + nLocktime + nHashType
         return preimage
 
     def serialize(self, estimate_size=False):
@@ -771,7 +778,8 @@ class Transaction:
         nLocktime = int_to_hex(self.locktime, 4)
         inputs = self.inputs()
         outputs = self.outputs()
-        txins = var_int(len(inputs)) + ''.join(self.serialize_input(txin, self.input_script(txin, estimate_size, self._sign_schnorr), estimate_size) for txin in inputs)
+        txins = var_int(len(inputs)) + ''.join(self.serialize_input(txin, self.input_script(txin,
+                                                                                            estimate_size, self._sign_schnorr), estimate_size) for txin in inputs)
         txouts = var_int(len(outputs)) + ''.join(self.serialize_output(o) for o in outputs)
         return nVersion + txins + txouts + nLocktime
 
@@ -798,7 +806,7 @@ class Transaction:
         return self.txid()
 
     @staticmethod
-    def _txid(raw_hex : str) -> str:
+    def _txid(raw_hex: str) -> str:
         return bh2u(Hash(bfh(raw_hex))[::-1])
 
     def add_inputs(self, inputs):
@@ -852,7 +860,7 @@ class Transaction:
         for txin in self.inputs():
             if txin['type'] == 'coinbase':
                 continue
-            signatures = list(filter(None, txin.get('signatures',[])))
+            signatures = list(filter(None, txin.get('signatures', [])))
             s += len(signatures)
             r += txin.get('num_sig', -1)
         return s, r
@@ -883,8 +891,8 @@ class Transaction:
             try:
                 pubkey_point = ser_to_point(pubkey)
                 vk = MyVerifyingKey.from_public_point(pubkey_point, curve=SECP256k1)
-                if vk.verify_digest(sig, msghash, sigdecode = ecdsa.util.sigdecode_der):
-                   return True
+                if vk.verify_digest(sig, msghash, sigdecode=ecdsa.util.sigdecode_der):
+                    return True
             except (AssertionError, ValueError, TypeError,
                     BadSignatureError, BadDigestError, UnexpectedDER) as e:
                 # ser_to_point will fail if pubkey is off-curve, infinity, or garbage.
@@ -897,15 +905,15 @@ class Transaction:
                     reason.insert(0, repr(e))
             return False
 
-
     @staticmethod
     def _ecdsa_sign(sec, pre_hash):
         pkey = regenerate_key(sec)
         secexp = pkey.secret
-        private_key = MySigningKey.from_secret_exponent(secexp, curve = SECP256k1)
+        private_key = MySigningKey.from_secret_exponent(secexp, curve=SECP256k1)
         public_key = private_key.get_verifying_key()
-        sig = private_key.sign_digest_deterministic(pre_hash, hashfunc=hashlib.sha256, sigencode = ecdsa.util.sigencode_der)
-        assert public_key.verify_digest(sig, pre_hash, sigdecode = ecdsa.util.sigdecode_der)
+        sig = private_key.sign_digest_deterministic(
+            pre_hash, hashfunc=hashlib.sha256, sigencode=ecdsa.util.sigencode_der)
+        assert public_key.verify_digest(sig, pre_hash, sigdecode=ecdsa.util.sigdecode_der)
         return sig
 
     @staticmethod
@@ -914,7 +922,6 @@ class Transaction:
         sig = schnorr.sign(sec, pre_hash)
         assert schnorr.verify(pubkey, sig, pre_hash)  # verify what we just signed
         return sig
-
 
     def sign(self, keypairs, *, use_cache=False):
         for i, txin in enumerate(self.inputs()):
@@ -941,7 +948,7 @@ class Transaction:
         '''Note: precondition is self._inputs is valid (ie: tx is already deserialized)'''
         pubkey = public_key_from_private_key(sec, compressed)
         # add signature
-        nHashType = 0x00000041 # hardcoded, perhaps should be taken from unsigned input dict
+        nHashType = 0x00000041  # hardcoded, perhaps should be taken from unsigned input dict
         pre_hash = Hash(bfh(self.serialize_preimage(i, nHashType, use_cache=use_cache)))
         if self._sign_schnorr:
             sig = self._schnorr_sign(pubkey, sec, pre_hash)
@@ -953,19 +960,18 @@ class Transaction:
             return None
         txin = self._inputs[i]
         txin['signatures'][j] = bh2u(sig + bytes((nHashType & 0xff,)))
-        txin['pubkeys'][j] = pubkey # needed for fd keys
+        txin['pubkeys'][j] = pubkey  # needed for fd keys
         return txin
 
     def get_outputs(self):
         """convert pubkeys to addresses"""
         o = []
         for type, addr, v in self.outputs():
-            o.append((addr,v))      # consider using yield (addr, v)
+            o.append((addr, v))      # consider using yield (addr, v)
         return o
 
     def get_output_addresses(self):
         return [addr for addr, val in self.get_outputs()]
-
 
     def has_address(self, addr):
         return (addr in self.get_output_addresses()) or (addr in (tx.get("address") for tx in self.inputs()))
@@ -973,7 +979,6 @@ class Transaction:
     def is_final(self):
         return not any([x.get('sequence', 0xffffffff - 1) < 0xffffffff - 1
                         for x in self.inputs()])
-
 
     def as_dict(self):
         if self.raw is None:
@@ -1039,7 +1044,7 @@ class Transaction:
             inps = []
         else:
             # may be a new list or list that was already in dict
-            inps = self.fetched_inputs(require_complete = True)
+            inps = self.fetched_inputs(require_complete=True)
         if len(self._inputs) == len(inps):
             # we already have results, don't do anything.
             return False
@@ -1056,6 +1061,7 @@ class Transaction:
         t = None
         cls = __class__
         self_txid = self.txid()
+
         def doIt():
             '''
             This function is seemingly complex, but it's really conceptually
@@ -1071,18 +1077,20 @@ class Transaction:
             cd8fcc8ad75267ff9ad314e770a66a9e871be7882b7c05a7e5271c46bfca98bc '''
             last_prog = -9999.0
             need_dl_txids = defaultdict(list)  # the dict of txids we will need to download (wasn't in cache)
+
             def prog(i, prog_total=100):
                 ''' notify interested code about progress '''
                 nonlocal last_prog
                 if prog_callback:
-                    prog = ((i+1)*100.0)/prog_total
+                    prog = ((i + 1) * 100.0) / prog_total
                     if prog - last_prog > 5.0:
                         prog_callback(prog)
                         last_prog = prog
             while eph.get('_fetch') == t and len(inps) < len(self._inputs):
                 i = len(inps)
                 inp = deepcopy(self._inputs[i])
-                typ, prevout_hash, n, addr, value = inp.get('type'), inp.get('prevout_hash'), inp.get('prevout_n'), inp.get('address'), inp.get('value')
+                typ, prevout_hash, n, addr, value = inp.get('type'), inp.get(
+                    'prevout_hash'), inp.get('prevout_n'), inp.get('address'), inp.get('value')
                 if not prevout_hash or n is None:
                     raise RuntimeError('Missing prevout_hash and/or prevout_n')
                 if typ != 'coinbase' and (not isinstance(addr, Address) or value is None):
@@ -1108,14 +1116,17 @@ class Transaction:
                                 # tx's that fail this check are never
                                 # put in cache anyway.
                                 #txid = tx._txid(tx.raw)
-                                #if txid != prevout_hash: # sanity check
+                                # if txid != prevout_hash: # sanity check
                                 #    print_error("fetch_input_data: cached prevout_hash {} != tx.txid() {}, ignoring.".format(prevout_hash, txid))
                             except Exception as e:
-                                print_error("fetch_input_data: WARNING failed to deserialize {}: {}".format(prevout_hash, repr(e)))
+                                print_error(
+                                    "fetch_input_data: WARNING failed to deserialize {}: {}".format(
+                                        prevout_hash, repr(e)))
                                 tx = None
                         else:
                             tx = None
-                            print_error("fetch_input_data: WARNING cached tx lacked any 'raw' bytes for {}".format(prevout_hash))
+                            print_error(
+                                "fetch_input_data: WARNING cached tx lacked any 'raw' bytes for {}".format(prevout_hash))
                     # now, examine the deserialized tx, if it's still good
                     if tx:
                         if n < len(tx.outputs()):
@@ -1125,14 +1136,17 @@ class Transaction:
                             inp['address'] = addr
                             print_error("fetch_input_data: fetched cached", i, addr, value)
                         else:
-                            print_error("fetch_input_data: ** FIXME ** should never happen -- n={} >= len(tx.outputs())={} for prevout {}".format(n, len(tx.outputs()), prevout_hash))
+                            print_error(
+                                "fetch_input_data: ** FIXME ** should never happen -- n={} >= len(tx.outputs())={} for prevout {}".format(
+                                    n, len(
+                                        tx.outputs()), prevout_hash))
                     else:
                         # tx was not in cache or wallet.transactions, mark
                         # it for download below (this branch can also execute
                         # in the unlikely case where there was an error above)
                         need_dl_txids[prevout_hash].append((i, n))  # remember the input# as well as the prevout_n
 
-                inps.append(inp) # append either cached result or as-yet-incomplete copy of _inputs[i]
+                inps.append(inp)  # append either cached result or as-yet-incomplete copy of _inputs[i]
             # Now, download the tx's we didn't find above if network is available
             # and caller said it's ok to go out ot network.. otherwise just return
             # what we have
@@ -1145,6 +1159,7 @@ class Transaction:
                     q = queue.Queue()
                     q_ct = 0
                     bad_txids = set()
+
                     def put_in_queue_and_cache(r):
                         ''' we cache the results directly in the network callback
                         as even if the user cancels the operation, we would like
@@ -1181,6 +1196,7 @@ class Transaction:
                         if eph.get('block_height'):
                             return False
                         lh = wallet.network.get_server_height() or wallet.get_local_height()
+
                         def got_tx_info(r):
                             q.put('block_height')  # indicate to other thread we got the block_height reply from network
                             try:
@@ -1194,7 +1210,7 @@ class Transaction:
                             except Exception as e:
                                 print_error('fetch_input_data: get_bh fail:', str(e), r)
                         if self_txid:
-                            wallet.network.queue_request('blockchain.transaction.get', [self_txid,True],
+                            wallet.network.queue_request('blockchain.transaction.get', [self_txid, True],
                                                          interface=None, callback=got_tx_info)
                             callback_funcs_to_cancel.add(got_tx_info)
                             return True
@@ -1212,7 +1228,8 @@ class Transaction:
                                 # early abort from func, canceled
                                 break
                             if r == 'block_height':
-                                # ignore block_height reply from network.. was already processed in other thread in got_tx_info above
+                                # ignore block_height reply from network.. was already processed in other
+                                # thread in got_tx_info above
                                 continue
                             if r.get('error'):
                                 msg = r.get('error')
@@ -1222,7 +1239,8 @@ class Transaction:
                             rawhex = r['result']
                             txid = r['params'][0]
                             assert txid not in bad_txids, "txid marked bad"  # skip if was marked bad by our callback code
-                            tx = Transaction(rawhex); tx.deserialize()
+                            tx = Transaction(rawhex)
+                            tx.deserialize()
                             for item in need_dl_txids[txid]:
                                 ii, n = item
                                 assert n < len(tx.outputs())
@@ -1243,7 +1261,8 @@ class Transaction:
                     for func in callback_funcs_to_cancel:
                         wallet.network.cancel_requests(func)
             if len(inps) == len(self._inputs) and eph.get('_fetch') == t:  # sanity check
-                eph.pop('_fetch', None)  # potential race condition here, popping wrong t -- but in practice w/ CPython threading it won't matter
+                # potential race condition here, popping wrong t -- but in practice w/ CPython threading it won't matter
+                eph.pop('_fetch', None)
                 print_error(f"fetch_input_data: elapsed {(time.time()-t0):.4f} sec")
                 if done_callback:
                     done_callback(*done_args)
@@ -1282,7 +1301,7 @@ class Transaction:
         return bool(self.ephemeral.pop('_fetch', None))
 
     @classmethod
-    def tx_cache_get(cls, txid : str) -> object:
+    def tx_cache_get(cls, txid: str) -> object:
         ''' Attempts to retrieve txid from the tx cache that this class
         keeps in-memory.  Returns None on failure. The returned tx is
         not deserialized, and is a copy of the one in the cache. '''
@@ -1296,7 +1315,7 @@ class Transaction:
         return None
 
     @classmethod
-    def tx_cache_put(cls, tx : object, txid : str = None):
+    def tx_cache_put(cls, tx: object, txid: str = None):
         ''' Puts a non-deserialized copy of tx into the tx_cache. '''
         if not tx or not tx.raw:
             raise ValueError('Please pass a tx which has a valid .raw attribute!')
@@ -1313,7 +1332,7 @@ def tx_from_str(txt):
     try:
         bfh(txt)
         is_hex = True
-    except:
+    except BaseException:
         is_hex = False
     if is_hex:
         return txt
