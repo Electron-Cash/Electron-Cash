@@ -138,7 +138,7 @@ def get_rpc_credentials(config):
 
 class Daemon(DaemonThread):
 
-    def __init__(self, config, fd, is_gui, plugins, listen_jsonrpc=True):
+    def __init__(self, config, fd, is_gui, plugins, *, listen_jsonrpc=True):
         DaemonThread.__init__(self)
         self.plugins = plugins
         self.config = config
