@@ -18,6 +18,7 @@ from .uikit_bindings import *
 from electroncash import networks
 from electroncash.address import Address, ScriptOutput
 from electroncash.paymentrequest import PaymentRequest
+from electroncash.transaction import OPReturn
 from electroncash import bitcoin
 from .feeslider import FeeSlider
 from .amountedit import BTCAmountEdit
@@ -209,10 +210,16 @@ class SendVC(SendBase):
         # Error Label
         self.message.text = ""
 
+        self.opReturnDel.placeholderFont = UIFont.italicSystemFontOfSize_(14.0)
+        self.opReturnDel.tv = self.opReturn
+        self.opReturnDel.text = ""
+        self.opReturnDel.placeholderText = _("OP_RETURN data (optional).")
+
         self.descDel.placeholderFont = UIFont.italicSystemFontOfSize_(14.0)
         self.descDel.tv = self.desc
         self.descDel.text = ""
         self.descDel.placeholderText = _("Description of the transaction (not mandatory).")
+        
 
         feelbl = self.feeLbl
         slider = self.feeSlider
@@ -453,7 +460,7 @@ class SendVC(SendBase):
             self.csPayToTop.constant = 0
 
         f = self.desc.frame
-        self.csContentHeight.constant = f.origin.y + f.size.height + 125
+        self.csContentHeight.constant = f.origin.y + f.size.height + 250
 
         retVal = False
         errLbl = self.message
@@ -527,6 +534,7 @@ class SendVC(SendBase):
         tf = self.fiat
         # label
         self.descDel.text = ""
+        self.opReturnDel.text = ""
         # slider
         slider = self.feeSlider
         slider.setValue_animated_(slider.minimumValue,True)
@@ -1020,6 +1028,21 @@ def read_send_form(send : ObjCInstance) -> tuple:
         #    msg += _('Do you wish to continue?')
         #    if not self.question(msg):
         #        return
+
+    try:
+        # handle op_return if specified and enabled
+        opreturn_message = send.opReturnDel.text
+        if opreturn_message:
+            #if self.opreturn_rawhex_cb.isChecked():
+            #        outputs.append(OPReturn.output_for_rawhex(opreturn_message))
+            #    else:
+            outputs.append(OPReturn.output_for_stringdata(opreturn_message))
+    except OPReturn.TooLarge as e:
+        utils.show_alert(send, _("Error"), str(e))
+        return None
+    except OPReturn.Error as e:
+        utils.show_alert(send, _("Error"), str(e))
+        return None
 
     if not outputs:
         utils.show_alert(send, _("Error"), _('No outputs'))
