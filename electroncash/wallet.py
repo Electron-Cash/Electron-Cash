@@ -1874,7 +1874,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 result.extend(new_addrs)
             return result
 
-    def make_unsigned_transaction(self, inputs, outputs, config, fee=None, change_addr=None, sign_schnorr=None):
+    def make_unsigned_transaction(self, inputs, outputs, config, fixed_fee=None, change_addr=None, sign_schnorr=None):
         ''' sign_schnorr flag controls whether to mark the tx as signing with
         schnorr or not. Specify either a bool, or set the flag to 'None' to use
         whatever the wallet is configured to use from the GUI '''
@@ -1892,17 +1892,17 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if not inputs:
             raise NotEnoughFunds()
 
-        if fee is None and config.fee_per_kb() is None:
+        if fixed_fee is None and config.fee_per_kb() is None:
             raise BaseException('Dynamic fee estimates not available')
 
         for item in inputs:
             self.add_input_info(item)
 
         # Fee estimator
-        if fee is None:
+        if fixed_fee is None:
             fee_estimator = config.estimate_fee
-        elif callable(fee):
-            fee_estimator = fee
+        elif callable(fixed_fee):
+            fee_estimator = fixed_fee
         else:
             fee_estimator = lambda size: fee
 
