@@ -33,7 +33,7 @@ import sys
 import time
 
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
-from functools import wraps, partial
+from functools import wraps
 
 from . import bitcoin
 from . import util
@@ -539,7 +539,7 @@ class Commands:
         coins = self.wallet.get_spendable_coins(domain, self.config)
         if feerate is not None:
             fee_per_kb = 1000 * PyDecimal(feerate)
-            fee_estimator = partial(SimpleConfig.estimate_fee_for_feerate, fee_per_kb)
+            fee_estimator = lambda size: SimpleConfig.estimate_fee_for_feerate(fee_per_kb, size)
         else:
             fee_estimator = fee
         tx = self.wallet.make_unsigned_transaction(coins, final_outputs, self.config, fee_estimator, change_addr)
