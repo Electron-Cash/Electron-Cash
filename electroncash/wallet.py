@@ -1904,7 +1904,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         elif callable(fixed_fee):
             fee_estimator = fixed_fee
         else:
-            fee_estimator = lambda size: fee
+            fee_estimator = lambda size: fixed_fee
 
         if i_max is None:
             # Let the coin chooser select the coins to spend
