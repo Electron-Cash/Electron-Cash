@@ -61,6 +61,7 @@ class SendVC(SendBase):
     dismissOnAppear = objc_property()
     kbas = objc_property()
     queuedPayTo = objc_property()
+    opReturnIsRaw = objc_property()
 
     @objc_method
     def init(self):
@@ -76,6 +77,7 @@ class SendVC(SendBase):
         self.dismissOnAppear = False
         self.kbas = None
         self.queuedPayTo = None
+        self.opReturnIsRaw = False
 
         self.navigationItem.leftItemsSupplementBackButton = True
         bb = UIBarButtonItem.new().autorelease()
@@ -99,6 +101,7 @@ class SendVC(SendBase):
         self.excessiveFee = None
         self.kbas = None
         self.queuedPayTo = None
+        self.opReturnIsRaw = None
         utils.nspy_pop(self)
         for e in [self.amt, self.fiat, self.payTo]:
             if e: utils.nspy_pop(e)
@@ -460,7 +463,7 @@ class SendVC(SendBase):
             self.csPayToTop.constant = 0
 
         f = self.desc.frame
-        self.csContentHeight.constant = f.origin.y + f.size.height + 250
+        self.csContentHeight.constant = f.origin.y + f.size.height + 255
 
         retVal = False
         errLbl = self.message
@@ -771,6 +774,11 @@ class SendVC(SendBase):
         self.chkOk()
 
     @objc_method
+    def onToggleRawOpReturn(self) -> None:
+        self.opReturnIsRaw = not bool(self.opReturnIsRaw)
+        self.opReturnToggle.setSelected_(self.opReturnIsRaw)
+    
+    @objc_method
     def onPreviewSendBut_(self, but) -> None:
         self.view.endEditing_(True)
         isPreview = but.ptr.value == self.previewBut.ptr.value
@@ -1030,13 +1038,12 @@ def read_send_form(send : ObjCInstance) -> tuple:
         #        return
 
     try:
-        # handle op_return if specified and enabled
         opreturn_message = send.opReturnDel.text
         if opreturn_message:
-            #if self.opreturn_rawhex_cb.isChecked():
-            #        outputs.append(OPReturn.output_for_rawhex(opreturn_message))
-            #    else:
-            outputs.append(OPReturn.output_for_stringdata(opreturn_message))
+            if send.opReturnIsRaw:
+                outputs.append(OPReturn.output_for_rawhex(opreturn_message))
+            else:
+                outputs.append(OPReturn.output_for_stringdata(opreturn_message))
     except OPReturn.TooLarge as e:
         utils.show_alert(send, _("Error"), str(e))
         return None

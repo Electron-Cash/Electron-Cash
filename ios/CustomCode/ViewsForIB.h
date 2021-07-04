@@ -88,6 +88,7 @@
 @property (nonatomic, weak) IBOutlet UIBarButtonItem *clearBut;
 @property (nonatomic, weak) IBOutlet UIBarButtonItem *previewBut;
 @property (nonatomic, weak) IBOutlet UIButton *sendBut; // actually a subview of a UIBarButtonItem
+@property (nonatomic, weak) IBOutlet UIButton *opReturnToggle;
 @property (nonatomic, weak) IBOutlet UILabel *message;
 @property (nonatomic, weak) IBOutlet NSLayoutConstraint *csFeeTop, *csTvHeight, *csPayToTop, *csContentHeight;
 @property (nonatomic, weak) IBOutlet UITableView *tv;
@@ -97,6 +98,7 @@
 @end
 
 @interface SendVC : SendBase
+-(IBAction)onToggleRawOpReturn; // implemented in python send.py
 -(IBAction)onQRBut:(id)sender; // implemented in python send.py
 -(IBAction)onContactBut:(id)sender; // implemented in python send.py
 -(IBAction)clear; // implemented in python send.py
