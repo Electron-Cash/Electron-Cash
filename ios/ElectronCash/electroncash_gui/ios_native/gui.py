@@ -1160,7 +1160,7 @@ class ElectrumGui(PrintError):
             self.sendVC.setPayToGreen()
         else:
             self.sendVC.setPayToExpired()
-        self.sendVC.onPayTo_message_amount_(None, None, None) # special usage of function will pick up fields from pr
+        self.sendVC.onPayTo_message_amount_(None, None, None, None, None) # special usage of function will pick up fields from pr
         # need to update fee
         self.sendVC.updateFee()
 
@@ -1238,9 +1238,11 @@ class ElectrumGui(PrintError):
             amount = out.get('amount')
             label = out.get('label')
             message = out.get('message')
+            op_return = out.get('op_return')
+            op_return_raw = out.get('op_return_raw')
             # use label as description (not BIP21 compliant)
             if self.sendVC:
-                self.sendVC.onPayTo_message_amount_(address,message,amount)
+                self.sendVC.onPayTo_message_amount_(address,message,amount,op_return,op_return_raw)
                 return True
             else:
                 self.show_error("Oops! Something went wrong! Email the developers!")
