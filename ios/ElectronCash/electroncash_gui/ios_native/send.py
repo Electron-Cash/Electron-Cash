@@ -270,7 +270,7 @@ class SendVC(SendBase):
             try:
                 qpt = list(self.queuedPayTo)
                 self.queuedPayTo = None
-                self.onPayTo_message_amount_opReturn_isRaw_(qpt[0],qpt[1],qpt[2], None, False)
+                self.onPayTo_message_amount_opReturn_isRaw_(qpt[0],qpt[1],qpt[2],qpt[3],qpt[4])
             except:
                 utils.NSLog("queuedPayTo.. failed with exception: %s",str(sys.exc_info()[1]))
 
@@ -412,10 +412,14 @@ class SendVC(SendBase):
         return True
 
     @objc_method
+    def onPayTo_message_amount_(self, address, message, amount) -> None:
+        return self.onPayTo_message_amount_opReturn_isRaw_(address, message, amount, None, False)
+
+    @objc_method
     def onPayTo_message_amount_opReturn_isRaw_(self, address, message, amount, op_return, op_return_is_raw) -> None:
         # address
         if not self.viewIfLoaded:
-            self.queuedPayTo = [address, message, amount]
+            self.queuedPayTo = [address, message, amount, op_return, op_return_is_raw]
             return
         tf = self.payTo
         pr = get_PR(self)
@@ -649,8 +653,8 @@ class SendVC(SendBase):
                 #print("LOCK AMOUNT = False")
 
                 try:
-                    #self.onPayTo_message_amount_opReturn_isRaw_(payto_address[1].to_ui_string(), None, None)
-                    self.onPayTo_message_amount_opReturn_isRaw_(data, None, None, None, False)
+                    #self.onPayTo_message_amount_(payto_address[1].to_ui_string(), None, None)
+                    self.onPayTo_message_amount_(data, None, None)
                     return
                 except Exception as e:
                     utils.NSLog("EXCEPTION -- %s",str(e))
@@ -687,7 +691,7 @@ class SendVC(SendBase):
         else:
             #print("onCheckPayToText.. last clause")
             self.isMax = is_max
-            self.onPayTo_message_amount_opReturn_isRaw_(outputs[0][1].to_ui_string(),"",outputs[0][2], None, False)
+            self.onPayTo_message_amount_(outputs[0][1].to_ui_string(),"",outputs[0][2])
             self.updateFee()  #schedule a fee update later
         utils.NSLog("onCheckPayToText_ result: is_max=%s outputs=%s total=%s errors=%s",str(is_max),str(outputs),str(total),str(errors))
 

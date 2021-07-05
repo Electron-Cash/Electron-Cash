@@ -1160,7 +1160,7 @@ class ElectrumGui(PrintError):
             self.sendVC.setPayToGreen()
         else:
             self.sendVC.setPayToExpired()
-        self.sendVC.onPayTo_message_amount_opReturn_isRaw_(None, None, None, None, False) # special usage of function will pick up fields from pr
+        self.sendVC.onPayTo_message_amount_(None, None, None) # special usage of function will pick up fields from pr
         # need to update fee
         self.sendVC.updateFee()
 
