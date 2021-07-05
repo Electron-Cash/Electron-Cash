@@ -270,7 +270,7 @@ class SendVC(SendBase):
             try:
                 qpt = list(self.queuedPayTo)
                 self.queuedPayTo = None
-                self.onPayTo_message_amount_(qpt[0],qpt[1],qpt[2], None, None)
+                self.onPayTo_message_amount_opReturn_isRaw_(qpt[0],qpt[1],qpt[2], None, False)
             except:
                 utils.NSLog("queuedPayTo.. failed with exception: %s",str(sys.exc_info()[1]))
 
@@ -412,7 +412,7 @@ class SendVC(SendBase):
         return True
 
     @objc_method
-    def onPayTo_message_amount_(self, address, message, amount, op_return, op_return_raw) -> None:
+    def onPayTo_message_amount_opReturn_isRaw_(self, address, message, amount, op_return, op_return_is_raw) -> None:
         # address
         if not self.viewIfLoaded:
             self.queuedPayTo = [address, message, amount]
@@ -444,19 +444,14 @@ class SendVC(SendBase):
         utils.uitf_redo_attrs(tf)
         utils.uitf_redo_attrs(self.fiat)
         # op_return
-        if op_return is not None:
-            self.opReturnDel.text = str(op_return)
-            self.opReturn.resignFirstResponder()
-        # op_return_raw
-        if op_return_raw is not None:
-            self.opReturnIsRaw = True
-            self.opReturnToggle.setSelected_(self.opReturnIsRaw)
-            self.opReturnDel.text = str(op_return_raw)
-            self.opReturn.resignFirstResponder()
+        self.opReturnDel.text = str(op_return) if op_return is not None else ""
+        self.opReturnIsRaw = bool(op_return_is_raw)
+        self.opReturnToggle.setSelected_(self.opReturnIsRaw)
+        self.opReturn.resignFirstResponder()
 
         self.qrScanErr = False
         self.chkOk()
-        utils.NSLog("OnPayTo %s %s %s %s %s",str(address), str(message), str(amount), str(op_return), str(op_return_raw))
+        utils.NSLog("OnPayTo %s %s %s %s %s",str(address), str(message), str(amount), str(op_return), str(op_return_is_raw))
 
     @objc_method
     def chkOk(self) -> bool:
@@ -654,8 +649,8 @@ class SendVC(SendBase):
                 #print("LOCK AMOUNT = False")
 
                 try:
-                    #self.onPayTo_message_amount_(payto_address[1].to_ui_string(), None, None)
-                    self.onPayTo_message_amount_(data, None, None, None, None)
+                    #self.onPayTo_message_amount_opReturn_isRaw_(payto_address[1].to_ui_string(), None, None)
+                    self.onPayTo_message_amount_opReturn_isRaw_(data, None, None, None, False)
                     return
                 except Exception as e:
                     utils.NSLog("EXCEPTION -- %s",str(e))
@@ -692,7 +687,7 @@ class SendVC(SendBase):
         else:
             #print("onCheckPayToText.. last clause")
             self.isMax = is_max
-            self.onPayTo_message_amount_(outputs[0][1].to_ui_string(),"",outputs[0][2], None, None)
+            self.onPayTo_message_amount_opReturn_isRaw_(outputs[0][1].to_ui_string(),"",outputs[0][2], None, False)
             self.updateFee()  #schedule a fee update later
         utils.NSLog("onCheckPayToText_ result: is_max=%s outputs=%s total=%s errors=%s",str(is_max),str(outputs),str(total),str(errors))
 
