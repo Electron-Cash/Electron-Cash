@@ -1240,9 +1240,13 @@ class ElectrumGui(PrintError):
             message = out.get('message')
             op_return = out.get('op_return')
             op_return_raw = out.get('op_return_raw')
+            op_return_is_raw = False
+            if op_return_raw is not None:
+                op_return_is_raw = True
+                op_return = op_return_raw
             # use label as description (not BIP21 compliant)
             if self.sendVC:
-                self.sendVC.onPayTo_message_amount_(address,message,amount,op_return,op_return_raw)
+                self.sendVC.onPayTo_message_amount_opReturn_isRaw_(address,message,amount,op_return,op_return_is_raw)
                 return True
             else:
                 self.show_error("Oops! Something went wrong! Email the developers!")
