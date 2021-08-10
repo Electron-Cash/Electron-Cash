@@ -3,5 +3,6 @@ trezor[hidapi]>=0.12.0
 keepkey>=6.1
 btchip-python
 hidapi
+pyopenssl>=20.0.0
 pyscard>=2.0.0
-pysatochip>=0.11.4
+pysatochip>=0.12.3

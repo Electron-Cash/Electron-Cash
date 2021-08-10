@@ -14,7 +14,7 @@ from .satochip import SatochipPlugin
 from ..hw_wallet.qt import QtHandlerBase, QtPluginBase
 
 #pysatochip 
-from pysatochip.CardConnector import CardConnector
+from pysatochip.CardConnector import CardConnector, UnexpectedSW12Error, CardError, CardNotPresentError
 from pysatochip.Satochip2FA import Satochip2FA                                       
 from pysatochip.version import SATOCHIP_PROTOCOL_MAJOR_VERSION, SATOCHIP_PROTOCOL_MINOR_VERSION
 
@@ -111,7 +111,8 @@ class SatochipSettingsDialog(WindowModalDialog):
             ('sw_version', _("Electrum Support")),
             ('is_seeded', _("Wallet seeded")),
             ('needs_2FA', _("Requires 2FA ")),
-            ('needs_SC', _("Secure Channel")),    
+            ('needs_SC', _("Secure Channel")),
+            ('card_label', _("Card label")),
         ]
         for row_num, (member_name, label) in enumerate(rows):
             widget = QLabel('<tt>')
@@ -147,6 +148,17 @@ class SatochipSettingsDialog(WindowModalDialog):
             thread.add(connect_and_doit, on_success=self.show_values)
         reset_2FA_btn.clicked.connect(_reset_2FA)
         
+        verify_card_btn = QPushButton('Verify card')
+        def _verify_card():
+            thread.add(connect_and_doit, on_success=self.verify_card)
+        verify_card_btn.clicked.connect(_verify_card)
+
+        change_card_label_btn = QPushButton('Change label')
+        def _change_card_label():
+            thread.add(connect_and_doit, on_success=self.change_card_label)
+            thread.add(connect_and_doit, on_success=self.show_values)
+        change_card_label_btn.clicked.connect(_change_card_label)
+        
         y += 3
         grid.addWidget(pin_btn, y, 0, 1, 2, Qt.AlignHCenter)
         y += 2
@@ -155,6 +167,10 @@ class SatochipSettingsDialog(WindowModalDialog):
         grid.addWidget(set_2FA_btn, y, 0, 1, 2, Qt.AlignHCenter)
         y += 2
         grid.addWidget(reset_2FA_btn, y, 0, 1, 2, Qt.AlignHCenter)
+        y += 2
+        grid.addWidget(verify_card_btn, y, 0, 1, 2, Qt.AlignHCenter)
+        y += 2
+        grid.addWidget(change_card_label_btn, y, 0, 1, 2, Qt.AlignHCenter)
         y += 2
         grid.addWidget(CloseButton(self), y, 0, 1, 2, Qt.AlignHCenter)
 
@@ -172,7 +188,7 @@ class SatochipSettingsDialog(WindowModalDialog):
 
         (response, sw1, sw2, d)=client.cc.card_get_status()
         if (sw1==0x90 and sw2==0x00):
-            fw_rel= 'v' + str(d["protocol_major_version"]) + '.' + str(d["protocol_minor_version"])
+            fw_rel= 'v' + str(d["protocol_major_version"]) + '.' + str(d["protocol_minor_version"])  +'-'+ str(d["applet_major_version"]) +'.'+ str(d["applet_minor_version"])
             self.fw_version.setText('<tt>%s' % fw_rel)
 
             #is_seeded?
@@ -196,15 +212,20 @@ class SatochipSettingsDialog(WindowModalDialog):
                 self.needs_SC.setText('<tt>%s' % "yes")
             else:
                 self.needs_SC.setText('<tt>%s' % "no")
-
+            
+            # card label
+            (response, sw1, sw2, label)= client.cc.card_get_label()
+            if (label==""):
+                label= "(none)"
+            self.card_label.setText('<tt>%s' % label)
+            
         else:
             fw_rel= "(unitialized)"
             self.fw_version.setText('<tt>%s' % fw_rel)
             self.needs_2FA.setText('<tt>%s' % "(unitialized)")
             self.is_seeded.setText('<tt>%s' % "no")
             self.needs_SC.setText('<tt>%s' % "(unknown)")
-
-
+            self.card_label.setText('<tt>%s' % "(none)")
 
     def change_pin(self, client):
         print_error("In change_pin")
@@ -379,3 +400,94 @@ class SatochipSettingsDialog(WindowModalDialog):
         else:
             msg= _(f"2FA is already disabled!")
             client.handler.show_error(msg)    
+
+    def verify_card(self, client):    
+        is_authentic, txt_ca, txt_subca, txt_device, txt_error = self.card_verify_authenticity(client)            
+
+        text_cert_chain= 4*"="+" Root CA certificate: "+4*"="+"\n"
+        text_cert_chain+= txt_ca
+        text_cert_chain+= "\n"+4*"="+" Sub CA certificate: "+4*"="+"\n"
+        text_cert_chain+= txt_subca
+        text_cert_chain+= "\n"+4*"="+" Device certificate: "+4*"="+"\n"
+        text_cert_chain+= txt_device
+
+        if is_authentic:
+            txt_result= 'Device authenticated successfully!'
+            txt_result+= '\n\n' + text_cert_chain
+            txt_color= 'green'
+            client.handler.show_message(txt_result)
+        else:
+            txt_result= ''.join(['Error: could not authenticate the issuer of this card! \n', 
+                                        'Reason: ', txt_error , '\n\n',
+                                        'If you did not load the card yourself, be extremely careful! \n',
+                                        'Contact support(at)satochip.io to report a suspicious device.'])
+            txt_result+= '\n\n' + text_cert_chain
+            txt_color= 'red'
+            client.handler.show_error(txt_result)
+
+    def card_verify_authenticity(self, client): #todo: add this function in pysatochip
+        cert_pem=txt_error=""
+        try:
+            cert_pem=client.cc.card_export_perso_certificate()
+        except CardError as ex:
+            txt_error= ''.join(["Unable to get device certificate: feature unsupported! \n", 
+                                "Authenticity validation is only available starting with Satochip v0.12 and higher"])
+        except CardNotPresentError as ex:
+            txt_error= "No card found! Please insert card."
+        except UnexpectedSW12Error as ex:
+            txt_error= "Exception during device certificate export: " + str(ex)
+
+        if cert_pem=="(empty)":
+            txt_error= "Device certificate is empty: the card has not been personalized!"
+
+        if txt_error!="":
+            return False, "(empty)", "(empty)", "(empty)", txt_error
+
+        # check the certificate chain from root CA to device
+        from pysatochip.certificate_validator import CertificateValidator
+        validator= CertificateValidator()
+        is_valid_chain, device_pubkey, txt_ca, txt_subca, txt_device, txt_error= validator.validate_certificate_chain(cert_pem, client.cc.card_type)
+        if not is_valid_chain:
+            return False, txt_ca, txt_subca, txt_device, txt_error
+
+        # perform challenge-response with the card to ensure that the key is correctly loaded in the device
+        is_valid_chalresp, txt_error = self.cc.card_challenge_response_pki(device_pubkey)
+
+        return is_valid_chalresp, txt_ca, txt_subca, txt_device, txt_error
+
+    def change_card_label(self, client):
+        msg = ''.join([
+            _("You can optionnaly add a label to your Satochip.\n"),
+            _("This label must be less than 64 chars long."),
+        ]) 
+        label = self.change_card_label_dialog(client, msg)
+        if label is None:
+            client.handler.show_message(_("Operation aborted by user!"))
+            return
+        (response, sw1, sw2)= client.cc.card_set_label(label)
+        if (sw1==0x90 and sw2==0x00):
+            client.handler.show_message(_("Card label changed successfully!"))
+        elif (sw1==0x6D and sw2==0x00):
+            client.handler.show_error(_("Error: card does not support label!")) # starts with satochip v0.12
+        else:
+            client.handler.show_error(f"Error while changing label: sw12={hex(sw1)} {hex(sw2)}")
+
+    def change_card_label_dialog(self, client, msg):
+        while (True):
+            parent = self.top_level_window()
+            d = WindowModalDialog(parent, _("Enter Label"))
+            pw = QLineEdit()
+            pw.setEchoMode(0)
+            pw.setMinimumWidth(200)
+
+            vbox = QVBoxLayout()
+            vbox.addWidget(WWLabel(msg))
+            vbox.addWidget(pw)
+            vbox.addLayout(Buttons(CancelButton(d), OkButton(d)))
+            d.setLayout(vbox)
+
+            label = pw.text() if d.exec_() else None
+            if label is None or len(label.encode('utf-8'))<=64:
+                return label 
+            else:
+                client.handler.show_error(_("Card label should not be longer than 64 chars!"))
