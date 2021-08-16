@@ -266,7 +266,6 @@ class BitstampYadio(ExchangeBase):
     def get_rates(self, ccy):
         json_usd = self.get_json('www.bitstamp.net', '/api/v2/ticker/bchusd')
         json_ars = self.get_json('api.yadio.io', '/exrates/ARS')
-        
         return {'ARS': PyDecimal(json_usd['last']) / PyDecimal(json_ars['ARS']['USD'])}
 
 
