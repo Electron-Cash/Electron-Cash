@@ -24,10 +24,23 @@
 """
 This module provides coin consolidation tools.
 """
-from typing import Optional
+from typing import List, Optional
 
 from .address import Address
+from .bitcoin import TYPE_ADDRESS
+from .transaction import Transaction
 from .wallet import Abstract_Wallet
+
+MAX_STANDARD_TX_SIZE: int = 100_000
+"""Maximum size for transactions that nodes are willing to relay/mine.
+"""
+
+MAX_TX_SIZE: int = 1_000_000
+"""
+Maximum allowed size for a transaction in a block.
+"""
+
+FEE_PER_BYTE: int = 1
 
 
 class AddressConsolidator:
@@ -57,3 +70,51 @@ class AddressConsolidator:
                 and (max_value_sats is None or utxo["value"] <= max_value_sats)
             )
         ]
+        for c in self._coins:
+            wallet.add_input_info(c)
+
+        self.wallet = wallet
+
+    def get_transactions(
+        self, output_address, max_tx_size: int = MAX_STANDARD_TX_SIZE
+    ) -> List[Transaction]:
+        """
+        Build as many raw transactions as needed to consolidate the coins.
+
+        :param max_tx_size: Maximum tx size in bytes. This is what limits the
+            number of inputs per transaction.
+        :param output_address: Make all transactions send the total amount to this
+            address.
+        :return:
+        """
+        assert max_tx_size < MAX_TX_SIZE
+        placeholder_amount = 200
+        transactions = []
+        while self._coins:
+            tx_size = 0
+            amount = 0
+            tx = Transaction(None)
+            tx.set_inputs([])
+            while tx_size < max_tx_size and self._coins:
+                dummy_tx = Transaction(None)
+                dummy_tx.set_inputs(tx.inputs() + [self._coins[0]])
+                dummy_tx.set_outputs(
+                    [(TYPE_ADDRESS, output_address, placeholder_amount)]
+                )
+                tx_size = len(dummy_tx.serialize(estimate_size=True)) // 2
+
+                if tx_size < max_tx_size:
+                    amount = amount + self._coins[0]["value"]
+                    tx.add_inputs([self._coins.pop(0)])
+                    tx.set_outputs(
+                        [
+                            (
+                                TYPE_ADDRESS,
+                                output_address,
+                                amount - tx_size * FEE_PER_BYTE,
+                            )
+                        ]
+                    )
+
+            transactions.append(tx)
+        return transactions

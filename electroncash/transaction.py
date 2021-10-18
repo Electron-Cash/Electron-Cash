@@ -835,10 +835,20 @@ class Transaction:
         self._inputs.extend(inputs)
         self.raw = None
 
+    def set_inputs(self, inputs):
+        self._inputs = inputs
+        self.raw = None
+
     def add_outputs(self, outputs):
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
                    for output in outputs)
         self._outputs.extend(outputs)
+        self.raw = None
+
+    def set_outputs(self, outputs):
+        assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
+                   for output in outputs)
+        self._outputs = outputs
         self.raw = None
 
     def input_value(self):
