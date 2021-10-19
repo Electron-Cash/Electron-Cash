@@ -103,7 +103,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
             self.assertLessEqual(coin["value"], 1005)
         self.assertEqual(len(consolidator._coins), 3)
 
-    def test_get_raw_transactions(self):
+    def test_get_unsigned_transactions(self):
         for size in range(200, 1500, 100):
             # select all coins
             consolidator = consolidate.AddressConsolidator(
@@ -116,7 +116,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                 min_value_sats=None,
                 max_value_sats=None,
             )
-            txs = consolidator.get_transactions(
+            txs = consolidator.get_unsigned_transactions(
                 output_address=TEST_ADDRESS,
                 max_tx_size=size,
             )

@@ -75,16 +75,16 @@ class AddressConsolidator:
 
         self.wallet = wallet
 
-    def get_transactions(
+    def get_unsigned_transactions(
         self, output_address, max_tx_size: int = MAX_STANDARD_TX_SIZE
     ) -> List[Transaction]:
         """
         Build as many raw transactions as needed to consolidate the coins.
 
-        :param max_tx_size: Maximum tx size in bytes. This is what limits the
-            number of inputs per transaction.
         :param output_address: Make all transactions send the total amount to this
             address.
+        :param max_tx_size: Maximum tx size in bytes. This is what limits the
+            number of inputs per transaction.
         :return:
         """
         assert max_tx_size < MAX_TX_SIZE
