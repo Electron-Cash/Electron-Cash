@@ -9,6 +9,9 @@ TEST_ADDRESS: Address = Address.from_string(
     "ecash:qr3l6uufcuwm9prgpa6cfxnez87fzstxesp7ugp0ez"
 )
 
+FEERATE: int = 1
+"""Satoshis per byte"""
+
 
 class TestConsolidateCoinSelection(unittest.TestCase):
     def setUp(self) -> None:
@@ -121,6 +124,22 @@ class TestConsolidateCoinSelection(unittest.TestCase):
             # tx size is roughly 148 * n_in + 34 * n_out + 10
             expected_n_inputs_for_size = (size - 44) // 148
             self.assertEqual(len(txs), math.ceil(8 / expected_n_inputs_for_size))
+
+            # Check the fee and amount
+            total_inputs = 0
+            total_outputs = 0
+            total_fee = 0
+            total_size = 0
+            for tx in txs:
+                tx_size = len(tx.serialize(estimate_size=True)) // 2
+                self.assertEqual(tx.get_fee(), tx_size * FEERATE)
+                total_fee += tx.get_fee()
+                total_inputs += tx.input_value()
+                total_outputs += tx.output_value()
+                total_size += tx_size
+            self.assertEqual(total_inputs, sum(range(1000, 1008)))
+            self.assertEqual(total_outputs, total_inputs - total_fee)
+            self.assertEqual(total_fee, total_size * FEERATE)
 
 
 def suite():
