@@ -2307,10 +2307,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         amount = tx.output_value() if self.max_button.isChecked() else sum(map(lambda x:x[2], outputs))
         fee = tx.get_fee()
 
-        #if fee < self.wallet.relayfee() * tx.estimated_size() / 1000 and tx.requires_fee(self.wallet):
-            #self.show_error(_("This transaction requires a higher fee, or it will not be propagated by the network"))
-            #return
-
         if preview:
             # NB: this ultimately takes a deepcopy of the tx in question
             # (TxDialog always takes a deep copy).
