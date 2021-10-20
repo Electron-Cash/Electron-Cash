@@ -63,7 +63,7 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
                 self.output_page.get_output_address(),
                 self.output_page.tx_size_sb.value(),
             )
-            can_sign = all(self.wallet.can_sign(tx) for tx in self.transactions)
+            can_sign = self.wallet.can_sign(self.transactions[0])
             self.tx_page.set_unsigned_transactions(self.transactions, can_sign)
 
     def on_save_clicked(self):
@@ -81,6 +81,9 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
             tx_dict = tx.as_dict()
             with open(path, "w+", encoding="utf-8") as f:
                 f.write(json.dumps(tx_dict, indent=4) + "\n")
+        QtWidgets.QMessageBox.information(
+            self, "Done saving", f"Saved {len(self.transactions)} files to {dir}"
+        )
 
     def on_sign_clicked(self):
         def sign_done(success):
@@ -92,12 +95,18 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
         for tx in self.transactions:
             self.main_window.sign_tx(tx, sign_done, on_pw_cancel=cleanup)
 
+        QtWidgets.QMessageBox.information(
+            self,
+            "Done signing",
+            f"Signed {len(self.transactions)} transactions. Remember to save them!",
+        )
+
         # Signing is done in a different thread, so delay the check for completeness
         # until the signatures have been added to the transaction.
         QtCore.QTimer.singleShot(
-            1000,
+            2000,
             lambda: self.tx_page.broadcast_button.setEnabled(
-                all([tx.is_complete() for tx in self.transactions])
+                self.transactions[-1].is_complete()
             ),
         )
         self.tx_page.save_button.setText("Save (signed)")
@@ -109,6 +118,11 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
                 self.main_window.broadcast_transaction(tx, None)
         finally:
             self.main_window.pop_top_level_window(self)
+        QtWidgets.QMessageBox.information(
+            self,
+            "Done broadcasting",
+            f"Broadcasted {len(self.transactions)} transactions.",
+        )
 
 
 class CoinSelectionPage(QtWidgets.QWizardPage):
@@ -226,7 +240,7 @@ class OutputsPage(QtWidgets.QWizardPage):
 
         tx_size_layout = QtWidgets.QHBoxLayout()
         layout.addLayout(tx_size_layout)
-        tx_size_layout.addWidget(QtWidgets.QLabel("Maximum transaction size"))
+        tx_size_layout.addWidget(QtWidgets.QLabel("Maximum transaction size (bytes)"))
         self.tx_size_sb = QtWidgets.QSpinBox()
         self.tx_size_sb.setMinimum(192)
         self.tx_size_sb.setMaximum(MAX_TX_SIZE)
@@ -305,11 +319,11 @@ class TransactionsPage(QtWidgets.QWizardPage):
             if num_tx == 0
             else sum([len(tx.inputs()) for tx in transactions]) / num_tx
         )
-        self.num_in_label.setText(f"Average number of inputs per tx: {avg_num_in}")
+        self.num_in_label.setText(f"Average number of inputs per tx: {avg_num_in:.2f}")
 
         in_value = sum([tx.input_value() for tx in transactions]) / 100
         out_value = sum([tx.output_value() for tx in transactions]) / 100
         fees = sum([tx.get_fee() for tx in transactions]) / 100
         self.value_label.setText(
-            f"Input value: {in_value} {XEC}; Output value: {out_value} {XEC}; Fees: {fees} {XEC}"
+            f"Input value: {in_value} {XEC}\nOutput value: {out_value} {XEC}\nFees: {fees} {XEC}"
         )
