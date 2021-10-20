@@ -491,5 +491,5 @@ class AddressList(MyTreeWidget):
         self.update()
 
     def _open_consolidate_coins_dialog(self, addr):
-        d = ConsolidateCoinsWizard(addr, self.parent.wallet, parent=self)
+        d = ConsolidateCoinsWizard(addr, self.parent.wallet, self.parent, parent=self)
         d.exec_()

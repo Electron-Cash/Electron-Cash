@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional, Sequence
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 from electroncash.address import Address, AddressError
 from electroncash.consolidate import (
@@ -20,6 +20,7 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
         self,
         address: Address,
         wallet: Abstract_Wallet,
+        main_window,
         parent: Optional[QtWidgets.QWidget] = None,
     ):
         super().__init__(parent)
@@ -30,6 +31,7 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
         self.address: Address = address
         self.wallet: Abstract_Wallet = wallet
         self.transactions: Sequence[Transaction] = []
+        self.main_window = main_window
 
         self.coins_page = CoinSelectionPage()
         self.addPage(self.coins_page)
@@ -61,6 +63,8 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
                 self.output_page.get_output_address(),
                 self.output_page.tx_size_sb.value(),
             )
+            can_sign = all(self.wallet.can_sign(tx) for tx in self.transactions)
+            self.tx_page.set_unsigned_transactions(self.transactions, can_sign)
 
     def on_save_clicked(self):
         dir = QtWidgets.QFileDialog.getExistingDirectory(
@@ -79,10 +83,32 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
                 f.write(json.dumps(tx_dict, indent=4) + "\n")
 
     def on_sign_clicked(self):
-        pass
+        def sign_done(success):
+            pass
+
+        def cleanup():
+            pass
+
+        for tx in self.transactions:
+            self.main_window.sign_tx(tx, sign_done, on_pw_cancel=cleanup)
+
+        # Signing is done in a different thread, so delay the check for completeness
+        # until the signatures have been added to the transaction.
+        QtCore.QTimer.singleShot(
+            1000,
+            lambda: self.tx_page.broadcast_button.setEnabled(
+                all([tx.is_complete() for tx in self.transactions])
+            ),
+        )
+        self.tx_page.save_button.setText("Save (signed)")
 
     def on_broadcast_clicked(self):
-        pass
+        self.main_window.push_top_level_window(self)
+        try:
+            for tx in self.transactions:
+                self.main_window.broadcast_transaction(tx, None)
+        finally:
+            self.main_window.pop_top_level_window(self)
 
 
 class CoinSelectionPage(QtWidgets.QWizardPage):
@@ -246,12 +272,14 @@ class TransactionsPage(QtWidgets.QWizardPage):
         layout.addWidget(self.num_in_label)
 
         self.value_label = QtWidgets.QLabel("Input value: 0; Output value: 0; Fees: 0")
-        layout.addWidget(self.num_tx_label)
+        layout.addWidget(self.value_label)
+
+        layout.addStretch(1)
 
         buttons_layout = QtWidgets.QHBoxLayout()
         layout.addLayout(buttons_layout)
 
-        self.save_button = QtWidgets.QPushButton("Save")
+        self.save_button = QtWidgets.QPushButton("Save (unsigned)")
         buttons_layout.addWidget(self.save_button)
 
         self.sign_button = QtWidgets.QPushButton("Sign")
@@ -261,13 +289,22 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.broadcast_button.setEnabled(False)
         buttons_layout.addWidget(self.broadcast_button)
 
-    def set_transactions(self, transactions: Sequence[Transaction]):
-        self.reset_buttons()
+    def set_unsigned_transactions(
+        self, transactions: Sequence[Transaction], can_sign: bool
+    ):
+        # Reset buttons when fresh unsigned transactions are set
+        self.save_button.setText("Save (unsigned)")
+        self.sign_button.setEnabled(can_sign)
+        self.broadcast_button.setEnabled(False)
 
-        num_tx = len(self.transactions)
+        num_tx = len(transactions)
         self.num_tx_label.setText(f"Number of transactions: {num_tx}")
 
-        avg_num_in = sum([len(tx.inputs()) for tx in transactions]) / num_tx
+        avg_num_in = (
+            0
+            if num_tx == 0
+            else sum([len(tx.inputs()) for tx in transactions]) / num_tx
+        )
         self.num_in_label.setText(f"Average number of inputs per tx: {avg_num_in}")
 
         in_value = sum([tx.input_value() for tx in transactions]) / 100
@@ -276,8 +313,3 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.value_label.setText(
             f"Input value: {in_value} {XEC}; Output value: {out_value} {XEC}; Fees: {fees} {XEC}"
         )
-
-    def reset_buttons(self):
-        # FIXME: check the wallet's ability to sign and disable Sign if needed
-        self.sign_button.setEnabled(True)
-        self.broadcast_button.setEnabled(False)
