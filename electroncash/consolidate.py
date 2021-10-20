@@ -57,7 +57,6 @@ class AddressConsolidator:
         min_value_sats: Optional[int] = None,
         max_value_sats: Optional[int] = None,
     ):
-
         self._coins = [
             utxo
             for utxo in wallet.get_addr_utxo(address).values()
@@ -76,7 +75,7 @@ class AddressConsolidator:
         self.wallet = wallet
 
     def get_unsigned_transactions(
-        self, output_address, max_tx_size: int = MAX_STANDARD_TX_SIZE
+        self, output_address: Address, max_tx_size: int = MAX_STANDARD_TX_SIZE
     ) -> List[Transaction]:
         """
         Build as many raw transactions as needed to consolidate the coins.
