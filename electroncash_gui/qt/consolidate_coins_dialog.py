@@ -3,8 +3,8 @@ from typing import Optional
 from PyQt5 import QtWidgets
 
 from electroncash.address import Address, AddressError
-
-# from electroncash.consolidate import AddressConsolidator
+from electroncash.consolidate import MAX_STANDARD_TX_SIZE, MAX_TX_SIZE
+from electroncash.constants import PROJECT_NAME
 from electroncash.wallet import Wallet
 
 
@@ -25,7 +25,7 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
         self.coin_selection_page = CoinSelectionPage()
         self.addPage(self.coin_selection_page)
 
-        self.pay_to_page = PayToPage()
+        self.pay_to_page = OutputsPage()
         self.addPage(self.pay_to_page)
 
 
@@ -49,8 +49,9 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.include_frozen_cb.setChecked(False)
         layout.addWidget(self.include_frozen_cb)
 
-        self.include_slp_cb = QtWidgets.QCheckBox("Include SLP UTXOs")
+        self.include_slp_cb = QtWidgets.QCheckBox("Include coins with SLP tokens")
         self.include_slp_cb.setChecked(False)
+        self.include_slp_cb.toggled.connect(self.warn_burn_tokens)
         layout.addWidget(self.include_slp_cb)
 
         min_value_sublayout = QtWidgets.QHBoxLayout()
@@ -65,6 +66,7 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.minimum_value_sb.setEnabled(False)
         self.minimum_value_sb.setSingleStep(0.01)
         self.minimum_value_sb.setValue(0)
+        self.minimum_value_sb.setToolTip("XEC")
         self.filter_by_min_value_cb.toggled.connect(self.minimum_value_sb.setEnabled)
         min_value_sublayout.addWidget(self.minimum_value_sb)
 
@@ -81,11 +83,24 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.maximum_value_sb.setSingleStep(0.01)
         self.maximum_value_sb.setMaximum(21_000_000_000_000)
         self.maximum_value_sb.setValue(21_000_000_000_000)
+        self.maximum_value_sb.setToolTip("XEC")
         self.filter_by_max_value_cb.toggled.connect(self.maximum_value_sb.setEnabled)
         max_value_sublayout.addWidget(self.maximum_value_sb)
 
+    def warn_burn_tokens(self, include_slp_is_checked: bool):
+        if include_slp_is_checked:
+            button = QtWidgets.QMessageBox.warning(
+                self,
+                "SLP tokens may be lost",
+                f"{PROJECT_NAME} does not support transferring SLP tokens. If you "
+                "include them in the consolidation transaction, they will be burned.",
+                buttons=QtWidgets.QMessageBox.Cancel | QtWidgets.QMessageBox.Ok,
+            )
+            if button == QtWidgets.QMessageBox.Cancel:
+                self.include_slp_cb.setChecked(False)
 
-class PayToPage(QtWidgets.QWizardPage):
+
+class OutputsPage(QtWidgets.QWizardPage):
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -109,6 +124,15 @@ class PayToPage(QtWidgets.QWizardPage):
         self.output_address_edit.setPlaceholderText("enter a valid destination address")
         self.output_address_edit.setEnabled(False)
         single_address_sublayout.addWidget(self.output_address_edit)
+
+        tx_size_layout = QtWidgets.QHBoxLayout()
+        layout.addLayout(tx_size_layout)
+        tx_size_layout.addWidget(QtWidgets.QLabel("Maximum transaction size"))
+        self.tx_size_sb = QtWidgets.QSpinBox()
+        self.tx_size_sb.setValue(MAX_STANDARD_TX_SIZE)
+        self.tx_size_sb.setMinimum(192)
+        self.tx_size_sb.setMaximum(MAX_TX_SIZE)
+        tx_size_layout.addWidget(self.tx_size_sb)
 
         self.single_address_rb.toggled.connect(self.output_address_edit.setEnabled)
         self.single_address_rb.toggled.connect(self.completeChanged.emit)
