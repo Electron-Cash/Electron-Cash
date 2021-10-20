@@ -13,9 +13,10 @@ from electroncash.consolidate import (
 from electroncash.constants import PROJECT_NAME, XEC
 from electroncash.transaction import Transaction
 from electroncash.wallet import Abstract_Wallet
+from electroncash_gui.qt.util import MessageBoxMixin
 
 
-class ConsolidateCoinsWizard(QtWidgets.QWizard):
+class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
     def __init__(
         self,
         address: Address,
