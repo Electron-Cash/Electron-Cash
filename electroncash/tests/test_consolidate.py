@@ -128,6 +128,9 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 3)
 
     def test_get_unsigned_transactions(self):
+        n_coins = 8
+        min_value = 1000
+        max_value = 1007
         for max_tx_size in range(200, 1500, 100):
             # select all coins
             consolidator = consolidate.AddressConsolidator(
@@ -140,6 +143,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                 min_value_sats=None,
                 max_value_sats=None,
             )
+            self.assertEqual(n_coins, len(consolidator._coins))
             txs = consolidator.get_unsigned_transactions(
                 output_address=TEST_ADDRESS,
                 max_tx_size=max_tx_size,
@@ -149,22 +153,24 @@ class TestConsolidateCoinSelection(unittest.TestCase):
 
             # tx size is roughly 148 * n_in + 34 * n_out + 10
             expected_max_n_inputs_for_size = math.floor((max_tx_size - 44) / 148)
-            self.assertEqual(len(txs), math.ceil(8 / expected_max_n_inputs_for_size))
+            self.assertEqual(
+                len(txs), math.ceil(n_coins / expected_max_n_inputs_for_size)
+            )
 
             # Check the fee and amount
-            total_inputs = 0
-            total_outputs = 0
+            total_input_value = 0
+            total_output_value = 0
             total_fee = 0
             total_size = 0
             for tx in txs:
                 tx_size = len(tx.serialize(estimate_size=True)) // 2
                 self.assertEqual(tx.get_fee(), tx_size * FEERATE)
                 total_fee += tx.get_fee()
-                total_inputs += tx.input_value()
-                total_outputs += tx.output_value()
+                total_input_value += tx.input_value()
+                total_output_value += tx.output_value()
                 total_size += tx_size
-            self.assertEqual(total_inputs, sum(range(1000, 1008)))
-            self.assertEqual(total_outputs, total_inputs - total_fee)
+            self.assertEqual(total_input_value, sum(range(min_value, max_value + 1)))
+            self.assertEqual(total_output_value, total_input_value - total_fee)
             self.assertEqual(total_fee, total_size * FEERATE)
 
 
