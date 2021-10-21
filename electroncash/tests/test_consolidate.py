@@ -16,6 +16,7 @@ FEERATE: int = 1
 class TestConsolidateCoinSelection(unittest.TestCase):
     def setUp(self) -> None:
         coins = {}
+        tx_history = []
         i = 0
         for is_coinbase in (True, False):
             for is_frozen_coin in (True, False):
@@ -32,9 +33,32 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                         "type": "p2pkh",
                     }
                     i += 1  # noqa: SIM113
+                #                     tx_hash, block_height
+                tx_history.append(("a" * 64, 1))
 
         self.mock_wallet = Mock()
         self.mock_wallet.get_addr_utxo.return_value = coins
+        self.mock_wallet.get_address_history.return_value = tx_history
+        self.mock_wallet.get_address_history.return_value = tx_history
+        self.mock_wallet.get_txin_type.return_value = "p2pkh"
+
+        # mock for self.wallet.txo.get(tx_hash, {}).get(address, [])
+        # returns list of (prevout_n, value, is_coinbase)
+        self.mock_wallet.txo = Mock()
+        txo_get_return = Mock()
+        txo_get_return.get.return_value = [
+            (
+                i,
+                1000 + i,
+                True,
+            )
+            for i in range(len(coins))
+        ]
+        self.mock_wallet.txo.get.return_value = txo_get_return
+
+        self.mock_wallet.get_address_index.return_value = True, 0
+
+        self.mock_wallet.keystore.get_xpubkey.return_value = "dummy"
 
     def test_coin_selection(self) -> None:
         for incl_coinbase in (True, False):
@@ -42,7 +66,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                 for incl_frozen in (True, False):
                     for incl_slp in (True, False):
                         consolidator = consolidate.AddressConsolidator(
-                            "address",
+                            TEST_ADDRESS,
                             self.mock_wallet,
                             incl_coinbase,
                             incl_noncoinbase,
@@ -61,7 +85,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
 
         # test minimum and maximum value
         consolidator = consolidate.AddressConsolidator(
-            "address",
+            TEST_ADDRESS,
             self.mock_wallet,
             True,
             True,
@@ -75,7 +99,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 5)
 
         consolidator = consolidate.AddressConsolidator(
-            "address",
+            TEST_ADDRESS,
             self.mock_wallet,
             True,
             True,
@@ -89,7 +113,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 6)
 
         consolidator = consolidate.AddressConsolidator(
-            "address",
+            TEST_ADDRESS,
             self.mock_wallet,
             True,
             True,
@@ -104,10 +128,10 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 3)
 
     def test_get_unsigned_transactions(self):
-        for size in range(200, 1500, 100):
+        for max_tx_size in range(200, 1500, 100):
             # select all coins
             consolidator = consolidate.AddressConsolidator(
-                "address",
+                TEST_ADDRESS,
                 self.mock_wallet,
                 True,
                 True,
@@ -118,12 +142,14 @@ class TestConsolidateCoinSelection(unittest.TestCase):
             )
             txs = consolidator.get_unsigned_transactions(
                 output_address=TEST_ADDRESS,
-                max_tx_size=size,
+                max_tx_size=max_tx_size,
             )
+            for tx in txs:
+                self.assertLess(len(tx.serialize(estimate_size=True)) // 2, max_tx_size)
 
             # tx size is roughly 148 * n_in + 34 * n_out + 10
-            expected_n_inputs_for_size = (size - 44) // 148
-            self.assertEqual(len(txs), math.ceil(8 / expected_n_inputs_for_size))
+            expected_max_n_inputs_for_size = math.floor((max_tx_size - 44) / 148)
+            self.assertEqual(len(txs), math.ceil(8 / expected_max_n_inputs_for_size))
 
             # Check the fee and amount
             total_inputs = 0

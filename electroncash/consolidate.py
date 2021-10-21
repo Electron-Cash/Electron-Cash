@@ -93,14 +93,6 @@ class AddressConsolidator:
                 "signatures": [None],
                 "num_sig": 1,
             }
-        elif isinstance(self.wallet, wallet.Simple_Deterministic_Wallet):
-            derivation = self.wallet.get_address_index(address)
-            x_pubkey = self.wallet.keystore.get_xpubkey(*derivation)
-            sig_info = {
-                "x_pubkeys": [x_pubkey],
-                "signatures": [None],
-                "num_sig": 1,
-            }
         elif isinstance(self.wallet, wallet.Multisig_Wallet):
             derivation = self.wallet.get_address_index(address)
             sig_info = {
@@ -110,6 +102,16 @@ class AddressConsolidator:
                 "signatures": [None] * self.wallet.n,
                 "num_sig": self.wallet.m,
                 "pubkeys": None,
+            }
+        else:
+            # Default case for wallet.Simple_Deterministic_Wallet and Mock wallet used
+            # in test
+            derivation = self.wallet.get_address_index(address)
+            x_pubkey = self.wallet.keystore.get_xpubkey(*derivation)
+            sig_info = {
+                "x_pubkeys": [x_pubkey],
+                "signatures": [None],
+                "num_sig": 1,
             }
 
         # Add more metadata to coins
