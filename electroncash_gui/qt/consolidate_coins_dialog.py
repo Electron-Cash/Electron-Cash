@@ -18,7 +18,7 @@ from electroncash_gui.qt.util import MessageBoxMixin
 
 
 class TransactionsStatus(Enum):
-    TERMINATING = "terminating previous thread..."
+    INTERRUPTED = "transaction building interrupted"
     NOT_STARTED = "not started"
     SELECTING = "selecting coins..."
     BUILDING = "building transactions..."
@@ -30,6 +30,7 @@ class ConsolidateWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     status_changed = QtCore.pyqtSignal(TransactionsStatus)
     transactions_ready = QtCore.pyqtSignal(list)
+    progress = QtCore.pyqtSignal(int)
 
     def __init__(
         self,
@@ -58,13 +59,28 @@ class ConsolidateWorker(QtCore.QObject):
             output_address,
             max_tx_size,
         )
+        self.mutex = QtCore.QMutex()
+        self.interrupt = False
+
+    def was_interruption_requested(self) -> bool:
+        self.mutex.lock()
+        do_interrupt = self.interrupt
+        self.mutex.unlock()
+        if do_interrupt:
+            return True
+        return False
 
     def build_transactions(self):
         self.status_changed.emit(TransactionsStatus.BUILDING)
-        transactions = self.consolidator.get_unsigned_transactions(
-            self.output_address,
-            self.max_tx_size,
-        )
+        transactions = []
+        for i, tx in enumerate(self.consolidator.iter_transactions()):
+            if self.was_interruption_requested():
+                self.status_changed.emit(TransactionsStatus.FINISHED)
+                self.finished.emit()
+                return
+            transactions.append(tx)
+            self.progress.emit(i)
+
         if transactions:
             self.status_changed.emit(TransactionsStatus.FINISHED)
             # else the transaction page will set the status to NO_RESULT upon receiving
@@ -109,9 +125,9 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
 
     def on_page_changed(self, page_id: int):
         # The thread is only supposed to be started after reaching the tx_page,
-        # and must be terminated if the user decides to go back to a previous page
+        # and must be stopped if the user decides to go back to a previous page
         # or close the dialog.
-        self.terminate_thread_if_needed()
+        self.stop_thread_if_running()
 
         if self.currentPage() is self.tx_page:
             self.tx_page.update_status(TransactionsStatus.NOT_STARTED)
@@ -132,28 +148,18 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
             self.worker.moveToThread(self.tx_thread)
             self.tx_thread.started.connect(self.worker.build_transactions)
             self.worker.status_changed.connect(self.tx_page.update_status)
+            self.worker.progress.connect(self.tx_page.update_progress)
             self.worker.transactions_ready.connect(self.on_build_transactions_finished)
             self.worker.finished.connect(self.tx_thread.quit)
-            self.worker.finished.connect(self.worker.deleteLater)
 
             self.tx_thread.start()
 
-    def terminate_thread_if_needed(self):
+    def stop_thread_if_running(self):
         if self.tx_thread is not None and self.tx_thread.isRunning():
-            # TODO: find a way to stop the thread in between two transactions, to
-            #       improve the UX
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Terminating thread",
-                "A running thread must first be terminated before you can be allowed "
-                f"to interact with the application again. {PROJECT_NAME} may become "
-                "unresponsive for a while until it is done. This can take up to "
-                "several minutes in some cases.",
-            )
-            self.tx_page.update_status(TransactionsStatus.TERMINATING)
-            self.tx_thread.terminate()
-            QtCore.QCoreApplication.processEvents()
-            self.tx_thread.wait()
+            self.worker.mutex.lock()
+            self.worker.interrupt = True
+            self.worker.mutex.unlock()
+            self.tx_thread.quit()
 
     def on_build_transactions_finished(self, transactions: Sequence[Transaction]):
         self.transactions = transactions
@@ -431,6 +437,9 @@ class TransactionsPage(QtWidgets.QWizardPage):
         ]:
             self.completeChanged.emit()
 
+    def update_progress(self, num_tx: int):
+        self.num_tx_label.setText(f"Number of transactions: <b>{num_tx}</b>")
+
     def set_unsigned_transactions(
         self, transactions: Sequence[Transaction], can_sign: bool
     ):
@@ -445,11 +454,8 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.sign_button.setEnabled(can_sign)
         self.broadcast_button.setEnabled(False)
 
-        num_tx = len(transactions)
-        self.num_tx_label.setText(f"Number of transactions: <b>{num_tx}</b>")
-
         # Assume the first transactions has the maximum number of inputs
-        num_in = 0 if num_tx == 0 else len(transactions[0].inputs())
+        num_in = 0 if len(transactions) == 0 else len(transactions[0].inputs())
         self.num_in_label.setText(f"Maximum number of inputs per tx: <b>{num_in}</b>")
 
         in_value = sum([tx.input_value() for tx in transactions]) / 100
