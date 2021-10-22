@@ -25,7 +25,7 @@
 This module provides coin consolidation tools.
 """
 import copy
-from typing import List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple
 
 from . import wallet
 from .address import Address
@@ -136,12 +136,13 @@ class AddressConsolidator:
             number of inputs per transaction.
         :return:
         """
-        transactions = []
+        return list(self.iter_transactions())
+
+    def iter_transactions(self) -> Iterator[Transaction]:
         coin_index = 0
         while coin_index < len(self._coins):
             coin_index, tx = self.build_another_transaction(coin_index)
-            transactions.append(tx)
-        return transactions
+            yield tx
 
     def build_another_transaction(self, coin_index: int) -> Tuple[int, Transaction]:
         """Build another transaction using coins starting at index coin_index.
