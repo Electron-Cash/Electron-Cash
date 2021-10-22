@@ -18,9 +18,11 @@ from electroncash_gui.qt.util import MessageBoxMixin
 
 
 class TransactionsStatus(Enum):
+    NOT_STARTED = "not started"
     SELECTING = "selecting coins..."
     BUILDING = "building transactions..."
     FINISHED = "finished building transactions"
+    NO_RESULT = "finished without generating any transactions"
 
 
 class ConsolidateWorker(QtCore.QObject):
@@ -62,7 +64,10 @@ class ConsolidateWorker(QtCore.QObject):
             self.output_address,
             self.max_tx_size,
         )
-        self.status_changed.emit(TransactionsStatus.FINISHED)
+        if transactions:
+            self.status_changed.emit(TransactionsStatus.FINISHED)
+            # else the transaction page will set the status to NO_RESULT upon receiving
+            # an empty list of transactions
         self.transactions_ready.emit(transactions)
         self.finished.emit()
 
@@ -340,6 +345,7 @@ class OutputsPage(QtWidgets.QWizardPage):
 class TransactionsPage(QtWidgets.QWizardPage):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.status: TransactionsStatus = TransactionsStatus.NOT_STARTED
         self.setTitle("Transactions")
 
         layout = QtWidgets.QVBoxLayout()
@@ -391,13 +397,22 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.setCursor(QtCore.Qt.WaitCursor)
 
     def update_status(self, status: TransactionsStatus):
+        previous_status, self.status = self.status, status
         self.status_label.setText(f"Status: <b>{status.value}</b>")
+        if previous_status != status and TransactionsStatus.FINISHED in [
+            previous_status,
+            status,
+        ]:
+            self.completeChanged.emit()
 
     def set_unsigned_transactions(
         self, transactions: Sequence[Transaction], can_sign: bool
     ):
         """Enable buttons, compute and display some information about transactions."""
         self.unsetCursor()
+        if not transactions:
+            self.update_status(TransactionsStatus.NO_RESULT)
+            return
         # Reset buttons when fresh unsigned transactions are set
         self.save_button.setText("Save (unsigned)")
         self.save_button.setEnabled(True)
@@ -417,3 +432,6 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.in_value_label.setText(f"Input value: <b>{in_value} {XEC}</b>")
         self.out_value_label.setText(f"Output value: <b>{out_value} {XEC}</b>")
         self.fees_label.setText(f"Fees: <b>{fees} {XEC}</b>")
+
+    def isComplete(self) -> bool:
+        return self.status == TransactionsStatus.FINISHED
