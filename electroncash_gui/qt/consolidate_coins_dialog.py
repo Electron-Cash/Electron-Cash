@@ -18,6 +18,7 @@ from electroncash_gui.qt.util import MessageBoxMixin
 
 
 class TransactionsStatus(Enum):
+    TERMINATING = "terminating previous thread..."
     NOT_STARTED = "not started"
     SELECTING = "selecting coins..."
     BUILDING = "building transactions..."
@@ -85,6 +86,8 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
             f"Consolidate coins for address {address.to_full_ui_string()}"
         )
 
+        self.tx_thread: Optional[QtCore.QThread] = None
+
         self.address: Address = address
         self.wallet: Abstract_Wallet = wallet
         self.transactions: Sequence[Transaction] = []
@@ -105,9 +108,14 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
         self.currentIdChanged.connect(self.on_page_changed)
 
     def on_page_changed(self, page_id: int):
+        # The thread is only supposed to be started after reaching the tx_page,
+        # and must be terminated if the user decides to go back to a previous page
+        # or close the dialog.
+        self.terminate_thread_if_needed()
+
         if self.currentPage() is self.tx_page:
-            # run the coin consolidation in a separate thread
-            self.thread = QtCore.QThread()
+            self.tx_page.update_status(TransactionsStatus.NOT_STARTED)
+            self.tx_thread = QtCore.QThread()
             self.worker = ConsolidateWorker(
                 self.address,
                 self.wallet,
@@ -121,16 +129,31 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
                 self.output_page.tx_size_sb.value(),
             )
             # Connections
-            self.worker.moveToThread(self.thread)
-            self.thread.started.connect(self.worker.build_transactions)
+            self.worker.moveToThread(self.tx_thread)
+            self.tx_thread.started.connect(self.worker.build_transactions)
             self.worker.status_changed.connect(self.tx_page.update_status)
             self.worker.transactions_ready.connect(self.on_build_transactions_finished)
-            self.worker.finished.connect(self.thread.quit)
+            self.worker.finished.connect(self.tx_thread.quit)
             self.worker.finished.connect(self.worker.deleteLater)
-            self.thread.finished.connect(self.thread.deleteLater)
 
-            self.tx_page.display_work_in_progress()
-            self.thread.start()
+            self.tx_thread.start()
+
+    def terminate_thread_if_needed(self):
+        if self.tx_thread is not None and self.tx_thread.isRunning():
+            # TODO: find a way to stop the thread in between two transactions, to
+            #       improve the UX
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Terminating thread",
+                "A running thread must first be terminated before you can be allowed "
+                f"to interact with the application again. {PROJECT_NAME} may become "
+                "unresponsive for a while until it is done. This can take up to "
+                "several minutes in some cases.",
+            )
+            self.tx_page.update_status(TransactionsStatus.TERMINATING)
+            self.tx_thread.terminate()
+            QtCore.QCoreApplication.processEvents()
+            self.tx_thread.wait()
 
     def on_build_transactions_finished(self, transactions: Sequence[Transaction]):
         self.transactions = transactions
@@ -397,8 +420,11 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.setCursor(QtCore.Qt.WaitCursor)
 
     def update_status(self, status: TransactionsStatus):
-        previous_status, self.status = self.status, status
+        if status == TransactionsStatus.BUILDING:
+            self.display_work_in_progress()
         self.status_label.setText(f"Status: <b>{status.value}</b>")
+
+        previous_status, self.status = self.status, status
         if previous_status != status and TransactionsStatus.FINISHED in [
             previous_status,
             status,
