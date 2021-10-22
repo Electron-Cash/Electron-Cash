@@ -133,22 +133,23 @@ class AddressConsolidator:
         assert max_tx_size < MAX_TX_SIZE
         placeholder_amount = 200
         transactions = []
-        while self._coins:
+        i = 0
+        while i < len(self._coins):
             tx_size = 0
             amount = 0
             tx = Transaction(None)
             tx.set_inputs([])
-            while tx_size < max_tx_size and self._coins:
+            while tx_size < max_tx_size and i < len(self._coins):
                 dummy_tx = Transaction(None)
-                dummy_tx.set_inputs(tx.inputs() + [self._coins[0]])
+                dummy_tx.set_inputs(tx.inputs() + [self._coins[i]])
                 dummy_tx.set_outputs(
                     [(TYPE_ADDRESS, output_address, placeholder_amount)]
                 )
                 tx_size = len(dummy_tx.serialize(estimate_size=True)) // 2
 
                 if tx_size < max_tx_size:
-                    amount = amount + self._coins[0]["value"]
-                    tx.add_inputs([self._coins.pop(0)])
+                    amount = amount + self._coins[i]["value"]
+                    tx.add_inputs([self._coins[i]])
                     tx.set_outputs(
                         [
                             (
@@ -158,6 +159,7 @@ class AddressConsolidator:
                             )
                         ]
                     )
+                    i += 1
 
             transactions.append(tx)
         return transactions
