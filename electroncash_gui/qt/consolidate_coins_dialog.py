@@ -16,6 +16,50 @@ from electroncash.wallet import Abstract_Wallet
 from electroncash_gui.qt.util import MessageBoxMixin
 
 
+class ConsolidateWorker(QtCore.QObject):
+    finished = QtCore.pyqtSignal()
+    status_changed = QtCore.pyqtSignal(str)
+    transactions_ready = QtCore.pyqtSignal(list)
+
+    def __init__(
+        self,
+        address: Address,
+        wallet: Abstract_Wallet,
+        include_coinbase: bool,
+        include_non_coinbase: bool,
+        include_frozen: bool,
+        include_slp: bool,
+        minimum_value: Optional[int],
+        maximum_value: Optional[int],
+        output_address: Address,
+        max_tx_size: int,
+    ):
+        super().__init__()
+        self.status_changed.emit("selecting coins...")
+        self.consolidator = AddressConsolidator(
+            address,
+            wallet,
+            include_coinbase,
+            include_non_coinbase,
+            include_frozen,
+            include_slp,
+            minimum_value,
+            maximum_value,
+        )
+        self.output_address = output_address
+        self.max_tx_size = max_tx_size
+
+    def build_transactions(self):
+        self.status_changed.emit("building transactions...")
+        transactions = self.consolidator.get_unsigned_transactions(
+            self.output_address,
+            self.max_tx_size,
+        )
+        self.status_changed.emit("finished building transactions")
+        self.transactions_ready.emit(transactions)
+        self.finished.emit()
+
+
 class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
     def __init__(
         self,
@@ -50,7 +94,9 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
 
     def on_page_changed(self, page_id: int):
         if self.currentPage() is self.tx_page:
-            consolidator = AddressConsolidator(
+            # run the coin consolidation in a separate thread
+            self.thread = QtCore.QThread()
+            self.worker = ConsolidateWorker(
                 self.address,
                 self.wallet,
                 self.coins_page.include_coinbase_cb.isChecked(),
@@ -59,13 +105,25 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
                 self.coins_page.include_slp_cb.isChecked(),
                 self.coins_page.get_minimum_value(),
                 self.coins_page.get_maximum_value(),
-            )
-            self.transactions = consolidator.get_unsigned_transactions(
                 self.output_page.get_output_address(),
                 self.output_page.tx_size_sb.value(),
             )
-            can_sign = self.wallet.can_sign(self.transactions[0])
-            self.tx_page.set_unsigned_transactions(self.transactions, can_sign)
+            # Connections
+            self.worker.moveToThread(self.thread)
+            self.thread.started.connect(self.worker.build_transactions)
+            self.worker.status_changed.connect(self.tx_page.update_status)
+            self.worker.transactions_ready.connect(self.on_build_transactions_finished)
+            self.worker.finished.connect(self.thread.quit)
+            self.worker.finished.connect(self.worker.deleteLater)
+            self.thread.finished.connect(self.thread.deleteLater)
+
+            self.tx_page.display_work_in_progress()
+            self.thread.start()
+
+    def on_build_transactions_finished(self, transactions: Sequence[Transaction]):
+        self.transactions = transactions
+        can_sign = self.wallet.can_sign(self.transactions[0])
+        self.tx_page.set_unsigned_transactions(self.transactions, can_sign)
 
     def on_save_clicked(self):
         dir = QtWidgets.QFileDialog.getExistingDirectory(
@@ -280,13 +338,16 @@ class TransactionsPage(QtWidgets.QWizardPage):
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
+        self.status_label = QtWidgets.QLabel("Status:")
+        layout.addWidget(self.status_label)
+
         self.num_tx_label = QtWidgets.QLabel("Number of transactions:")
         layout.addWidget(self.num_tx_label)
 
         self.num_in_label = QtWidgets.QLabel("Average number of inputs per tx:")
         layout.addWidget(self.num_in_label)
 
-        self.value_label = QtWidgets.QLabel("Input value: 0; Output value: 0; Fees: 0")
+        self.value_label = QtWidgets.QLabel("Input value:\nOutput value:\nFees:")
         layout.addWidget(self.value_label)
 
         layout.addStretch(1)
@@ -304,16 +365,31 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.broadcast_button.setEnabled(False)
         buttons_layout.addWidget(self.broadcast_button)
 
+    def display_work_in_progress(self):
+        """Disable buttons, inform the user about the ongoing computation"""
+        self.save_button.setEnabled(False)
+        self.sign_button.setEnabled(False)
+        self.broadcast_button.setEnabled(False)
+
+        self.status_label.setText("Status: <b>building transactions</b>")
+        self.setCursor(QtCore.Qt.WaitCursor)
+
+    def update_status(self, status: str):
+        self.status_label.setText(f"Status: <b>{status}</b>")
+
     def set_unsigned_transactions(
         self, transactions: Sequence[Transaction], can_sign: bool
     ):
+        """Enable buttons, compute and display some information about transactions."""
+        self.unsetCursor()
         # Reset buttons when fresh unsigned transactions are set
         self.save_button.setText("Save (unsigned)")
+        self.save_button.setEnabled(True)
         self.sign_button.setEnabled(can_sign)
         self.broadcast_button.setEnabled(False)
 
         num_tx = len(transactions)
-        self.num_tx_label.setText(f"Number of transactions: {num_tx}")
+        self.num_tx_label.setText(f"Number of transactions: <b>{num_tx}</b>")
 
         avg_num_in = (
             0
@@ -326,5 +402,7 @@ class TransactionsPage(QtWidgets.QWizardPage):
         out_value = sum([tx.output_value() for tx in transactions]) / 100
         fees = sum([tx.get_fee() for tx in transactions]) / 100
         self.value_label.setText(
-            f"Input value: {in_value} {XEC}\nOutput value: {out_value} {XEC}\nFees: {fees} {XEC}"
+            f"Input value: <b>{in_value} {XEC}</b><br>"
+            f"Output value: <b>{out_value} {XEC}</b><br>"
+            f"Fees: <b>{fees} {XEC}</b>"
         )
