@@ -25,7 +25,7 @@
 This module provides coin consolidation tools.
 """
 import copy
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from . import wallet
 from .address import Address
@@ -41,7 +41,8 @@ MAX_TX_SIZE: int = 1_000_000
 Maximum allowed size for a transaction in a block.
 """
 
-FEE_PER_BYTE: int = 1
+FEERATE: int = 1
+"""satoshis per byte"""
 
 
 class AddressConsolidator:
@@ -131,38 +132,59 @@ class AddressConsolidator:
         :return:
         """
         assert max_tx_size < MAX_TX_SIZE
-        placeholder_amount = 200
         transactions = []
-        i = 0
-        while i < len(self._coins):
-            tx_size = 0
-            amount = 0
-            tx = Transaction(None)
-            tx.set_inputs([])
-            while tx_size < max_tx_size and i < len(self._coins):
-                dummy_tx = Transaction(None)
-                dummy_tx.set_inputs(tx.inputs() + [self._coins[i]])
-                dummy_tx.set_outputs(
-                    [(TYPE_ADDRESS, output_address, placeholder_amount)]
-                )
-                tx_size = len(dummy_tx.serialize(estimate_size=True)) // 2
-
-                if tx_size < max_tx_size:
-                    amount = amount + self._coins[i]["value"]
-                    tx.add_inputs([self._coins[i]])
-                    tx.set_outputs(
-                        [
-                            (
-                                TYPE_ADDRESS,
-                                output_address,
-                                amount - tx_size * FEE_PER_BYTE,
-                            )
-                        ]
-                    )
-                    i += 1
-
+        coin_index = 0
+        while coin_index < len(self._coins):
+            coin_index, tx = self.build_another_transaction(
+                max_tx_size, coin_index, output_address
+            )
             transactions.append(tx)
         return transactions
+
+    def build_another_transaction(
+        self, max_tx_size: int, coin_index: int, out_address: Address
+    ) -> Tuple[int, Transaction]:
+        """Build another transaction using coins starting at index coin_index.
+        Return a 2-tuple with the index of the next unused coin and the transaction.
+        """
+        tx_size = 0
+        amount = 0
+        tx = Transaction(None)
+        tx.set_inputs([])
+        while tx_size < max_tx_size and coin_index < len(self._coins):
+            tx_size = self.try_adding_another_coin_to_transaction(
+                tx,
+                self._coins[coin_index],
+                out_address,
+                max_tx_size,
+                amount + self._coins[coin_index]["value"],
+            )
+            if tx_size < max_tx_size:
+                amount = amount + self._coins[coin_index]["value"]
+                coin_index += 1
+        return coin_index, tx
+
+    def try_adding_another_coin_to_transaction(
+        self,
+        tx: Transaction,
+        coin: dict,
+        out_address: Address,
+        max_tx_size: int,
+        next_amount: int,
+    ) -> int:
+        """Add coin to tx.inputs() if the resulting tx size is less than max_tx_size.
+        Return the resulting tx_size (no matter if the coin was actually added or not).
+        """
+        dummy_tx = Transaction(None)
+        dummy_tx.set_inputs(tx.inputs() + [coin])
+        dummy_tx.set_outputs([(TYPE_ADDRESS, out_address, next_amount)])
+        tx_size = len(dummy_tx.serialize(estimate_size=True)) // 2
+        if tx_size < max_tx_size:
+            tx.add_inputs([coin])
+            tx.set_outputs(
+                [(TYPE_ADDRESS, out_address, next_amount - tx_size * FEERATE)]
+            )
+        return tx_size
 
     def add_input_info(self, txin, siginfo: dict):
         """Reimplemented from wallet.add_input_info to optimize for multiple calls
