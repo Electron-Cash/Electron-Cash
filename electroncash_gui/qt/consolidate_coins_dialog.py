@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -16,9 +17,15 @@ from electroncash.wallet import Abstract_Wallet
 from electroncash_gui.qt.util import MessageBoxMixin
 
 
+class TransactionsStatus(Enum):
+    SELECTING = "selecting coins..."
+    BUILDING = "building transactions..."
+    FINISHED = "finished building transactions"
+
+
 class ConsolidateWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
-    status_changed = QtCore.pyqtSignal(str)
+    status_changed = QtCore.pyqtSignal(TransactionsStatus)
     transactions_ready = QtCore.pyqtSignal(list)
 
     def __init__(
@@ -35,7 +42,7 @@ class ConsolidateWorker(QtCore.QObject):
         max_tx_size: int,
     ):
         super().__init__()
-        self.status_changed.emit("selecting coins...")
+        self.status_changed.emit(TransactionsStatus.SELECTING)
         self.consolidator = AddressConsolidator(
             address,
             wallet,
@@ -50,12 +57,12 @@ class ConsolidateWorker(QtCore.QObject):
         self.max_tx_size = max_tx_size
 
     def build_transactions(self):
-        self.status_changed.emit("building transactions...")
+        self.status_changed.emit(TransactionsStatus.BUILDING)
         transactions = self.consolidator.get_unsigned_transactions(
             self.output_address,
             self.max_tx_size,
         )
-        self.status_changed.emit("finished building transactions")
+        self.status_changed.emit(TransactionsStatus.FINISHED)
         self.transactions_ready.emit(transactions)
         self.finished.emit()
 
@@ -338,17 +345,20 @@ class TransactionsPage(QtWidgets.QWizardPage):
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
-        self.status_label = QtWidgets.QLabel("Status:")
+        self.status_label = QtWidgets.QLabel()
         layout.addWidget(self.status_label)
 
-        self.num_tx_label = QtWidgets.QLabel("Number of transactions:")
+        self.num_tx_label = QtWidgets.QLabel()
         layout.addWidget(self.num_tx_label)
-
-        self.num_in_label = QtWidgets.QLabel("Average number of inputs per tx:")
+        self.num_in_label = QtWidgets.QLabel()
         layout.addWidget(self.num_in_label)
-
-        self.value_label = QtWidgets.QLabel("Input value:\nOutput value:\nFees:")
-        layout.addWidget(self.value_label)
+        self.in_value_label = QtWidgets.QLabel()
+        layout.addWidget(self.in_value_label)
+        self.out_value_label = QtWidgets.QLabel()
+        layout.addWidget(self.out_value_label)
+        self.fees_label = QtWidgets.QLabel()
+        layout.addWidget(self.fees_label)
+        self.reset_labels()
 
         layout.addStretch(1)
 
@@ -365,17 +375,23 @@ class TransactionsPage(QtWidgets.QWizardPage):
         self.broadcast_button.setEnabled(False)
         buttons_layout.addWidget(self.broadcast_button)
 
+    def reset_labels(self):
+        self.num_tx_label.setText("Number of transactions:")
+        self.num_in_label.setText("Number of inputs per tx:")
+        self.in_value_label.setText("Input value:")
+        self.out_value_label.setText("Output value:")
+        self.fees_label.setText("Fees:")
+
     def display_work_in_progress(self):
         """Disable buttons, inform the user about the ongoing computation"""
+        self.reset_labels()
         self.save_button.setEnabled(False)
         self.sign_button.setEnabled(False)
         self.broadcast_button.setEnabled(False)
-
-        self.status_label.setText("Status: <b>building transactions</b>")
         self.setCursor(QtCore.Qt.WaitCursor)
 
-    def update_status(self, status: str):
-        self.status_label.setText(f"Status: <b>{status}</b>")
+    def update_status(self, status: TransactionsStatus):
+        self.status_label.setText(f"Status: <b>{status.value}</b>")
 
     def set_unsigned_transactions(
         self, transactions: Sequence[Transaction], can_sign: bool
@@ -391,18 +407,13 @@ class TransactionsPage(QtWidgets.QWizardPage):
         num_tx = len(transactions)
         self.num_tx_label.setText(f"Number of transactions: <b>{num_tx}</b>")
 
-        avg_num_in = (
-            0
-            if num_tx == 0
-            else sum([len(tx.inputs()) for tx in transactions]) / num_tx
-        )
-        self.num_in_label.setText(f"Average number of inputs per tx: {avg_num_in:.2f}")
+        # Assume the first transactions has the maximum number of inputs
+        num_in = 0 if num_tx == 0 else len(transactions[0].inputs())
+        self.num_in_label.setText(f"Maximum number of inputs per tx: <b>{num_in}</b>")
 
         in_value = sum([tx.input_value() for tx in transactions]) / 100
         out_value = sum([tx.output_value() for tx in transactions]) / 100
         fees = sum([tx.get_fee() for tx in transactions]) / 100
-        self.value_label.setText(
-            f"Input value: <b>{in_value} {XEC}</b><br>"
-            f"Output value: <b>{out_value} {XEC}</b><br>"
-            f"Fees: <b>{fees} {XEC}</b>"
-        )
+        self.in_value_label.setText(f"Input value: <b>{in_value} {XEC}</b>")
+        self.out_value_label.setText(f"Output value: <b>{out_value} {XEC}</b>")
+        self.fees_label.setText(f"Fees: <b>{fees} {XEC}</b>")
