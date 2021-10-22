@@ -58,7 +58,14 @@ class AddressConsolidator:
         include_slp: bool = False,
         min_value_sats: Optional[int] = None,
         max_value_sats: Optional[int] = None,
+        output_address: Optional[Address] = None,
+        max_tx_size: Optional[int] = MAX_STANDARD_TX_SIZE,
     ):
+        # output address defaults to input address if unspecified
+        self.output_address = output_address or address
+        self.max_tx_size = max_tx_size
+        assert self.max_tx_size < MAX_TX_SIZE
+
         self._coins = [
             utxo
             for utxo in wallet_instance.get_addr_utxo(address).values()
@@ -119,9 +126,7 @@ class AddressConsolidator:
         for i, c in enumerate(self._coins):
             self.add_input_info(c, sig_info)
 
-    def get_unsigned_transactions(
-        self, output_address: Address, max_tx_size: int = MAX_STANDARD_TX_SIZE
-    ) -> List[Transaction]:
+    def get_unsigned_transactions(self) -> List[Transaction]:
         """
         Build as many raw transactions as needed to consolidate the coins.
 
@@ -131,19 +136,14 @@ class AddressConsolidator:
             number of inputs per transaction.
         :return:
         """
-        assert max_tx_size < MAX_TX_SIZE
         transactions = []
         coin_index = 0
         while coin_index < len(self._coins):
-            coin_index, tx = self.build_another_transaction(
-                max_tx_size, coin_index, output_address
-            )
+            coin_index, tx = self.build_another_transaction(coin_index)
             transactions.append(tx)
         return transactions
 
-    def build_another_transaction(
-        self, max_tx_size: int, coin_index: int, out_address: Address
-    ) -> Tuple[int, Transaction]:
+    def build_another_transaction(self, coin_index: int) -> Tuple[int, Transaction]:
         """Build another transaction using coins starting at index coin_index.
         Return a 2-tuple with the index of the next unused coin and the transaction.
         """
@@ -151,15 +151,13 @@ class AddressConsolidator:
         amount = 0
         tx = Transaction(None)
         tx.set_inputs([])
-        while tx_size < max_tx_size and coin_index < len(self._coins):
+        while tx_size < self.max_tx_size and coin_index < len(self._coins):
             tx_size = self.try_adding_another_coin_to_transaction(
                 tx,
                 self._coins[coin_index],
-                out_address,
-                max_tx_size,
                 amount + self._coins[coin_index]["value"],
             )
-            if tx_size < max_tx_size:
+            if tx_size < self.max_tx_size:
                 amount = amount + self._coins[coin_index]["value"]
                 coin_index += 1
         return coin_index, tx
@@ -168,8 +166,6 @@ class AddressConsolidator:
         self,
         tx: Transaction,
         coin: dict,
-        out_address: Address,
-        max_tx_size: int,
         next_amount: int,
     ) -> int:
         """Add coin to tx.inputs() if the resulting tx size is less than max_tx_size.
@@ -177,12 +173,12 @@ class AddressConsolidator:
         """
         dummy_tx = Transaction(None)
         dummy_tx.set_inputs(tx.inputs() + [coin])
-        dummy_tx.set_outputs([(TYPE_ADDRESS, out_address, next_amount)])
+        dummy_tx.set_outputs([(TYPE_ADDRESS, self.output_address, next_amount)])
         tx_size = len(dummy_tx.serialize(estimate_size=True)) // 2
-        if tx_size < max_tx_size:
+        if tx_size < self.max_tx_size:
             tx.add_inputs([coin])
             tx.set_outputs(
-                [(TYPE_ADDRESS, out_address, next_amount - tx_size * FEERATE)]
+                [(TYPE_ADDRESS, self.output_address, next_amount - tx_size * FEERATE)]
             )
         return tx_size
 

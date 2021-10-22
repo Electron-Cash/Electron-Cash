@@ -142,12 +142,11 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                 True,
                 min_value_sats=None,
                 max_value_sats=None,
-            )
-            self.assertEqual(n_coins, len(consolidator._coins))
-            txs = consolidator.get_unsigned_transactions(
                 output_address=TEST_ADDRESS,
                 max_tx_size=max_tx_size,
             )
+            self.assertEqual(n_coins, len(consolidator._coins))
+            txs = consolidator.get_unsigned_transactions()
             for tx in txs:
                 self.assertLess(len(tx.serialize(estimate_size=True)) // 2, max_tx_size)
 

@@ -55,9 +55,9 @@ class ConsolidateWorker(QtCore.QObject):
             include_slp,
             minimum_value,
             maximum_value,
+            output_address,
+            max_tx_size,
         )
-        self.output_address = output_address
-        self.max_tx_size = max_tx_size
 
     def build_transactions(self):
         self.status_changed.emit(TransactionsStatus.BUILDING)
