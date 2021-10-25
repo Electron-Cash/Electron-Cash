@@ -23,6 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .util import *
+from .consolidate_coins_dialog import ConsolidateCoinsWizard
 from electroncash.i18n import _
 from electroncash.plugins import run_hook
 from electroncash.address import Address
@@ -31,7 +32,6 @@ from electroncash import cashacct
 from collections import defaultdict
 from functools import wraps
 from enum import IntEnum
-
 
 class UTXOList(MyTreeWidget):
     class Col(IntEnum):
@@ -236,11 +236,11 @@ class UTXOList(MyTreeWidget):
                 column_title = self.headerItem().text(col)
                 alt_column_title, alt_copy_text = None, None
                 slp_token = item.data(0, self.DataRoles.slp_token)
+                addr = item.data(0, self.DataRoles.address)
                 ca_info = None
                 if col == self.Col.output_point:
                     copy_text = item.data(0, self.DataRoles.name)
                 elif col == self.Col.address:
-                    addr = item.data(0, self.DataRoles.address)
                     # Determine the "alt copy text" "Legacy Address" or "Cash Address"
                     copy_text = addr.to_full_ui_string()
                     if Address.FMT_UI == Address.FMT_LEGACY:
@@ -248,7 +248,6 @@ class UTXOList(MyTreeWidget):
                     else:
                         alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_LEGACY), _('Legacy Address')
                     ca_info = item.data(0, self.DataRoles.cash_account)  # may be None
-                    del addr
                 else:
                     copy_text = item.text(col)
                 if copy_text:
@@ -288,6 +287,10 @@ class UTXOList(MyTreeWidget):
                         spend_action.setText(_("SLP Token: Spend Locked"))
                     elif 'i' in frozen_flags:  # immature coinbase
                         spend_action.setText(_("Immature Coinbase: Spend Locked"))
+                menu.addAction(
+                    "Consolidate coins for address",
+                    lambda: self._open_consolidate_coins_dialog(addr),
+                )
             else:
                 # multi-selection
                 menu.addSeparator()
@@ -366,3 +369,8 @@ class UTXOList(MyTreeWidget):
         if was != b:
             self.wallet.storage.put('utxo_list_show_cash_accounts', b)
             self.update()
+
+
+    def _open_consolidate_coins_dialog(self, addr):
+        d = ConsolidateCoinsWizard(addr, self.parent.wallet, self.parent, parent=self)
+        d.exec_()
