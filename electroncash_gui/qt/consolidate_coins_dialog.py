@@ -186,14 +186,16 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
         )
 
     def on_sign_clicked(self):
-        def sign_done(success):
-            pass
-
-        def cleanup():
-            pass
+        password = None
+        if self.wallet.has_password():
+            password = self.main_window.password_dialog(
+                "Enter your password to proceed"
+            )
+            if not password:
+                return
 
         for tx in self.transactions:
-            self.main_window.sign_tx(tx, sign_done, on_pw_cancel=cleanup)
+            self.wallet.sign_transaction(tx, password, use_cache=True)
 
         QtWidgets.QMessageBox.information(
             self,
