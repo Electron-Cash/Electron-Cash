@@ -324,6 +324,7 @@ class OutputsPage(QtWidgets.QWizardPage):
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
+        layout.addWidget(QtWidgets.QLabel("<h2>Destination address</h2>"))
         self.same_address_rb = QtWidgets.QRadioButton("Same address as inputs")
         self.same_address_rb.setChecked(True)
         layout.addWidget(self.same_address_rb)
@@ -338,6 +339,9 @@ class OutputsPage(QtWidgets.QWizardPage):
         self.output_address_edit.setEnabled(False)
         single_address_sublayout.addWidget(self.output_address_edit)
 
+        layout.addSpacing(20)
+
+        layout.addWidget(QtWidgets.QLabel("<h2>Transaction parameters</h2>"))
         tx_size_layout = QtWidgets.QHBoxLayout()
         layout.addLayout(tx_size_layout)
         tx_size_layout.addWidget(QtWidgets.QLabel("Maximum transaction size (bytes)"))
