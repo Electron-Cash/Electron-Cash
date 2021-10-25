@@ -62,16 +62,26 @@ class ConsolidateWorker(QtCore.QObject):
             output_address,
             max_tx_size,
         )
-        self.mutex = QtCore.QMutex()
-        self.interrupt = False
+
+        self.interrupt_mutex = QtCore.QMutex()
+        self.interrupt: bool = False
 
     def was_interruption_requested(self) -> bool:
-        self.mutex.lock()
+        self.interrupt_mutex.lock()
         do_interrupt = self.interrupt
-        self.mutex.unlock()
-        if do_interrupt:
-            return True
-        return False
+        self.interrupt_mutex.unlock()
+        return do_interrupt
+
+    def request_interruption(self):
+        """Stop the worker as soon as possible (i.e. in-between two
+        transactions).
+        This causes the :attr:`status_changed` and :attr:`finished` signals to be
+        emitted. The :attr:`transactions_ready` signal is not emitted if the worker
+        is interrupted before it has generated the last transaction.
+        """
+        self.interrupt_mutex.lock()
+        self.interrupt = True
+        self.interrupt_mutex.unlock()
 
     def build_transactions(self):
         self.status_changed.emit(TransactionsStatus.BUILDING)
@@ -159,9 +169,7 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
 
     def stop_thread_if_running(self):
         if self.tx_thread is not None and self.tx_thread.isRunning():
-            self.worker.mutex.lock()
-            self.worker.interrupt = True
-            self.worker.mutex.unlock()
+            self.worker.request_interruption()
             self.tx_thread.quit()
 
     def on_build_transactions_finished(self, transactions: Sequence[Transaction]):
