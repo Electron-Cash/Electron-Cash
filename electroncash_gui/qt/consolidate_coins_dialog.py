@@ -18,7 +18,7 @@ from electroncash_gui.qt.util import MessageBoxMixin
 
 
 class TransactionsStatus(Enum):
-    INTERRUPTED = "transaction building interrupted"
+    INTERRUPTED = "cancelled"
     NOT_STARTED = "not started"
     SELECTING = "selecting coins..."
     BUILDING = "building transactions..."
@@ -30,7 +30,10 @@ class ConsolidateWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     status_changed = QtCore.pyqtSignal(TransactionsStatus)
     transactions_ready = QtCore.pyqtSignal(list)
+    """Emits the list of :class:`Transaction` after the last transaction is
+     generated."""
     progress = QtCore.pyqtSignal(int)
+    """Emits the number of generated transactions after each new transaction."""
 
     def __init__(
         self,
@@ -75,11 +78,11 @@ class ConsolidateWorker(QtCore.QObject):
         transactions = []
         for i, tx in enumerate(self.consolidator.iter_transactions()):
             if self.was_interruption_requested():
-                self.status_changed.emit(TransactionsStatus.FINISHED)
+                self.status_changed.emit(TransactionsStatus.INTERRUPTED)
                 self.finished.emit()
                 return
             transactions.append(tx)
-            self.progress.emit(i)
+            self.progress.emit(i + 1)
 
         if transactions:
             self.status_changed.emit(TransactionsStatus.FINISHED)
