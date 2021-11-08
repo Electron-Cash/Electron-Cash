@@ -1107,7 +1107,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = address_dialog.AddressDialog(self,  addr, windowParent=parent)
         d.exec_()
 
-    def show_transaction(self, tx, tx_desc = None):
+    def show_transaction(self, tx: Transaction, tx_desc = None):
         '''tx_desc is set only for txs created in the Send tab'''
         d = show_transaction(tx, self, tx_desc)
         self._tx_dialogs.add(d)

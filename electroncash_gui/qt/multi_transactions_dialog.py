@@ -2,18 +2,20 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtGui, QtWidgets
 
 from electroncash import Transaction
+from electroncash.bitcoin import sha256
 from electroncash.wallet import Abstract_Wallet
 unit = "BCH"
-sats_to_BCH_conv_factor = 100000000
+BCH_decimals = 8
 
 class MultiTransactionsWidget(QtWidgets.QWidget):
     """Display multiple transactions, with statistics and tools (sign, broadcast...)"""
 
     def __init__(self, wallet, main_window, parent=None):
         super().__init__(parent)
+        self.setMinimumWidth(800)
         self.wallet: Abstract_Wallet = wallet
         self.transactions: Sequence[Transaction] = []
         self.main_window = main_window
@@ -23,8 +25,6 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
 
         self.num_tx_label = QtWidgets.QLabel()
         layout.addWidget(self.num_tx_label)
-        self.num_in_label = QtWidgets.QLabel()
-        layout.addWidget(self.num_in_label)
         self.in_value_label = QtWidgets.QLabel()
         layout.addWidget(self.in_value_label)
         self.out_value_label = QtWidgets.QLabel()
@@ -33,7 +33,20 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         layout.addWidget(self.fees_label)
         self.reset_labels()
 
-        layout.addStretch(1)
+        self.transactions_table = QtWidgets.QTableWidget()
+        self.transactions_table.setColumnCount(5)
+        self.transactions_table.horizontalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeToContents
+        )
+        self.transactions_table.horizontalHeader().setStretchLastSection(True)
+        self._horiz_header_labels = [
+            "Inputs",
+            "Outputs",
+            "Output amount",
+            "Fee",
+            "Output addresses",
+        ]
+        layout.addWidget(self.transactions_table)
 
         buttons_layout = QtWidgets.QHBoxLayout()
         layout.addLayout(buttons_layout)
@@ -52,10 +65,9 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
 
     def reset_labels(self):
         self.num_tx_label.setText("Number of transactions:")
-        self.num_in_label.setText("Number of inputs per tx:")
-        self.in_value_label.setText("Input value:")
-        self.out_value_label.setText("Output value:")
-        self.fees_label.setText("Fees:")
+        self.in_value_label.setText("Total input value:")
+        self.out_value_label.setText("Total output value:")
+        self.fees_label.setText("Total fees:")
 
     def disable_buttons(self):
         self.save_button.setEnabled(False)
@@ -70,9 +82,12 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
 
     def set_transactions(self, transactions: Sequence[Transaction]):
         """Enable buttons, compute and display some information about transactions."""
+        self.transactions_table.clear()
+
         self.transactions = transactions
 
         can_sign = self.wallet.can_sign(transactions[0]) if transactions else False
+
         # Reset buttons when fresh unsigned transactions are set
         self.save_button.setText("Save")
         self.save_button.setEnabled(True)
@@ -81,16 +96,44 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
 
         self.num_tx_label.setText(f"Number of transactions: <b>{len(transactions)}</b>")
 
-        # Assume the first transactions has the maximum number of inputs
-        num_in = 0 if len(transactions) == 0 else len(transactions[0].inputs())
-        self.num_in_label.setText(f"Number of inputs per tx: <b>{num_in}</b>")
+        sats_per_unit = 10 ** BCH_decimals
+        sum_in_value, sum_out_value, sum_fees = 0, 0, 0
+        self.transactions_table.setRowCount(len(transactions))
+        self.transactions_table.setHorizontalHeaderLabels(self._horiz_header_labels)
+        for i, tx in enumerate(transactions):
+            in_value = tx.input_value()
+            out_value = tx.output_value()
+            fee = in_value - out_value
+            sum_in_value += in_value
+            sum_out_value += out_value
+            sum_fees += fee
+            self.transactions_table.setItem(
+                i, 0, QtWidgets.QTableWidgetItem(f"{len(tx.inputs())}")
+            )
+            self.transactions_table.setItem(
+                i, 1, QtWidgets.QTableWidgetItem(f"{len(tx.outputs())}")
+            )
+            self.transactions_table.setItem(
+                i, 2, QtWidgets.QTableWidgetItem(f"{out_value / sats_per_unit:.2f}")
+            )
+            self.transactions_table.setItem(
+                i, 3, QtWidgets.QTableWidgetItem(f"{fee / sats_per_unit:.2f}")
+            )
 
-        in_value = sum([tx.input_value() for tx in transactions]) / sats_to_BCH_conv_factor
-        out_value = sum([tx.output_value() for tx in transactions]) / sats_to_BCH_conv_factor
-        fees = sum([tx.get_fee() for tx in transactions]) / sats_to_BCH_conv_factor
-        self.in_value_label.setText(f"Input value: <b>{in_value} {unit}</b>")
-        self.out_value_label.setText(f"Output value: <b>{out_value} {unit}</b>")
-        self.fees_label.setText(f"Fees: <b>{fees} {unit}</b>")
+            addresses = ", ".join([addr.to_cashaddr() for (_, addr, _) in tx.outputs()])
+            color_item = QtWidgets.QTableWidgetItem(addresses)
+            color_item.setToolTip(addresses)
+            hash = sha256(addresses.encode("utf8"))
+            color_item.setBackground(QtGui.QColor(hash[0], hash[1], hash[2]))
+            self.transactions_table.setItem(i, 4, color_item)
+
+        self.in_value_label.setText(
+            f"Total input value: <b>{sum_in_value / sats_per_unit} {unit}</b>"
+        )
+        self.out_value_label.setText(
+            f"Total output value: <b>{sum_out_value / sats_per_unit} {unit}</b>"
+        )
+        self.fees_label.setText(f"Total fees: <b>{sum_fees / sats_per_unit} {unit}</b>")
 
     def on_save_clicked(self):
         dir = QtWidgets.QFileDialog.getExistingDirectory(
