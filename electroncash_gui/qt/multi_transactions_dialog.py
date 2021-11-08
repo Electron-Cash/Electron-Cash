@@ -147,3 +147,24 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
             "Done broadcasting",
             f"Broadcasted {len(self.transactions)} transactions.",
         )
+
+
+class MultiTransactionsDialog(QtWidgets.QDialog):
+    """This dialog is just a minimalistic wrapper for the widget. It does not implement
+    any logic."""
+
+    def __init__(self, wallet, main_window, parent=None):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+
+        self.widget = MultiTransactionsWidget(wallet, main_window, self)
+        layout.addWidget(self.widget)
+
+        buttons_layout = QtWidgets.QHBoxLayout()
+        layout.addLayout(buttons_layout)
+
+        close_button = QtWidgets.QPushButton("Close")
+        buttons_layout.addWidget(close_button)
+
+        close_button.clicked.connect(self.accept)

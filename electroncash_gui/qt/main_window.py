@@ -76,6 +76,7 @@ from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
 from .transaction_dialog import show_transaction
 from .fee_slider import FeeSlider
+from .multi_transactions_dialog import MultiTransactionsDialog
 from .popup_widget import ShowPopupLabel, KillPopupLabel
 from . import cashacctqt
 from . import lnsqt
@@ -3712,7 +3713,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     f"{PROJECT_NAME} was unable to deserialize the"
                     f" transaction in file {filename}:\n" + str(e)
                 )
-        # todo: load the transactions in a dialog for batch signing and broadcast
+        if not transactions:
+            return
+
+        multi_tx_dialog = MultiTransactionsDialog(self.wallet, self, self)
+        multi_tx_dialog.widget.set_transactions(
+            transactions, self.wallet.can_sign(transactions[0]))
+        multi_tx_dialog.exec_()
 
     def do_process_from_txid(self, *, txid=None, parent=None, tx_desc=None):
         parent = parent or self
