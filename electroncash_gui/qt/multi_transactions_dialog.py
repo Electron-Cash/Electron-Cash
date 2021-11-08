@@ -120,11 +120,15 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
                 i, 3, QtWidgets.QTableWidgetItem(f"{fee / sats_per_unit:.2f}")
             )
 
-            addresses = ", ".join([addr.to_cashaddr() for (_, addr, _) in tx.outputs()])
-            color_item = QtWidgets.QTableWidgetItem(addresses)
-            color_item.setToolTip(addresses)
-            hash = sha256(addresses.encode("utf8"))
-            color_item.setBackground(QtGui.QColor(hash[0], hash[1], hash[2]))
+            # Print the output addresses on colored background, with a color depending
+            # on the hash of the output addresses. This helps with controlling that
+            # all the outputs are the same, when needed.
+            addresses_set = {addr.to_cashaddr() for (_, addr, _) in tx.outputs()}
+            addresses_txt = ", ".join(sorted(addresses_set))
+            color_item = QtWidgets.QTableWidgetItem(addresses_txt)
+            color_item.setToolTip(addresses_txt)
+            h = sha256(addresses_txt.encode("utf8"))
+            color_item.setBackground(QtGui.QColor(h[0], h[1], h[2]))
             self.transactions_table.setItem(i, 4, color_item)
 
         self.in_value_label.setText(
