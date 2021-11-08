@@ -48,16 +48,20 @@ from electroncash.bitcoin import COIN, TYPE_ADDRESS, TYPE_SCRIPT
 from electroncash import networks
 from electroncash.plugins import run_hook
 from electroncash.i18n import _, ngettext, pgettext
+from electroncash.transaction import (
+    OPReturn,
+    SerializationError,
+    Transaction,
+    tx_from_str,
+)
 from electroncash.util import (format_time, format_satoshis, PrintError,
                                format_satoshis_plain, NotEnoughFunds,
                                ExcessiveFee, UserCancelled, InvalidPassword,
                                bh2u, bfh, format_fee_satoshis, Weak,
                                print_error)
 import electroncash.web as web
-from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct
 from electroncash import paymentrequest
-from electroncash.transaction import OPReturn, SerializationError, tx_from_str
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
 from electroncash.contacts import Contact
 from electroncash import rpa
@@ -3714,7 +3718,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         parent = parent or self
         if self.gui_object.warn_if_no_network(parent):
             return
-        from electroncash import transaction
         ok = txid is not None
         if not ok:
             txid, ok = QInputDialog.getText(parent, _('Lookup transaction'), _('Transaction ID') + ':')
@@ -3723,7 +3726,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if not ok:
                 parent.show_message(_("Error retrieving transaction") + ":\n" + r)
                 return
-            tx = transaction.Transaction(r, sign_schnorr=self.wallet.is_schnorr_enabled())  # note that presumably the tx is already signed if it comes from blockchain so this sign_schnorr parameter is superfluous, but here to satisfy my OCD -Calin
+            tx = Transaction(r, sign_schnorr=self.wallet.is_schnorr_enabled())  # note that presumably the tx is already signed if it comes from blockchain so this sign_schnorr parameter is superfluous, but here to satisfy my OCD -Calin
             self.show_transaction(tx, tx_desc=tx_desc)
 
     def export_bip38_dialog(self):
