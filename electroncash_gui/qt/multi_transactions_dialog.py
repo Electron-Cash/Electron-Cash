@@ -68,10 +68,11 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         is being made while transactions are still being built."""
         self.num_tx_label.setText(f"Number of transactions: <b>{num_tx}</b>")
 
-    def set_transactions(self, transactions: Sequence[Transaction], can_sign: bool):
+    def set_transactions(self, transactions: Sequence[Transaction]):
         """Enable buttons, compute and display some information about transactions."""
         self.transactions = transactions
 
+        can_sign = self.wallet.can_sign(transactions[0]) if transactions else False
         # Reset buttons when fresh unsigned transactions are set
         self.save_button.setText("Save")
         self.save_button.setEnabled(True)

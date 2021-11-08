@@ -3717,8 +3717,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return
 
         multi_tx_dialog = MultiTransactionsDialog(self.wallet, self, self)
-        multi_tx_dialog.widget.set_transactions(
-            transactions, self.wallet.can_sign(transactions[0]))
+        multi_tx_dialog.widget.set_transactions(transactions)
         multi_tx_dialog.exec_()
 
     def do_process_from_txid(self, *, txid=None, parent=None, tx_desc=None):

@@ -171,8 +171,7 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
 
     def on_build_transactions_finished(self, transactions: Sequence[Transaction]):
         self.transactions = transactions
-        can_sign = self.wallet.can_sign(self.transactions[0])
-        self.tx_page.set_unsigned_transactions(self.transactions, can_sign)
+        self.tx_page.set_unsigned_transactions(self.transactions)
 
 
 class CoinSelectionPage(QtWidgets.QWizardPage):
@@ -363,14 +362,12 @@ class TransactionsPage(QtWidgets.QWizardPage):
     def update_progress(self, num_tx: int):
         self.multi_tx_display.set_displayed_number_of_transactions(num_tx)
 
-    def set_unsigned_transactions(
-        self, transactions: Sequence[Transaction], can_sign: bool
-    ):
+    def set_unsigned_transactions(self, transactions: Sequence[Transaction]):
         self.unsetCursor()
         if not transactions:
             self.update_status(TransactionsStatus.NO_RESULT)
             return
-        self.multi_tx_display.set_transactions(transactions, can_sign)
+        self.multi_tx_display.set_transactions(transactions)
 
     def isComplete(self) -> bool:
         return self.status == TransactionsStatus.FINISHED
