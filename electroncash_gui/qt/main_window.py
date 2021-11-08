@@ -57,7 +57,7 @@ import electroncash.web as web
 from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct
 from electroncash import paymentrequest
-from electroncash.transaction import OPReturn
+from electroncash.transaction import OPReturn, SerializationError, tx_from_str
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
 from electroncash.contacts import Contact
 from electroncash import rpa
@@ -744,6 +744,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From &Text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
         raw_transaction_menu.addAction(_("From the &Blockchain") + "...", self.do_process_from_txid, QKeySequence("Ctrl+B"))
         raw_transaction_menu.addAction(_("From &QR Code") + "...", self.read_tx_from_qrcode)
+        raw_transaction_menu.addAction(_("From &Multiple files") + "...", self.do_process_from_multiple_files)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
         if ColorScheme.dark_scheme and sys.platform != 'darwin':  # use dark icon in menu except for on macOS where we can't be sure it will look right due to the way menus work on macOS
@@ -3581,8 +3582,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         parent = parent or self
         return PasswordDialog(parent, msg).run()
 
-    def tx_from_text(self, txt):
-        from electroncash.transaction import tx_from_str
+    def tx_from_text(self, txt) -> Optional[Transaction]:
         try:
             txt_tx = tx_from_str(txt)
             tx = Transaction(txt_tx, sign_schnorr=self.wallet.is_schnorr_enabled())
@@ -3656,13 +3656,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self._qr_dialog = None
             self.show_error(str(e))
 
-
-    def read_tx_from_file(self) -> Optional[Transaction]:
-        fileName = self.getOpenFileName(_("Select your transaction file"), "*.txn")
-        if not fileName:
-            return
+    def read_tx_from_file(self, filename: str) -> Optional[Transaction]:
         try:
-            with open(fileName, "r", encoding='utf-8') as f:
+            with open(filename, "r", encoding='utf-8') as f:
                 file_content = f.read()
             file_content = file_content.strip()
             tx_file_dict = json.loads(str(file_content))
@@ -3673,7 +3669,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return tx
 
     def do_process_from_text(self):
-        from electroncash.transaction import SerializationError
         text = text_dialog(self.top_level_window(), _('Input raw transaction'), _("Transaction:"), _("Load transaction"))
         if not text:
             return
@@ -3685,13 +3680,35 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
     def do_process_from_file(self):
-        from electroncash.transaction import SerializationError
+        fileName = self.getOpenFileName(_("Select your transaction file"), "*.txn")
+        if not fileName:
+            return
         try:
-            tx = self.read_tx_from_file()
+            tx = self.read_tx_from_file(fileName)
             if tx:
                 self.show_transaction(tx)
         except SerializationError as e:
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
+
+    def do_process_from_multiple_files(self):
+        filenames, _filter = QtWidgets.QFileDialog.getOpenFileNames(
+            self,
+            "Select one or more files to open",
+            self.config.get('io_dir', os.path.expanduser('~'))
+        )
+
+        transactions = []
+        for filename in filenames:
+            try:
+                tx = self.read_tx_from_file(filename)
+                if tx is not None:
+                    transactions.append(tx)
+            except SerializationError as e:
+                self.show_critical(
+                    f"{PROJECT_NAME} was unable to deserialize the"
+                    f" transaction in file {filename}:\n" + str(e)
+                )
+        # todo: load the transactions in a dialog for batch signing and broadcast
 
     def do_process_from_txid(self, *, txid=None, parent=None, tx_desc=None):
         parent = parent or self
