@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtWidgets
 
 from electroncash import Transaction
 from electroncash.wallet import Abstract_Wallet
@@ -128,14 +128,11 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
             f"Signed {len(self.transactions)} transactions. Remember to save them!",
         )
 
-        # Signing is done in a different thread, so delay the check for completeness
-        # until the signatures have been added to the transaction.
-        QtCore.QTimer.singleShot(
-            2000,
-            lambda: self.broadcast_button.setEnabled(
-                self.transactions[-1].is_complete()
-            ),
-        )
+        # FIXME: for now it is assumed that all loaded transactions have the same
+        #        status (signed or unsigned). Checking for completeness is currently
+        #        too slow to be done on many large transactions.
+        are_tx_complete = self.transactions[0].is_complete()
+        self.broadcast_button.setEnabled(are_tx_complete)
         self.save_button.setText("Save (signed)")
 
     def on_broadcast_clicked(self):
