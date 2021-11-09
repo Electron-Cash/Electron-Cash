@@ -25,6 +25,18 @@ transactions as expected.
 
 # Release notes
 
+## Release 5.0.3
+
+- Add a coin consolidation tool to reduce the number of UTXOs for a single address (#142).
+- Improve the support for Satochip hardware wallets (#143):
+  - use BIP39 seeds by default
+  - fix the message signature and verification tool to produce proper eCash signed message
+  - support label and card authenticity features
+- Allow encrypting watch-only wallets and hardware wallets (#150).
+- Add a tool to sign or broadcast multiple transactions from files (#152).
+- Use the "m/44'/1'/0'" BIP44 derivation path by default in testnet mode (#153).
+- Set up automatic code formatting and quality control tools (#141).
+
 
 ## Release 5.0.2
 
