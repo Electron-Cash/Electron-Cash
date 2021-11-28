@@ -4,7 +4,7 @@ from typing import Sequence
 
 from PyQt5 import QtGui, QtWidgets
 
-from electroncash import Transaction
+from electroncash import transaction
 from electroncash.bitcoin import sha256
 from electroncash.wallet import Abstract_Wallet
 unit = "BCH"
@@ -17,7 +17,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.setMinimumWidth(800)
         self.wallet: Abstract_Wallet = wallet
-        self.transactions: Sequence[Transaction] = []
+        self.transactions: Sequence[transaction.Transaction] = []
         self.main_window = main_window
 
         layout = QtWidgets.QVBoxLayout()
@@ -80,7 +80,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         is being made while transactions are still being built."""
         self.num_tx_label.setText(f"Number of transactions: <b>{num_tx}</b>")
 
-    def set_transactions(self, transactions: Sequence[Transaction]):
+    def set_transactions(self, transactions: Sequence[transaction.Transaction]):
         """Enable buttons, compute and display some information about transactions."""
         self.transactions_table.clear()
 
@@ -100,13 +100,26 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         sum_in_value, sum_out_value, sum_fees = 0, 0, 0
         self.transactions_table.setRowCount(len(transactions))
         self.transactions_table.setHorizontalHeaderLabels(self._horiz_header_labels)
+        has_missing_input_values = False
         for i, tx in enumerate(transactions):
-            in_value = tx.input_value()
             out_value = tx.output_value()
-            fee = in_value - out_value
-            sum_in_value += in_value
             sum_out_value += out_value
-            sum_fees += fee
+            try:
+                in_value = tx.input_value()
+            except transaction.InputValueMissing:
+                has_missing_input_values = True
+                fee_item = QtWidgets.QTableWidgetItem("N.A.")
+                fee_item.setToolTip(
+                    "Raw signed transactions don't specify input amounts"
+                )
+                # TODO: asynchronously fetch the input values from the network to
+                #       update the item and labels without slowing down the user
+            else:
+                fee = in_value - out_value
+                sum_in_value += in_value
+                sum_fees += fee
+                fee_item = QtWidgets.QTableWidgetItem(f"{fee / sats_per_unit:.2f}")
+
             self.transactions_table.setItem(
                 i, 0, QtWidgets.QTableWidgetItem(f"{len(tx.inputs())}")
             )
@@ -116,9 +129,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
             self.transactions_table.setItem(
                 i, 2, QtWidgets.QTableWidgetItem(f"{out_value / sats_per_unit:.2f}")
             )
-            self.transactions_table.setItem(
-                i, 3, QtWidgets.QTableWidgetItem(f"{fee / sats_per_unit:.2f}")
-            )
+            self.transactions_table.setItem(i, 3, fee_item)
 
             # Print the output addresses on colored background, with a color depending
             # on the hash of the output addresses. This helps with controlling that
@@ -131,13 +142,22 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
             color_item.setBackground(QtGui.QColor(h[0], h[1], h[2]))
             self.transactions_table.setItem(i, 4, color_item)
 
-        self.in_value_label.setText(
-            f"Total input value: <b>{sum_in_value / sats_per_unit} {unit}</b>"
-        )
         self.out_value_label.setText(
             f"Total output value: <b>{sum_out_value / sats_per_unit} {unit}</b>"
         )
-        self.fees_label.setText(f"Total fees: <b>{sum_fees / sats_per_unit} {unit}</b>")
+        if not has_missing_input_values:
+            self.in_value_label.setText(
+            f"Total input value: <b>{sum_in_value / sats_per_unit} {unit}</b>"
+            )
+            self.fees_label.setText(
+                f"Total fees: <b>{sum_fees / sats_per_unit} {unit}</b>"
+            )
+        else:
+            self.in_value_label.setText("Total input value: N.A")
+            self.fees_label.setText("Total fees: N.A")
+            tooltip = "Some transactions don't specify input amounts"
+            self.in_value_label.setToolTip(tooltip)
+            self.fees_label.setToolTip(tooltip)
 
     def on_save_clicked(self):
         dir = QtWidgets.QFileDialog.getExistingDirectory(
