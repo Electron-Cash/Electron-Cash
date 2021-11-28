@@ -13,7 +13,6 @@ from electroncash.consolidate import (
 from electroncash.transaction import Transaction
 from electroncash.wallet import Abstract_Wallet
 from electroncash_gui.qt.multi_transactions_dialog import MultiTransactionsWidget
-from electroncash_gui.qt.util import MessageBoxMixin
 
 unit = "BCH"
 sats_to_BCH_conv_factor = 100000000
@@ -103,7 +102,7 @@ class ConsolidateWorker(QtCore.QObject):
         self.finished.emit()
 
 
-class ConsolidateCoinsWizard(QtWidgets.QWizard, MessageBoxMixin):
+class ConsolidateCoinsWizard(QtWidgets.QWizard):
     def __init__(
         self,
         address: Address,
