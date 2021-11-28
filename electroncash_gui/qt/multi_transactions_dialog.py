@@ -92,7 +92,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         self.save_button.setText("Save")
         self.save_button.setEnabled(True)
         self.sign_button.setEnabled(can_sign)
-        self.broadcast_button.setEnabled(False)
+        self.broadcast_button.setEnabled(self.are_transactions_complete())
 
         self.num_tx_label.setText(f"Number of transactions: <b>{len(transactions)}</b>")
 
@@ -195,13 +195,16 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
             "Done signing",
             f"Signed {len(self.transactions)} transactions. Remember to save them!",
         )
+        self.broadcast_button.setEnabled(self.are_transactions_complete())
+        self.save_button.setText("Save (signed)")
 
+    def are_transactions_complete(self) -> bool:
+        if not self.transactions:
+            return False
         # FIXME: for now it is assumed that all loaded transactions have the same
         #        status (signed or unsigned). Checking for completeness is currently
         #        too slow to be done on many large transactions.
-        are_tx_complete = self.transactions[0].is_complete()
-        self.broadcast_button.setEnabled(are_tx_complete)
-        self.save_button.setText("Save (signed)")
+        return self.transactions[0].is_complete()
 
     def on_broadcast_clicked(self):
         self.main_window.push_top_level_window(self)
