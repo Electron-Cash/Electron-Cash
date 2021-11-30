@@ -206,17 +206,17 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.filter_by_min_value_cb.setChecked(False)
         min_value_sublayout.addWidget(self.filter_by_min_value_cb)
 
-        self.minimum_value_sb = QtWidgets.QDoubleSpinBox()
-        self.minimum_value_sb.setDecimals(8)
-        self.minimum_value_sb.setEnabled(False)
-        self.minimum_value_sb.setStepType(
+        self.minimum_amount_sb = QtWidgets.QDoubleSpinBox()
+        self.minimum_amount_sb.setEnabled(False)
+        self.minimum_amount_sb.setDecimals(8)
+        self.minimum_amount_sb.setStepType(
             QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
         )
-        self.minimum_value_sb.setMaximum(21_000_000)
-        self.minimum_value_sb.setValue(0.00000546)
-        self.minimum_value_sb.setToolTip(f"{unit}")
-        self.filter_by_min_value_cb.toggled.connect(self.minimum_value_sb.setEnabled)
-        min_value_sublayout.addWidget(self.minimum_value_sb)
+        self.minimum_amount_sb.setMaximum(21_000_000)
+        self.minimum_amount_sb.setValue(0.00000546)
+        self.minimum_amount_sb.setToolTip(f"{unit}")
+        self.filter_by_min_value_cb.toggled.connect(self.minimum_amount_sb.setEnabled)
+        min_value_sublayout.addWidget(self.minimum_amount_sb)
 
         max_value_sublayout = QtWidgets.QHBoxLayout()
         layout.addLayout(max_value_sublayout)
@@ -226,17 +226,18 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.filter_by_max_value_cb.setChecked(False)
         max_value_sublayout.addWidget(self.filter_by_max_value_cb)
 
-        self.maximum_value_sb = QtWidgets.QDoubleSpinBox()
-        self.maximum_value_sb.setDecimals(8)
-        self.maximum_value_sb.setEnabled(False)
-        self.maximum_value_sb.setStepType(
+        self.maximum_amount_sb = QtWidgets.QDoubleSpinBox()
+        self.maximum_amount_sb.setEnabled(False)
+        self.maximum_amount_sb.setDecimals(8)
+        self.maximum_amount_sb.setStepType(
             QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
         )
-        self.maximum_value_sb.setMaximum(21_000_000)
-        self.maximum_value_sb.setValue(21_000_000)
-        self.maximum_value_sb.setToolTip(f"{unit}")
-        self.filter_by_max_value_cb.toggled.connect(self.maximum_value_sb.setEnabled)
-        max_value_sublayout.addWidget(self.maximum_value_sb)
+        self.maximum_amount_sb.setMaximum(21_000_000)
+        self.maximum_amount_sb.setValue(21_000_000)
+        self.maximum_amount_sb.setToolTip(f"{unit}")
+        self.maximum_amount_sb.valueChanged.connect(self.on_maximum_amount_changed)
+        self.filter_by_max_value_cb.toggled.connect(self.maximum_amount_sb.setEnabled)
+        max_value_sublayout.addWidget(self.maximum_amount_sb)
 
     def warn_burn_tokens(self, include_slp_is_checked: bool):
         if include_slp_is_checked:
@@ -255,7 +256,7 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         return (
             None
             if not self.filter_by_min_value_cb.isChecked()
-            else int(sats_to_BCH_conv_factor * self.minimum_value_sb.value())
+            else int(sats_to_BCH_conv_factor * self.minimum_amount_sb.value())
         )
 
     def get_maximum_value(self) -> Optional[int]:
@@ -263,8 +264,11 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         return (
             None
             if not self.filter_by_max_value_cb.isChecked()
-            else int(sats_to_BCH_conv_factor * self.maximum_value_sb.value())
+            else int(sats_to_BCH_conv_factor * self.maximum_amount_sb.value())
         )
+
+    def on_maximum_amount_changed(self, max_amount: float):
+        self.minimum_amount_sb.setMaximum(max_amount)
 
 
 class OutputsPage(QtWidgets.QWizardPage):
