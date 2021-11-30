@@ -227,26 +227,28 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
 
         self.minimum_amount_sb = AmountSpinBox()
         self.minimum_amount_sb.setValue(0.00000546)
+        self.minimum_amount_sb.valueChanged.connect(self.on_min_or_max_amount_changed)
         self.filter_by_min_value_cb = self.add_filter_by_value_line(
             "Minimum amount (XEC)", self.minimum_amount_sb
         )
 
         self.maximum_amount_sb = AmountSpinBox()
         self.maximum_amount_sb.setValue(21_000_000)
-        self.maximum_amount_sb.valueChanged.connect(self.on_maximum_amount_changed)
+        self.maximum_amount_sb.valueChanged.connect(self.on_min_or_max_amount_changed)
         self.filter_by_max_value_cb = self.add_filter_by_value_line(
             "Maximum amount (XEC)", self.maximum_amount_sb
         )
 
         self.minimum_height_sb = BlockHeightSpinBox()
         self.minimum_height_sb.setValue(0)
+        self.minimum_height_sb.valueChanged.connect(self.on_min_or_max_height_changed)
         self.filter_by_min_height_cb = self.add_filter_by_value_line(
             "Minimum block height", self.minimum_height_sb
         )
 
         self.maximum_height_sb = BlockHeightSpinBox()
         self.maximum_height_sb.setValue(1_000_000)
-        self.maximum_height_sb.valueChanged.connect(self.on_maximum_height_changed)
+        self.maximum_height_sb.valueChanged.connect(self.on_min_or_max_height_changed)
         self.filter_by_max_height_cb = self.add_filter_by_value_line(
             "Maximum block height", self.maximum_height_sb
         )
@@ -297,11 +299,23 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
             else int(sats_to_BCH_conv_factor * self.maximum_amount_sb.value())
         )
 
-    def on_maximum_amount_changed(self, max_amount: float):
-        self.minimum_amount_sb.setMaximum(max_amount)
+    def on_min_or_max_amount_changed(self, *args):
+        """Warn if the min-max range is empty"""
+        if self.minimum_amount_sb.value() > self.maximum_amount_sb.value():
+            self.minimum_amount_sb.setStyleSheet("color: red;")
+            self.maximum_amount_sb.setStyleSheet("color: red;")
+        else:
+            self.minimum_amount_sb.setStyleSheet("")
+            self.maximum_amount_sb.setStyleSheet("")
 
-    def on_maximum_height_changed(self, max_height: int):
-        self.minimum_height_sb.setValue(max_height)
+    def on_min_or_max_height_changed(self, *args):
+        """Warn if the min-max range is empty"""
+        if self.minimum_height_sb.value() > self.maximum_height_sb.value():
+            self.minimum_height_sb.setStyleSheet("color: red;")
+            self.maximum_height_sb.setStyleSheet("color: red;")
+        else:
+            self.minimum_height_sb.setStyleSheet("")
+            self.maximum_height_sb.setStyleSheet("")
 
 
 class OutputsPage(QtWidgets.QWizardPage):
