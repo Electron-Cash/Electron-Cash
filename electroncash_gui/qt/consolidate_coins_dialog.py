@@ -209,8 +209,11 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.minimum_value_sb = QtWidgets.QDoubleSpinBox()
         self.minimum_value_sb.setDecimals(8)
         self.minimum_value_sb.setEnabled(False)
-        self.minimum_value_sb.setSingleStep(0.000001)
-        self.minimum_value_sb.setValue(0)
+        self.minimum_value_sb.setStepType(
+            QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
+        )
+        self.minimum_value_sb.setMaximum(21_000_000)
+        self.minimum_value_sb.setValue(0.00000546)
         self.minimum_value_sb.setToolTip(f"{unit}")
         self.filter_by_min_value_cb.toggled.connect(self.minimum_value_sb.setEnabled)
         min_value_sublayout.addWidget(self.minimum_value_sb)
@@ -226,7 +229,9 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.maximum_value_sb = QtWidgets.QDoubleSpinBox()
         self.maximum_value_sb.setDecimals(8)
         self.maximum_value_sb.setEnabled(False)
-        self.maximum_value_sb.setSingleStep(0.000001)
+        self.maximum_value_sb.setStepType(
+            QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
+        )
         self.maximum_value_sb.setMaximum(21_000_000)
         self.maximum_value_sb.setValue(21_000_000)
         self.maximum_value_sb.setToolTip(f"{unit}")
