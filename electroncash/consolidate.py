@@ -58,6 +58,8 @@ class AddressConsolidator:
         include_slp: bool = False,
         min_value_sats: Optional[int] = None,
         max_value_sats: Optional[int] = None,
+        min_height: Optional[int] = None,
+        max_height: Optional[int] = None,
         output_address: Optional[Address] = None,
         max_tx_size: Optional[int] = MAX_STANDARD_TX_SIZE,
     ):
@@ -76,6 +78,8 @@ class AddressConsolidator:
                 and (include_frozen or not utxo["is_frozen_coin"])
                 and (min_value_sats is None or utxo["value"] >= min_value_sats)
                 and (max_value_sats is None or utxo["value"] <= max_value_sats)
+                and (min_height is None or utxo["height"] >= min_height)
+                and (max_height is None or utxo["height"] <= max_height)
             )
         ]
         self.wallet = wallet_instance

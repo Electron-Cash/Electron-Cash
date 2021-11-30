@@ -45,6 +45,8 @@ class ConsolidateWorker(QtCore.QObject):
         include_slp: bool,
         minimum_value: Optional[int],
         maximum_value: Optional[int],
+        minimum_height: Optional[int],
+        maximum_height: Optional[int],
         output_address: Address,
         max_tx_size: int,
     ):
@@ -59,6 +61,8 @@ class ConsolidateWorker(QtCore.QObject):
             include_slp,
             minimum_value,
             maximum_value,
+            minimum_height,
+            maximum_height,
             output_address,
             max_tx_size,
         )
@@ -150,6 +154,8 @@ class ConsolidateCoinsWizard(QtWidgets.QWizard):
                 self.coins_page.include_slp_cb.isChecked(),
                 self.coins_page.get_minimum_value(),
                 self.coins_page.get_maximum_value(),
+                self.coins_page.minimum_height_sb.value(),
+                self.coins_page.maximum_height_sb.value(),
                 self.output_page.get_output_address(),
                 self.output_page.tx_size_sb.value(),
             )
@@ -185,6 +191,15 @@ class AmountSpinBox(QtWidgets.QDoubleSpinBox):
         self.setMinimumWidth(170)
 
 
+class BlockHeightSpinBox(QtWidgets.QSpinBox):
+    def __init__(self):
+        super().__init__()
+        self.setToolTip("Block height")
+        # This maximum should give us a useful range of ~20,000 years
+        self.setMaximum(1_000_000_000)
+        self.setGroupSeparatorShown(True)
+
+
 class CoinSelectionPage(QtWidgets.QWizardPage):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -213,16 +228,27 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.minimum_amount_sb = AmountSpinBox()
         self.minimum_amount_sb.setValue(0.00000546)
         self.filter_by_min_value_cb = self.add_filter_by_value_line(
-            "Define a minimum value for coins to select",
-            self.minimum_amount_sb,
+            "Minimum amount (XEC)", self.minimum_amount_sb
         )
 
         self.maximum_amount_sb = AmountSpinBox()
         self.maximum_amount_sb.setValue(21_000_000)
         self.maximum_amount_sb.valueChanged.connect(self.on_maximum_amount_changed)
         self.filter_by_max_value_cb = self.add_filter_by_value_line(
-            "Define a maximum value for coins to select",
-            self.maximum_amount_sb,
+            "Maximum amount (XEC)", self.maximum_amount_sb
+        )
+
+        self.minimum_height_sb = BlockHeightSpinBox()
+        self.minimum_height_sb.setValue(0)
+        self.filter_by_min_height_cb = self.add_filter_by_value_line(
+            "Minimum block height", self.minimum_height_sb
+        )
+
+        self.maximum_height_sb = BlockHeightSpinBox()
+        self.maximum_height_sb.setValue(1_000_000)
+        self.maximum_height_sb.valueChanged.connect(self.on_maximum_height_changed)
+        self.filter_by_max_height_cb = self.add_filter_by_value_line(
+            "Maximum block height", self.maximum_height_sb
         )
 
     def add_filter_by_value_line(
@@ -273,6 +299,9 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
 
     def on_maximum_amount_changed(self, max_amount: float):
         self.minimum_amount_sb.setMaximum(max_amount)
+
+    def on_maximum_height_changed(self, max_height: int):
+        self.minimum_height_sb.setValue(max_height)
 
 
 class OutputsPage(QtWidgets.QWizardPage):

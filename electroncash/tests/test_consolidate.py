@@ -25,7 +25,7 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                         "address": TEST_ADDRESS,
                         "prevout_n": i,
                         "prevout_hash": "a" * 64,
-                        "height": 1,
+                        "height": 700_000 + i,
                         "value": 1000 + i,
                         "coinbase": is_coinbase,
                         "is_frozen_coin": is_frozen_coin,
@@ -33,7 +33,6 @@ class TestConsolidateCoinSelection(unittest.TestCase):
                         "type": "p2pkh",
                     }
                     i += 1  # noqa: SIM113
-                #                     tx_hash, block_height
                 tx_history.append(("a" * 64, 1))
 
         self.mock_wallet = Mock()
@@ -126,6 +125,70 @@ class TestConsolidateCoinSelection(unittest.TestCase):
             self.assertGreaterEqual(coin["value"], 1003)
             self.assertLessEqual(coin["value"], 1005)
         self.assertEqual(len(consolidator._coins), 3)
+
+        # test minimum and maximum height
+        consolidator = consolidate.AddressConsolidator(
+            TEST_ADDRESS,
+            self.mock_wallet,
+            True,
+            True,
+            True,
+            True,
+            min_height=None,
+            max_height=700_005,
+        )
+        for coin in consolidator._coins:
+            self.assertLessEqual(coin["height"], 700_005)
+        self.assertEqual(len(consolidator._coins), 6)
+
+        consolidator = consolidate.AddressConsolidator(
+            TEST_ADDRESS,
+            self.mock_wallet,
+            True,
+            True,
+            True,
+            True,
+            min_height=700_003,
+            max_height=None,
+        )
+        for coin in consolidator._coins:
+            self.assertGreaterEqual(coin["height"], 700_003)
+        self.assertEqual(len(consolidator._coins), 5)
+
+        consolidator = consolidate.AddressConsolidator(
+            TEST_ADDRESS,
+            self.mock_wallet,
+            True,
+            True,
+            True,
+            True,
+            min_height=700_003,
+            max_height=700_005,
+        )
+        for coin in consolidator._coins:
+            self.assertGreaterEqual(coin["height"], 700_003)
+            self.assertLessEqual(coin["height"], 700_005)
+        self.assertEqual(len(consolidator._coins), 3)
+
+        # Filter both on height and value
+        consolidator = consolidate.AddressConsolidator(
+            TEST_ADDRESS,
+            self.mock_wallet,
+            True,
+            True,
+            True,
+            True,
+            min_value_sats=1004,
+            max_value_sats=1006,
+            min_height=700_003,
+            max_height=700_005,
+        )
+        for coin in consolidator._coins:
+            self.assertGreaterEqual(coin["value"], 1003)
+            self.assertLessEqual(coin["value"], 1006)
+            self.assertGreaterEqual(coin["height"], 700_003)
+            self.assertLessEqual(coin["height"], 700_005)
+        self.assertEqual(len(consolidator._coins), 2)
 
     def test_get_unsigned_transactions(self):
         n_coins = 8
