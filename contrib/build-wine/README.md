@@ -14,9 +14,8 @@ repository)::
 Where BRANCH_OR_TAG above is a git branch or tag you wish to build.
 
 Note: If on a Linux host, the above script may ask you for your password as
-docker requires commands be run via sudo.  Make sure you are in the /etc/sudoers
-file.  On a macOS host, this is not the case and docker can be run as a normal
-user.
+docker requires commands be run as either `root` or a user in the `docker` group.
+Make sure you are in the `docker` group (edit `/etc/groups`, log out, log back in).
+On a macOS host, this is not the case and docker can be run as a normal user.
 
 The built .exe files will be placed in: `dist/`
-

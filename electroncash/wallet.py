@@ -44,7 +44,7 @@ from typing import Set, Tuple, Union
 
 from .i18n import ngettext
 from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time,
-                   finalization_print_error, to_string)
+                   finalization_print_error, to_string, TimeoutException)
 
 from .address import Address, Script, ScriptOutput, PublicKey, OpCodes
 from .bitcoin import *
@@ -67,7 +67,7 @@ from .blockchain import NULL_HASH_HEX
 
 
 from . import paymentrequest
-from .paymentrequest import InvoiceStore, PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
+from .paymentrequest import InvoiceStore, PR_PAID, PR_UNCONFIRMED, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .contacts import Contacts
 from . import cashacct
 from . import slp
@@ -663,6 +663,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             height, conf, timestamp = self.get_tx_height(tx_hash)
             self.cashacct.add_verified_tx_hook(tx_hash, info, header)
         self.network.trigger_callback('verified2', self, tx_hash, height, conf, timestamp)
+        self._update_request_statuses_touched_by_tx(tx_hash)
 
     def verification_failed(self, tx_hash, reason):
         ''' TODO: Notify gui of this if it keeps happening, try a different
@@ -695,6 +696,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if txs: self.cashacct.undo_verifications_hook(txs)
         if txs:
             self._addr_bal_cache = {}  # this is probably not necessary -- as the receive_history_callback will invalidate bad cache items -- but just to be paranoid we clear the whole balance cache on reorg anyway as a safety measure
+        for tx_hash in txs:
+            self._update_request_statuses_touched_by_tx(tx_hash)    
         return txs
 
     def get_local_height(self):
@@ -1459,6 +1462,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def receive_tx_callback(self, tx_hash, tx, tx_height):
         self.add_transaction(tx_hash, tx)
         self.add_unverified_tx(tx_hash, tx_height)
+        self._update_request_statuses_touched_by_tx(tx_hash)
+
+    def _update_request_statuses_touched_by_tx(self, tx_hash):
+        tx = self.transactions.get(tx_hash)
+        if tx is None:
+            return
         if self.network and self.network.callback_listener_count("payment_received") > 0:
             for _, addr, _ in tx.outputs():
                 status = self.get_request_status(addr)  # returns PR_UNKNOWN quickly if addr has no requests, otherwise returns tuple
@@ -1901,6 +1910,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # Fee estimator
         if fixed_fee is None:
             fee_estimator = config.estimate_fee
+        elif callable(fixed_fee):
+            fee_estimator = fixed_fee
         else:
             fee_estimator = lambda size: fixed_fee
 
@@ -1976,7 +1987,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         sats_per_byte=fee_in_satoshis/tx_in_bytes
         if (sats_per_byte > 50):
             raise ExcessiveFee()
-            return
 
         # Sort the inputs and outputs deterministically
         tx.BIP_LI01_sort()
@@ -2167,7 +2177,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # a network call and it will eventually exit.
             t.join(timeout=3.0)
 
-    def wait_until_synchronized(self, callback=None):
+    def wait_until_synchronized(self, callback=None, *, timeout=None):
+        tstart = time.time()
+        def check_timed_out():
+            if timeout is not None and time.time() - tstart > timeout:
+                raise TimeoutException()
         def wait_for_wallet():
             self.set_up_to_date(False)
             while not self.is_up_to_date():
@@ -2178,12 +2192,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         len(self.addresses(True)))
                     callback(msg)
                 time.sleep(0.1)
+                check_timed_out()
         def wait_for_network():
             while not self.network.is_connected():
                 if callback:
                     msg = "%s \n" % (_("Connecting..."))
                     callback(msg)
                 time.sleep(0.1)
+                check_timed_out()
         # wait until we are connected, because the user
         # might have selected another server
         if self.network:
@@ -2215,27 +2231,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if age > age_limit:
                 break # ok, it's old. not need to keep looping
         return age > age_limit
-
-    def cpfp(self, tx, fee, sign_schnorr=None):
-        ''' sign_schnorr is a bool or None for auto '''
-        sign_schnorr = self.is_schnorr_enabled() if sign_schnorr is None else bool(sign_schnorr)
-        txid = tx.txid()
-        for i, o in enumerate(tx.outputs()):
-            otype, address, value = o
-            if otype == TYPE_ADDRESS and self.is_mine(address):
-                break
-        else:
-            return
-        coins = self.get_addr_utxo(address)
-        item = coins.get(txid+':%d'%i)
-        if not item:
-            return
-        self.add_input_info(item)
-        inputs = [item]
-        outputs = [(TYPE_ADDRESS, address, value - fee)]
-        locktime = self.get_local_height()
-        # note: no need to call tx.BIP_LI01_sort() here - single input/output
-        return Transaction.from_io(inputs, outputs, locktime=locktime, sign_schnorr=sign_schnorr)
 
     def add_input_info(self, txin):
         address = txin['address']
@@ -2366,7 +2361,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             info = self.verified_tx.get(txid)
             if info:
                 tx_height, timestamp, pos = info
-                conf = local_height - tx_height
+                conf = max(local_height - tx_height + 1, 0)
             else:
                 conf = 0
             l.append((conf, v))
@@ -2438,7 +2433,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         conf = None
         if amount:
             paid, conf = self.get_payment_status(address, amount)
-            status = PR_PAID if paid else PR_UNPAID
+            if not paid:
+                status = PR_UNPAID
+            elif conf == 0:
+                status = PR_UNCONFIRMED
+            else:
+                status = PR_PAID
             if status == PR_UNPAID and expiration is not None and time.time() > timestamp + expiration:
                 status = PR_EXPIRED
         else:

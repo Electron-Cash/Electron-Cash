@@ -23,13 +23,13 @@
 
 # Many of the functions in this file are copied from ElectrumX
 
-from collections import namedtuple
 import hashlib
 import struct
+from collections import namedtuple
+from typing import Union
 
 from . import cashaddr, networks
-from enum import IntEnum
-from .bitcoin import EC_KEY, is_minikey, minikey_to_private_key, SCRIPT_TYPES
+from .bitcoin import EC_KEY, is_minikey, minikey_to_private_key, SCRIPT_TYPES, OpCodes, push_script_bytes
 from .util import cachedproperty, inv_dict
 
 _sha256 = hashlib.sha256
@@ -42,150 +42,6 @@ class AddressError(Exception):
 
 class ScriptError(Exception):
     '''Exception used for Script errors.'''
-
-
-# Derived from Bitcoin-ABC script.h
-class OpCodes(IntEnum):
-    # push value
-    OP_0 = 0x00
-    OP_FALSE = OP_0
-    OP_PUSHDATA1 = 0x4c
-    OP_PUSHDATA2 = 0x4d
-    OP_PUSHDATA4 = 0x4e
-    OP_1NEGATE = 0x4f
-    OP_RESERVED = 0x50
-    OP_1 = 0x51
-    OP_TRUE = OP_1
-    OP_2 = 0x52
-    OP_3 = 0x53
-    OP_4 = 0x54
-    OP_5 = 0x55
-    OP_6 = 0x56
-    OP_7 = 0x57
-    OP_8 = 0x58
-    OP_9 = 0x59
-    OP_10 = 0x5a
-    OP_11 = 0x5b
-    OP_12 = 0x5c
-    OP_13 = 0x5d
-    OP_14 = 0x5e
-    OP_15 = 0x5f
-    OP_16 = 0x60
-
-    # control
-    OP_NOP = 0x61
-    OP_VER = 0x62
-    OP_IF = 0x63
-    OP_NOTIF = 0x64
-    OP_VERIF = 0x65
-    OP_VERNOTIF = 0x66
-    OP_ELSE = 0x67
-    OP_ENDIF = 0x68
-    OP_VERIFY = 0x69
-    OP_RETURN = 0x6a
-
-    # stack ops
-    OP_TOALTSTACK = 0x6b
-    OP_FROMALTSTACK = 0x6c
-    OP_2DROP = 0x6d
-    OP_2DUP = 0x6e
-    OP_3DUP = 0x6f
-    OP_2OVER = 0x70
-    OP_2ROT = 0x71
-    OP_2SWAP = 0x72
-    OP_IFDUP = 0x73
-    OP_DEPTH = 0x74
-    OP_DROP = 0x75
-    OP_DUP = 0x76
-    OP_NIP = 0x77
-    OP_OVER = 0x78
-    OP_PICK = 0x79
-    OP_ROLL = 0x7a
-    OP_ROT = 0x7b
-    OP_SWAP = 0x7c
-    OP_TUCK = 0x7d
-
-    # splice ops
-    OP_CAT = 0x7e
-    OP_SPLIT = 0x7f   # after monolith upgrade (May 2018)
-    OP_NUM2BIN = 0x80 # after monolith upgrade (May 2018)
-    OP_BIN2NUM = 0x81 # after monolith upgrade (May 2018)
-    OP_SIZE = 0x82
-
-    # bit logic
-    OP_INVERT = 0x83
-    OP_AND = 0x84
-    OP_OR = 0x85
-    OP_XOR = 0x86
-    OP_EQUAL = 0x87
-    OP_EQUALVERIFY = 0x88
-    OP_RESERVED1 = 0x89
-    OP_RESERVED2 = 0x8a
-
-    # numeric
-    OP_1ADD = 0x8b
-    OP_1SUB = 0x8c
-    OP_2MUL = 0x8d
-    OP_2DIV = 0x8e
-    OP_NEGATE = 0x8f
-    OP_ABS = 0x90
-    OP_NOT = 0x91
-    OP_0NOTEQUAL = 0x92
-
-    OP_ADD = 0x93
-    OP_SUB = 0x94
-    OP_MUL = 0x95
-    OP_DIV = 0x96
-    OP_MOD = 0x97
-    OP_LSHIFT = 0x98
-    OP_RSHIFT = 0x99
-
-    OP_BOOLAND = 0x9a
-    OP_BOOLOR = 0x9b
-    OP_NUMEQUAL = 0x9c
-    OP_NUMEQUALVERIFY = 0x9d
-    OP_NUMNOTEQUAL = 0x9e
-    OP_LESSTHAN = 0x9f
-    OP_GREATERTHAN = 0xa0
-    OP_LESSTHANOREQUAL = 0xa1
-    OP_GREATERTHANOREQUAL = 0xa2
-    OP_MIN = 0xa3
-    OP_MAX = 0xa4
-
-    OP_WITHIN = 0xa5
-
-    # crypto
-    OP_RIPEMD160 = 0xa6
-    OP_SHA1 = 0xa7
-    OP_SHA256 = 0xa8
-    OP_HASH160 = 0xa9
-    OP_HASH256 = 0xaa
-    OP_CODESEPARATOR = 0xab
-    OP_CHECKSIG = 0xac
-    OP_CHECKSIGVERIFY = 0xad
-    OP_CHECKMULTISIG = 0xae
-    OP_CHECKMULTISIGVERIFY = 0xaf
-
-    # expansion
-    OP_NOP1 = 0xb0
-    OP_CHECKLOCKTIMEVERIFY = 0xb1
-    OP_NOP2 = OP_CHECKLOCKTIMEVERIFY
-    OP_CHECKSEQUENCEVERIFY = 0xb2
-    OP_NOP3 = OP_CHECKSEQUENCEVERIFY
-    OP_NOP4 = 0xb3
-    OP_NOP5 = 0xb4
-    OP_NOP6 = 0xb5
-    OP_NOP7 = 0xb6
-    OP_NOP8 = 0xb7
-    OP_NOP9 = 0xb8
-    OP_NOP10 = 0xb9
-
-    # More crypto
-    OP_CHECKDATASIG = 0xba
-    OP_CHECKDATASIGVERIFY = 0xbb
-
-    # additional byte string operations
-    OP_REVERSEBYTES = 0xbc
 
 
 P2PKH_prefix = bytes([OpCodes.OP_DUP, OpCodes.OP_HASH160, 20])
@@ -422,7 +278,7 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
                     friendlystring = data.hex()
 
                 parts.append(lookup(op) + " " + friendlystring)
-            else: # isinstance(op, int):
+            else:  # isinstance(op, int):
                 parts.append(lookup(op))
         return ', '.join(parts)
 
@@ -764,26 +620,17 @@ class Script:
             PublicKey.validate(pubkey)   # Can be compressed or not
         # See https://bitcoin.org/en/developer-guide
         # 2 of 3 is: OP_2 pubkey1 pubkey2 pubkey3 OP_3 OP_CHECKMULTISIG
-        return (bytes([OpCodes.OP_1 + m - 1])
+        return (cls.push_data(bytes([m]))
                 + b''.join(cls.push_data(pubkey) for pubkey in pubkeys)
-                + bytes([OpCodes.OP_1 + n - 1, OpCodes.OP_CHECKMULTISIG]))
+                + cls.push_data(bytes([n])) + bytes([OpCodes.OP_CHECKMULTISIG]))
 
     @classmethod
-    def push_data(cls, data):
-        '''Returns the OpCodes to push the data on the stack.'''
-        assert isinstance(data, (bytes, bytearray))
-
-        n = len(data)
-        if n < OpCodes.OP_PUSHDATA1:
-            return bytes([n]) + data
-        if n < 256:
-            return bytes([OpCodes.OP_PUSHDATA1, n]) + data
-        if n < 65536:
-            return bytes([OpCodes.OP_PUSHDATA2]) + struct.pack('<H', n) + data
-        return bytes([OpCodes.OP_PUSHDATA4]) + struct.pack('<I', n) + data
+    def push_data(cls, data: Union[bytes, bytearray], *, minimal=True) -> bytes:
+        """Returns the OpCodes to push the data on the stack, plus the payload."""
+        return push_script_bytes(data, minimal=minimal)
 
     @classmethod
-    def get_ops(cls, script):
+    def get_ops(cls, script, *, synthesize_minimal_data=True):
         ops = []
 
         # The unpacks or script[n] below throw on truncated scripts
@@ -805,7 +652,7 @@ class Script:
                         # Two-byte length, then data
                         dlen, = struct.unpack('<H', script[n: n + 2])
                         n += 2
-                    else: # op == OpCodes.OP_PUSHDATA4
+                    else:  # op == OpCodes.OP_PUSHDATA4
                         # Four-byte length, then data
                         dlen, = struct.unpack('<I', script[n: n + 4])
                         n += 4
@@ -813,6 +660,14 @@ class Script:
                         raise IndexError
                     data = script[n:n + dlen]
                     n += dlen
+                elif synthesize_minimal_data and OpCodes.OP_1 <= op <= OpCodes.OP_16:
+                    # BIP62: 1-byte pushes containing just 0x1 to 0x10 are encoded as single op-codes
+                    # We synthesize the data that was originally pushed.
+                    data = bytes([1 + (op - OpCodes.OP_1)])
+                elif synthesize_minimal_data and op == OpCodes.OP_1NEGATE:
+                    # BIP62: 1-byte pushes containing just 0x81 are encoded as single op-codes
+                    # We synthesize the data that was originally pushed.
+                    data = bytes([0x81])
                 else:
                     data = None
 

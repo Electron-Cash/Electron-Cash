@@ -11,21 +11,19 @@ folder.
 1. Install Docker  (Ubuntu instructions -- other platforms vary)
 
     ```
-    $ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-    $ sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    $ sudo apt-get update
-    $ sudo apt-get install -y docker-ce
+    $ sudo apt update
+    $ sudo apt install -y docker.io
     ```
 
-2. Build binary
+2. Make sure your current user account is in the `docker` group (edit `/etc/groups`, log out, log back in).
+
+3. Build binary
 
     ```
-    $ sudo contrib/build-linux/appimage/build.sh REVISION_TAG_OR_BRANCH_OR_COMMIT_TAG
+    $ contrib/build-linux/appimage/build.sh REVISION_TAG_OR_BRANCH_OR_COMMIT_TAG
     ```
 
-    _Note:_ If you are using a MacOS host, run the above **without** `sudo`.
-
-3. The generated .AppImage binary is in `./dist`.
+4. The generated .AppImage binary is in `./dist`.
 
 
 ## FAQ

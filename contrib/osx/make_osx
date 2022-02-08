@@ -129,16 +129,18 @@ PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install -s $PYTHON_VERSION && \
 
 # We use a hashed requirements file for even the build tools to prevent
 # dependency attacks even in the build process
-info "Installing dmgbuild, requests, and other build tools we need..."
+info "Installing pip, dmgbuild, requests, and other build tools we need..."
 # Ensure we have wheel because otherwise we get warnings about not having it (even though below installs it again)
 python3 -m pip install --user --upgrade wheel || fail "Failed to install wheel"
+python3 -m pip install -I --user -r contrib/deterministic-build/requirements-pip.txt \
+    || fail "Could not install pip"
 python3 -m pip install -I --user -r contrib/osx/requirements-osx-build.txt \
-    || fail "Could not install osx-requirements"
+    || fail "Could not install osx build requirements"
 
 
 info "Installing PyInstaller"
-# Just use regular, latest PyInstaller 4.2+ from pypi
-python3 -m pip install pyinstaller --user --upgrade && pyenv rehash || fail "Could not install PyInstaller"
+# Just use regular, latest PyInstaller 4.2+ from pypi (note that 4.4 seems to crash always!)
+python3 -m pip install 'pyinstaller<4.4' --user --upgrade && pyenv rehash || fail "Could not install PyInstaller"
 
 info "Using these versions for building $PACKAGE:"  # NB: PACKAGE var comes from ../base.sh
 sw_vers
@@ -226,8 +228,13 @@ plutil -insert 'NSCameraUsageDescription' \
 	-- dist/$PACKAGE.app/Contents/Info.plist \
 	|| fail "Could not add keys to Info.plist. Make sure the program 'plutil' exists and is installed."
 
+plutil -insert 'LSMinimumSystemVersion' \
+       -string '10.14.0' \
+	-- dist/$PACKAGE.app/Contents/Info.plist \
+	|| fail "Could not add keys to Info.plist. Make sure the program 'plutil' exists and is installed."
 
-FORCE_MOJAVE_DARK=0  # Set to 1 to try and add the Info.plist key to force mojave dark mode supprt. As of PyQt 5.14.1, it doesn't work.
+FORCE_MOJAVE_DARK=1  # Set to 1 to try and add the Info.plist key to force mojave dark mode support.
+                     # On PyQt 5.14.1, it doesn't work, but on 5.15.2 it does.
 if ((DARWIN_VER >= 18 && FORCE_MOJAVE_DARK)); then
     # Add a key to Info.plist key to support Mojave dark mode
     info "Adding Mojave dark mode support to Info.plist"

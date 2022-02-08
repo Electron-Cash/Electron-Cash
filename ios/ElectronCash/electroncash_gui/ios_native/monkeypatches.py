@@ -12,11 +12,14 @@
     Monkey Patches -- mostly to modify electroncash.* package to suit our needs.
     Don't hate me.  (This was needed to keep the iOS stuff self-contained.)
 '''
+import ssl
+import sys
 from .uikit_bindings import *
 from electroncash.util import (InvalidPassword, profiler)
 import electroncash.bitcoin as ec_bitcoin
+from electroncash.simple_config import SimpleConfig
 from electroncash_gui.ios_native.utils import NSLog
-import sys, ssl
+
 
 class MonkeyPatches:
 
@@ -156,3 +159,14 @@ class MonkeyPatches:
             data2 = olddec(key,iv,cypher)
             print("data=",data,"data2=",data2,'cypher=',cypher)
         '''
+
+
+class PatchedSimpleConfig(SimpleConfig):
+    """ We restore the "max_fee_rate" method to its original in this patched version, to allow the prefs
+    "Max Static Fee" widget to actually do something. """
+
+    def max_fee_rate(self):
+        f = self.get('max_fee_rate', ec_bitcoin.MAX_FEE_RATE)
+        if f == 0:
+            f = ec_bitcoin.MAX_FEE_RATE
+        return f

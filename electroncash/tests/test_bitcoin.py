@@ -8,11 +8,11 @@ from ..bitcoin import (
     generator_secp256k1, point_to_ser, public_key_to_p2pkh, EC_KEY, bip32_root,
     bip32_public_derivation, bip32_private_derivation, pw_encode, pw_decode,
     Hash, public_key_from_private_key, address_from_private_key, is_private_key,
-    xpub_from_xprv, var_int, op_push, regenerate_key, verify_message,
+    xpub_from_xprv, var_int, op_push, push_script, regenerate_key, verify_message,
     deserialize_privkey, serialize_privkey, is_minikey, is_compressed, is_xpub,
-    xpub_type, is_xprv, is_bip32_derivation, Bip38Key)
+    xpub_type, is_xprv, is_bip32_derivation, Bip38Key, OpCodes)
 from ..networks import set_mainnet, set_testnet
-from ..util import bfh
+from ..util import bfh, bh2u
 
 try:
     import ecdsa
@@ -154,7 +154,7 @@ class Test_bitcoin(unittest.TestCase):
 
     def test_var_int(self):
         for i in range(0xfd):
-            self.assertEqual(var_int(i), "{:02x}".format(i) )
+            self.assertEqual(var_int(i), "{:02x}".format(i))
 
         self.assertEqual(var_int(0xfd), "fdfd00")
         self.assertEqual(var_int(0xfe), "fdfe00")
@@ -173,13 +173,44 @@ class Test_bitcoin(unittest.TestCase):
         self.assertEqual(op_push(0x4b), '4b')
         self.assertEqual(op_push(0x4c), '4c4c')
         self.assertEqual(op_push(0xfe), '4cfe')
-        self.assertEqual(op_push(0xff), '4dff00')
+        self.assertEqual(op_push(0xff), '4cff')
         self.assertEqual(op_push(0x100), '4d0001')
         self.assertEqual(op_push(0x1234), '4d3412')
         self.assertEqual(op_push(0xfffe), '4dfeff')
-        self.assertEqual(op_push(0xffff), '4effff0000')
+        self.assertEqual(op_push(0xffff), '4dffff')
         self.assertEqual(op_push(0x10000), '4e00000100')
         self.assertEqual(op_push(0x12345678), '4e78563412')
+
+    def test_push_script(self):
+        # https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#push-operators
+        self.assertEqual(push_script(''), bh2u(bytes([OpCodes.OP_0])))
+        self.assertEqual(push_script('07'), bh2u(bytes([OpCodes.OP_7])))
+        self.assertEqual(push_script('10'), bh2u(bytes([OpCodes.OP_16])))
+        self.assertEqual(push_script('81'), bh2u(bytes([OpCodes.OP_1NEGATE])))
+        self.assertEqual(push_script('11'), '0111')
+        self.assertEqual(push_script(75 * '42'), '4b' + 75 * '42')
+        self.assertEqual(push_script(76 * '42'), bh2u(bytes([OpCodes.OP_PUSHDATA1]) + bfh('4c' + 76 * '42')))
+        self.assertEqual(push_script(100 * '42'), bh2u(bytes([OpCodes.OP_PUSHDATA1]) + bfh('64' + 100 * '42')))
+        self.assertEqual(push_script(255 * '42'), bh2u(bytes([OpCodes.OP_PUSHDATA1]) + bfh('ff' + 255 * '42')))
+        self.assertEqual(push_script(256 * '42'), bh2u(bytes([OpCodes.OP_PUSHDATA2]) + bfh('0001' + 256 * '42')))
+        self.assertEqual(push_script(520 * '42'), bh2u(bytes([OpCodes.OP_PUSHDATA2]) + bfh('0802' + 520 * '42')))
+        # We also optionally support pushing non-minimally (for OP_RETURN "scripts")
+        self.assertEqual(push_script('', minimal=False), bh2u(bytes([OpCodes.OP_0])))
+        self.assertEqual(push_script('07', minimal=False), '0107')
+        self.assertEqual(push_script('10', minimal=False), '0110')
+        self.assertEqual(push_script('81', minimal=False), '0181')
+        self.assertEqual(push_script('11', minimal=False), '0111')
+        self.assertEqual(push_script(75 * '42', minimal=False), '4b' + 75 * '42')
+        self.assertEqual(push_script(76 * '42', minimal=False),
+                         bh2u(bytes([OpCodes.OP_PUSHDATA1]) + bfh('4c' + 76 * '42')))
+        self.assertEqual(push_script(100 * '42', minimal=False),
+                         bh2u(bytes([OpCodes.OP_PUSHDATA1]) + bfh('64' + 100 * '42')))
+        self.assertEqual(push_script(255 * '42', minimal=False),
+                         bh2u(bytes([OpCodes.OP_PUSHDATA1]) + bfh('ff' + 255 * '42')))
+        self.assertEqual(push_script(256 * '42', minimal=False),
+                         bh2u(bytes([OpCodes.OP_PUSHDATA2]) + bfh('0001' + 256 * '42')))
+        self.assertEqual(push_script(520 * '42', minimal=False),
+                         bh2u(bytes([OpCodes.OP_PUSHDATA2]) + bfh('0802' + 520 * '42')))
 
 
 class Test_bitcoin_testnet(unittest.TestCase):

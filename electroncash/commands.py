@@ -44,7 +44,8 @@ from .plugins import run_hook
 from .wallet import create_new_wallet, restore_wallet_from_text
 from .transaction import Transaction, multisig_script, OPReturn
 from .util import bfh, bh2u, format_satoshis, json_decode, print_error, to_bytes
-from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
+from .paymentrequest import PR_PAID, PR_UNCONFIRMED, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
+from .simple_config import SimpleConfig
 
 known_commands = {}
 
@@ -509,8 +510,10 @@ class Commands:
         message = util.to_bytes(message)
         return bitcoin.verify_message(address, sig, message)
 
-    def _mktx(self, outputs, fee=None, change_addr=None, domain=None, nocheck=False,
+    def _mktx(self, outputs, fee=None, feerate=None, change_addr=None, domain=None, nocheck=False,
               unsigned=False, password=None, locktime=None, op_return=None, op_return_raw=None, addtransaction=False):
+        if fee is not None and feerate is not None:
+            raise ValueError("Cannot specify both 'fee' and 'feerate' at the same time!")
         if op_return and op_return_raw:
             raise ValueError('Both op_return and op_return_raw cannot be specified together!')
         self.nocheck = nocheck
@@ -534,7 +537,12 @@ class Commands:
             final_outputs.append((TYPE_ADDRESS, address, amount))
 
         coins = self.wallet.get_spendable_coins(domain, self.config)
-        tx = self.wallet.make_unsigned_transaction(coins, final_outputs, self.config, fee, change_addr)
+        if feerate is not None:
+            fee_per_kb = 1000 * PyDecimal(feerate)
+            fee_estimator = lambda size: SimpleConfig.estimate_fee_for_feerate(fee_per_kb, size)
+        else:
+            fee_estimator = fee
+        tx = self.wallet.make_unsigned_transaction(coins, final_outputs, self.config, fee_estimator, change_addr)
         if locktime != None:
             tx.locktime = locktime
         if not unsigned:
@@ -547,20 +555,20 @@ class Commands:
         return tx
 
     @command('wp')
-    def payto(self, destination, amount, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
+    def payto(self, destination, amount, fee=None, feerate=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
               op_return=None, op_return_raw=None, addtransaction=False):
         """Create a transaction. """
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
-        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, unsigned, password, locktime, op_return, op_return_raw, addtransaction=addtransaction)
+        tx = self._mktx([(destination, amount)], tx_fee, feerate, change_addr, domain, nocheck, unsigned, password, locktime, op_return, op_return_raw, addtransaction=addtransaction)
         return tx.as_dict()
 
     @command('wp')
-    def paytomany(self, outputs, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None, addtransaction=False):
+    def paytomany(self, outputs, fee=None, feerate=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None, addtransaction=False):
         """Create a multi-output transaction. """
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
-        tx = self._mktx(outputs, tx_fee, change_addr, domain, nocheck, unsigned, password, locktime, addtransaction=addtransaction)
+        tx = self._mktx(outputs, tx_fee, feerate, change_addr, domain, nocheck, unsigned, password, locktime, addtransaction=addtransaction)
         return tx.as_dict()
 
     @command('w')
@@ -702,6 +710,7 @@ class Commands:
             PR_UNPAID: 'Pending',
             PR_PAID: 'Paid',
             PR_EXPIRED: 'Expired',
+            PR_UNCONFIRMED: 'Unconfirmed'
         }
         out['address'] = out.get('address').to_ui_string()
         out['amount (BCH)'] = format_satoshis(out.get('amount'))
@@ -857,7 +866,8 @@ command_options = {
     'entropy':     (None, "Custom entropy"),
     'expiration':  (None, "Time in seconds"),
     'expired':     (None, "Show only expired requests."),
-    'fee':         ("-f", "Transaction fee (in BCH)"),
+    'fee':         ("-f", "Transaction fee (absolute, in BCH)"),
+    'feerate':     (None, "Transaction fee rate (in sat/byte)"),
     'force':       (None, "Create new address beyond gap limit, if no more addresses are available."),
     'from_addr':   ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
     'frozen':      (None, "Show only frozen addresses"),
@@ -989,10 +999,10 @@ def add_global_options(parser):
     group.add_argument("-P", "--portable", action="store_true", dest="portable", default=False, help="Use local 'electron_cash_data' directory")
     group.add_argument("-w", "--wallet", dest="wallet_path", help="wallet path")
     group.add_argument("-wp", "--walletpassword", dest="wallet_password", default=None, help="Supply wallet password")
+    group.add_argument("--forgetconfig", action="store_true", dest="forget_config", default=False, help="Forget config on exit")
     group.add_argument("--testnet", action="store_true", dest="testnet", default=False, help="Use Testnet")
     group.add_argument("--testnet4", action="store_true", dest="testnet4", default=False, help="Use Testnet4")
     group.add_argument("--scalenet", action="store_true", dest="scalenet", default=False, help="Use Scalenet")
-    group.add_argument("--taxcoin", action="store_true", dest="taxcoin", default=False, help="Use TaxCoin (ABC)")
 
 def get_parser():
     # create main parser

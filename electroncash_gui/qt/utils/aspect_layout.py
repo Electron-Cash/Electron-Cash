@@ -70,8 +70,8 @@ class FixedAspectRatioLayout(QLayout):
             c_aratio = 1
         s_aratio = self.aspect_ratio
         item_rect = QRect(QPoint(0, 0), QSize(
-            contents.width() if c_aratio < s_aratio else contents.height() * s_aratio,
-            contents.height() if c_aratio > s_aratio else contents.width() / s_aratio
+            contents.width() if c_aratio < s_aratio else int(contents.height() * s_aratio),
+            contents.height() if c_aratio > s_aratio else int(contents.width() / s_aratio)
         ))
 
         content_margins = self.contentsMargins()
@@ -82,7 +82,7 @@ class FixedAspectRatioLayout(QLayout):
                 if item.alignment() & Qt.AlignRight:
                     item_rect.moveRight(contents.width() + content_margins.right())
                 else:
-                    item_rect.moveLeft(content_margins.left() + (free_space.width() / 2))
+                    item_rect.moveLeft(content_margins.left() + (free_space.width() // 2))
             else:
                 item_rect.moveLeft(content_margins.left())
 
@@ -90,7 +90,7 @@ class FixedAspectRatioLayout(QLayout):
                 if item.alignment() & Qt.AlignBottom:
                     item_rect.moveBottom(contents.height() + content_margins.bottom())
                 else:
-                    item_rect.moveTop(content_margins.top() + (free_space.height() / 2))
+                    item_rect.moveTop(content_margins.top() + (free_space.height() // 2))
             else:
                 item_rect.moveTop(content_margins.top())
 

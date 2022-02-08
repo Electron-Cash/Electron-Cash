@@ -16,6 +16,9 @@ with open('contrib/requirements/requirements.txt') as f:
 with open('contrib/requirements/requirements-hw.txt') as f:
     requirements_hw = f.read().splitlines()
 
+with open('contrib/requirements/requirements-binaries.txt') as f:
+    requirements_binaries = f.read().splitlines()
+
 version = imp.load_source('version', 'electroncash/version.py')
 
 if sys.version_info[:3] < (3, 6):
@@ -55,7 +58,7 @@ if platform.system() in ['Linux', 'FreeBSD', 'DragonFly']:
         # Menu icon
         (os.path.join(share_dir, 'icons/hicolor/256x256/apps/'),   ['icons/electron-cash.png']),
         (os.path.join(share_dir, 'pixmaps/'),                      ['icons/electron-cash.png']),
-        (os.path.join(share_dir, 'icons/hicolor/scaleable/apps.'), ['icons/electron-cash.svg']),
+        (os.path.join(share_dir, 'icons/hicolor/scaleable/apps/'), ['icons/electron-cash.svg']),
         # Menu entry
         (os.path.join(share_dir, 'applications/'), ['electron-cash.desktop']),
         # App stream (store) metadata
@@ -120,9 +123,7 @@ class MakeAllBeforeSdist(setuptools.command.sdist.sdist):
 
 
 platform_package_data = {
-    'electroncash_gui.qt': [
-        'data/ard_mone.mp3'
-    ],
+    'electroncash_gui.qt': [],
 }
 
 if sys.platform in ('linux'):
@@ -145,8 +146,8 @@ setup(
     install_requires=requirements,
     extras_require={
         'hardware': requirements_hw,
-        'gui': ['pyqt5'],
-        'all': requirements_hw + ['pyqt5']
+        'gui': requirements_binaries,
+        'all': requirements_hw + requirements_binaries
     },
     packages=[
         'electroncash',
@@ -180,7 +181,6 @@ setup(
             'servers_testnet.json',
             'servers_testnet4.json',
             'servers_scalenet.json',
-            'servers_taxcoin.json',
             'currencies.json',
             'www/index.html',
             'wordlist/*.txt',

@@ -268,8 +268,10 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 # 5 second cooldown period on broadcast_button after successful
                 # broadcast
                 self.last_broadcast_time = time.time()
-                self.update()  # disables the broadcast button if last_broadcast_time is < BROADCAST_COOLDOWN_SECS seconds ago
-                QTimer.singleShot(self.BROADCAST_COOLDOWN_SECS*1e3+100, self.update)  # broadcast button will re-enable if we got nothing from server and >= BROADCAST_COOLDOWN_SECS elapsed
+                # disables the broadcast button if last_broadcast_time is < BROADCAST_COOLDOWN_SECS seconds ago
+                self.update()
+                # broadcast button will re-enable if we got nothing from server and >= BROADCAST_COOLDOWN_SECS elapsed
+                QTimer.singleShot(int(self.BROADCAST_COOLDOWN_SECS * 1e3 + 100), self.update)
         self.main_window.push_top_level_window(self)
         try:
             self.main_window.broadcast_transaction(self.tx, self.desc, callback=broadcast_done)
@@ -427,7 +429,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             # Set the proper text (plural / singular form)
             self.freeze_button.setText(self._make_freeze_button_text(op, len(spends_coins_mine)))
             # Freeze/Unfreeze enabled only for signed transactions or transactions with frozen coins
-            self.freeze_button.setEnabled(has_frozen or status_enum in (StatusEnum.Signed, StatusEnum.PartiallySigned))
+            self.freeze_button.setEnabled(
+                bool(has_frozen or status_enum in (StatusEnum.Signed, StatusEnum.PartiallySigned)))
         else:
             self.freeze_button.setEnabled(False)
             self.freeze_button.setText(self._make_freeze_button_text())
@@ -441,12 +444,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         #    the "Broadcast" button for a time after a successful broadcast.
         #    This prevents the user from being able to spam the broadcast
         #    button. See #1483.
-        self.broadcast_button.setEnabled(can_broadcast
-                                         and time.time() - self.last_broadcast_time
-                                                >= self.BROADCAST_COOLDOWN_SECS)
+        self.broadcast_button.setEnabled(
+            bool(can_broadcast and time.time() - self.last_broadcast_time >= self.BROADCAST_COOLDOWN_SECS))
 
-        can_sign = not self.tx.is_complete() and \
-            (self.wallet.can_sign(self.tx) or bool(self.main_window.tx_external_keypairs))
+        can_sign = bool(not self.tx.is_complete() and
+                        (self.wallet.can_sign(self.tx) or bool(self.main_window.tx_external_keypairs)))
         self.sign_button.setEnabled(can_sign)
         self.tx_hash_e.setText(tx_hash or _('Unknown'))
         if fee is None:

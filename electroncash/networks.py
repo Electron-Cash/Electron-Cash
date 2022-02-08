@@ -73,8 +73,8 @@ class MainNet(AbstractNet):
     #    network.synchronous_get(("blockchain.block.header", [height, height]))
     #
     # Consult the ElectrumX documentation for more details.
-    VERIFICATION_BLOCK_MERKLE_ROOT = "68077352cf309072547164625deb11e92bd379e759e87f3f9ac6e61d1532c536"
-    VERIFICATION_BLOCK_HEIGHT = 661942
+    VERIFICATION_BLOCK_MERKLE_ROOT = "60b3f9f9e439fd5f6c95ae380b91a480359657afd9206a9274f66fd42845273b"
+    VERIFICATION_BLOCK_HEIGHT = 717171
     asert_daa = ASERTDaa(is_testnet=False)
     # Note: We *must* specify the anchor if the checkpoint is after the anchor, due to the way
     # blockchain.py skips headers after the checkpoint.  So all instances that have a checkpoint
@@ -115,8 +115,8 @@ class TestNet(AbstractNet):
     BITCOIN_CASH_FORK_BLOCK_HEIGHT = 1155876
     BITCOIN_CASH_FORK_BLOCK_HASH = "00000000000e38fef93ed9582a7df43815d5c2ba9fd37ef70c9a0ea4a285b8f5"
 
-    VERIFICATION_BLOCK_MERKLE_ROOT = "d97d670815829fddcf728fa2d29665de53e83609fd471b0716a49cde383fb888"
-    VERIFICATION_BLOCK_HEIGHT = 1421482
+    VERIFICATION_BLOCK_MERKLE_ROOT = "7551842b70e20582390f5693ffce71df5509f5a3f6e32ac0f91123231dbcf97a"
+    VERIFICATION_BLOCK_HEIGHT = 1476226
     asert_daa = ASERTDaa(is_testnet=True)
     asert_daa.anchor = Anchor(height=1421481, bits=486604799, prev_time=1605445400)
 
@@ -146,11 +146,10 @@ class TestNet4(TestNet):
     # Nov 13. 2017 HF to CW144 DAA height (height of last block mined on old DAA)
     CW144_HEIGHT = 3000
 
-    VERIFICATION_BLOCK_MERKLE_ROOT = "9ca8933d4aa7b85093e3ec317e40bdfeda3e2b793fcd7907b38580fa193d9c77"
-    VERIFICATION_BLOCK_HEIGHT = 16845
+    VERIFICATION_BLOCK_MERKLE_ROOT = "e4cd956daecf2a1d2894954bb479f09e6d2d488e470ed59e1af6a329170597d6"
+    VERIFICATION_BLOCK_HEIGHT = 68611
     asert_daa = ASERTDaa(is_testnet=True)  # Redeclare to get instance for this subclass
     asert_daa.anchor = Anchor(height=16844, bits=486604799, prev_time=1605451779)
-
 
 
 class ScaleNet(TestNet):
@@ -175,58 +174,6 @@ class ScaleNet(TestNet):
     VERIFICATION_BLOCK_HEIGHT = 2016
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
-
-
-
-class TaxCoinNet(AbstractNet):
-    """ This is for supporting ABC tax coin. Use CLI arg --taxcoin to see this network.
-    Users using this network cannot see BCH and vice-versa, due to the checkpoint block.
-    If one wants to see both chains one can run 2 clients since they will use different data
-    directories. """
-    TESTNET = False
-    WIF_PREFIX = 0x80
-    ADDRTYPE_P2PKH = 0
-    ADDRTYPE_P2PKH_BITPAY = 28
-    ADDRTYPE_P2SH = 5
-    ADDRTYPE_P2SH_BITPAY = 40
-    CASHADDR_PREFIX = "bitcoincash"
-    HEADERS_URL = "http://bitcoincash.com/files/blockchain_headers"  # Unused
-    GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
-    DEFAULT_PORTS = {'t': '50001', 's': '50002'}
-    DEFAULT_SERVERS = _read_json_dict('servers_taxcoin.json')  # DO NOT MODIFY IN CLIENT CODE
-    TITLE = "Electron Tax - 'Ard Moné Edition"
-    BASE_UNITS = {'TAX': 8, 'mTAX': 5, 'sechets': 2}
-    DEFAULT_UNIT = "TAX"
-
-    # Bitcoin Cash fork block specification
-    BITCOIN_CASH_FORK_BLOCK_HEIGHT = 478559
-    BITCOIN_CASH_FORK_BLOCK_HASH = "000000000000000000651ef99cb9fcbe0dadde1d424bd9f15ff20136191a5eec"
-
-    # Nov 13. 2017 HF to CW144 DAA height (height of last block mined on old DAA)
-    CW144_HEIGHT = 504031
-
-    # Note: this is not the Merkle root of the verification block itself , but a Merkle root of
-    # all blockchain headers up until and including this block. To get this value you need to
-    # connect to an ElectrumX server you trust and issue it a protocol command. This can be
-    # done in the console as follows:
-    #
-    #    network.synchronous_get(("blockchain.block.header", [height, height]))
-    #
-    # Consult the ElectrumX documentation for more details.
-    VERIFICATION_BLOCK_MERKLE_ROOT = "d0d925862df595918416020caf5467b7ae67ae8f807daf60626c36755b62f9a2"
-    VERIFICATION_BLOCK_HEIGHT = 661648  # ABC fork block
-    asert_daa = ASERTDaa(is_testnet=False)
-    asert_daa.anchor = Anchor(height=661647, bits=402971390, prev_time=1605447844)
-
-    # Version numbers for BIP32 extended keys
-    # standard: xprv, xpub
-    XPRV_HEADERS = {
-        'standard': 0x0488ade4,
-    }
-
-    XPUB_HEADERS = {
-        'standard': 0x0488b21e,
-    }
 
 
 # All new code should access this to get the current network config.
@@ -261,12 +208,6 @@ def set_testnet4():
 def set_scalenet():
     global net
     net = ScaleNet
-    _set_units()
-
-
-def set_taxcoin():
-    global net
-    net = TaxCoinNet
     _set_units()
 
 

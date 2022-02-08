@@ -5,6 +5,7 @@ import platform
 import queue
 import threading
 import os
+import weakref
 import webbrowser
 from collections import namedtuple
 from functools import partial, wraps
@@ -27,12 +28,13 @@ else:
 
 dialogs = []
 
-from electroncash.paymentrequest import PR_UNPAID, PR_PAID, PR_EXPIRED
+from electroncash.paymentrequest import PR_UNCONFIRMED, PR_UNPAID, PR_PAID, PR_EXPIRED
 
 pr_icons = {
     PR_UNPAID:":icons/unpaid.svg",
     PR_PAID:":icons/confirmed.svg",
-    PR_EXPIRED:":icons/expired.svg"
+    PR_EXPIRED:":icons/expired.svg",
+    PR_UNCONFIRMED: ":icons/unconfirmed.svg"
 }
 
 def _(message): return message
@@ -522,16 +524,19 @@ def filename_field(config, defaultname, select_msg):
     gb.setLayout(vbox)
     b1 = QRadioButton()
     b1.setText(_("CSV"))
-    b1.setChecked(True)
     b2 = QRadioButton()
     b2.setText(_("JSON"))
+    if defaultname.endswith(".json"):
+        b2.setChecked(True)
+    else:
+        b1.setChecked(True)
     vbox.addWidget(b1)
     vbox.addWidget(b2)
 
     hbox = QHBoxLayout()
 
     directory = config.get('io_dir', os.path.expanduser('~'))
-    path = os.path.join( directory, defaultname )
+    path = os.path.join(directory, defaultname)
     filename_e = QLineEdit()
     filename_e.setText(path)
 
@@ -660,7 +665,7 @@ class MyTreeWidget(QTreeWidget):
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
     def keyPressEvent(self, event):
-        if event.key() in [ Qt.Key_F2, Qt.Key_Return ] and self.editor is None:
+        if event.key() in {Qt.Key_F2, Qt.Key_Return} and self.editor is None:
             item, col = self.currentItem(), self.currentColumn()
             if item and col > -1:
                 self.on_activated(item, col)
@@ -867,7 +872,7 @@ class OverlayControlMixin:
         if hasattr(self, 'verticalScrollBar') and self.verticalScrollBar().isVisible():
             scrollbar_width = self.style().pixelMetric(QStyle.PM_ScrollBarExtent)
             x -= scrollbar_width
-        self.overlay_widget.move(x, y)
+        self.overlay_widget.move(int(x), int(y))
 
     def addWidget(self, widget: QWidget, index: int = None):
         if index is not None:
@@ -1152,7 +1157,7 @@ class RateLimiter(PrintError):
                 self.timer.timeout.connect(self._doIt)
                 #self.timer.destroyed.connect(lambda x=None,qn=self.qn: print(qn,"Timer deallocated"))
                 self.timer.setSingleShot(True)
-                self.timer.start(diff*1e3)
+                self.timer.start(int(diff*1e3))
                 #self.print_error("deferring")
         else:
             # We had a timer active, which means as future call will occur. So return early and let that call happenin the future.
@@ -1332,6 +1337,7 @@ def webopen(url: str):
     else:
         webbrowser.open(url)
 
+
 class TextBrowserKeyboardFocusFilter(QTextBrowser):
     """
     This is a QTextBrowser that only enables keyboard text selection when the focus reason is
@@ -1353,6 +1359,29 @@ class TextBrowserKeyboardFocusFilter(QTextBrowser):
     def keyPressEvent(self, e: QKeyEvent):
         self.setTextInteractionFlags(self.textInteractionFlags() | Qt.TextSelectableByKeyboard)
         super().keyPressEvent(e)
+
+
+class OnDestroyedMixin:
+    """A mixin class designed to be used with any QObject. It will call the on_destroyed method (which can be
+    overridden), and it offers the property is_destroyed.  Used in network_dialog.py. """
+    def __init__(self):
+        assert isinstance(self, QObject)
+        self.is_destroyed = False
+        weak_self = weakref.ref(self)
+
+        def handler(obj):
+            strong_self = weak_self()
+            if strong_self:
+                strong_self.on_destroyed(obj)
+
+        self.destroyed.connect(lambda obj: handler(obj))
+
+    def on_destroyed(self, obj):
+        if self.is_destroyed:
+            return
+        self.is_destroyed = True
+        print_error(f"OnDestroyedMixin, object destroyed: {self!r}")
+
 
 if __name__ == "__main__":
     app = QApplication([])

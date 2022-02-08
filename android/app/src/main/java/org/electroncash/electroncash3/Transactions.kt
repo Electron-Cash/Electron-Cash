@@ -64,7 +64,7 @@ class TransactionModel(wallet: PyObject, val txHistory: PyObject) : ListItemMode
         val confirmations = get("conf")!!.toInt()
         when {
             confirmations <= 0 -> app.getString(R.string.Unconfirmed)
-            else -> app.resources.getQuantityString(R.plurals.confirmation,
+            else -> app.resources.getQuantityString(R.plurals.conf_confirmation,
                                                     confirmations, confirmations)
         }
     }
@@ -113,7 +113,7 @@ class TransactionDialog : DetailDialog() {
         } else {
             val feeSpb = (fee.toDouble() / size.toDouble()).roundToInt()
             tvFee.text = String.format("%s (%s)",
-                                       getString(R.string.sat_byte, feeSpb),
+                                       getString(R.string.sats_per, feeSpb),
                                        ltr(formatSatoshisAndUnit(fee)))
         }
     }

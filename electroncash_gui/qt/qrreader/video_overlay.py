@@ -66,7 +66,7 @@ class QrReaderVideoOverlay(QWidget):
         self.bg_rect_pen = QPen()
         self.bg_rect_pen.setColor(Qt.black)
         self.bg_rect_pen.setStyle(Qt.DotLine)
-        self.bg_rect_fill = QColor(255, 255, 255, 255 * self.BG_RECT_OPACITY)
+        self.bg_rect_fill = QColor(255, 255, 255, int(255 * self.BG_RECT_OPACITY))
 
         self.qr_finder = QSvgRenderer(":icons/qr_finder.svg")
 
@@ -99,12 +99,12 @@ class QrReaderVideoOverlay(QWidget):
         # Compute the transform to flip the coordinate system on the x axis
         transform_flip = QTransform()
         if self.flip_x:
-            transform_flip = transform_flip.translate(self.resolution.width(), 0.0)
+            transform_flip = transform_flip.translate(float(self.resolution.width()), 0.0)
             transform_flip = transform_flip.scale(-1.0, 1.0)
 
         # Small helper for tuple to QPoint
         def toqp(point):
-            return QPoint(point[0], point[1])
+            return QPoint(int(point[0]), int(point[1]))
 
         # Starting from here we care about AA
         painter.setRenderHint(QPainter.Antialiasing)

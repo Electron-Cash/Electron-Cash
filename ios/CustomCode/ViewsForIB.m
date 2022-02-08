@@ -24,6 +24,35 @@ static void applyWorkaround(UIViewController *vc) {
         vc.modalPresentationStyle = UIModalPresentationFullScreen;
         NSLog(@"iOS 13+ workaround: forcing presentation style to fullscreen for %@", [vc description]);
     }
+    // Another workaround for iOS 15+ breaking stuff. :(
+    // Ugh. see: https://developer.apple.com/forums/thread/682420
+    if (@available(iOS 15, *)) {
+        if ([vc isKindOfClass:[UINavigationController class]]) {
+            UINavigationController *nav = (UINavigationController *)vc;
+            UINavigationBar *bar = nav.navigationBar;
+            if (bar) {
+                UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
+                [appearance configureWithOpaqueBackground];
+                // HACK!!
+                if (CustomNavController.topNavBGColor) {
+                    appearance.backgroundColor = CustomNavController.topNavBGColor;
+                }
+                if (CustomNavController.topNavTextColor) {
+                    NSMutableDictionary *dict = nil;
+                    if (appearance.titleTextAttributes)
+                        dict = [NSMutableDictionary dictionaryWithDictionary:appearance.titleTextAttributes];
+                    else
+                        dict = [NSMutableDictionary new];
+                    [dict setValue:[CustomNavController.topNavTextColor copy] forKey:NSForegroundColorAttributeName];
+                    appearance.titleTextAttributes = dict;
+                }
+                bar.standardAppearance = appearance;
+                bar.scrollEdgeAppearance = bar.standardAppearance;
+                NSLog(@"iOS 15+ workaround: applying navBar standardAppearance workaround for %@",
+                      [vc description]);
+            }
+        }
+    }
 }
 
 @implementation CustomViewController
@@ -82,6 +111,14 @@ static void applyWorkaround(UIViewController *vc) {
     applyWorkaround(viewControllerToPresent);
     [super presentViewController:viewControllerToPresent animated:flag completion:completion];
 }
+// Class properties
+static UIColor *s_topNavBGColor = nil;
++ (void) setTopNavBGColor:(UIColor *)c { s_topNavBGColor = [c copy]; }
++ (UIColor *) topNavBGColor { return s_topNavBGColor; }
+
+static UIColor *s_topNavTextColor = nil;
++ (void) setTopNavTextColor:(UIColor *)c { s_topNavTextColor = [c copy]; }
++ (UIColor *) topNavTextColor { return s_topNavTextColor; }
 @end
 
 @implementation AddrConvBase

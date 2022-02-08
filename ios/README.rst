@@ -22,7 +22,7 @@ Quick Start Instructions
            python3 -m pip install 'cookiecutter==1.6.0' --user --upgrade
            python3 -m pip install 'briefcase==0.2.6' --user --upgrade
            python3 -m pip install 'pbxproj==2.5.1' --user --upgrade
-           pyrhon3 -m pip install 'rubicon-objc==0.2.10' --user --upgrade
+           python3 -m pip install 'rubicon-objc==0.2.10' --user --upgrade
 
            (NOTE: The exact versions specified above are known to work, but you may also try and use newer version as well.)
 
@@ -62,4 +62,4 @@ If you want to run the app to point to the BCH TestNet network:
 
 Additional Notes
 ----------------
-The app built by this Xcode project is a fully running standalone Electron Cash as an iPhone app.  It pulls in sources from ../lib and other places when generating the Xcode project, but everything that is needed (.py files, Python interpreter, etc) ends up packaged in the generated iOS .app!
+The app built by this Xcode project is a fully running standalone Electron Cash as an iPhone app.  It pulls in sources from `../electroncash` and other places when generating the Xcode project, but everything that is needed (.py files, Python interpreter, etc) ends up packaged in the generated iOS .app!

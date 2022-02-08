@@ -58,8 +58,8 @@ class QRCodeWidget(QWidget, util.PrintError):
 
     _black_brush = QBrush(QColor(0, 0, 0, 255))
     _white_brush = QBrush(QColor(255, 255, 255, 255))
-    _black_pen = QPen(_black_brush, 1.0, join = Qt.MiterJoin)
-    _white_pen = QPen(_white_brush, 1.0, join = Qt.MiterJoin)
+    _black_pen = QPen(_black_brush, 1.0, join=Qt.MiterJoin)
+    _white_pen = QPen(_white_brush, 1.0, join=Qt.MiterJoin)
 
     def paintEvent(self, e):
         matrix = None
@@ -80,15 +80,15 @@ class QRCodeWidget(QWidget, util.PrintError):
 
         margin = 5
         framesize = min(r.width(), r.height())
-        boxsize = int( (framesize - 2*margin)/k )
-        size = k*boxsize
-        left = (r.width() - size)/2
-        top = (r.height() - size)/2
+        boxsize = (framesize - 2 * margin) // k
+        size = k * boxsize
+        left = (r.width() - size) // 2
+        top = (r.height() - size) // 2
 
         # Make a white margin around the QR in case of dark theme use
         qp.setBrush(self._white_brush)
         qp.setPen(self._white_pen)
-        qp.drawRect(left-margin, top-margin, size+(margin*2), size+(margin*2))
+        qp.drawRect(left-margin, top-margin, size + (margin * 2), size + (margin * 2))
         qp.setBrush(self._black_brush)
         qp.setPen(self._black_pen)
 

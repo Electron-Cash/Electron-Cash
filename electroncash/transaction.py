@@ -176,11 +176,14 @@ def short_hex(bytes):
 
 def match_decoded(decoded, to_match):
     if len(decoded) != len(to_match):
-        return False;
+        return False
     for i in range(len(decoded)):
-        if to_match[i] == opcodes.OP_PUSHDATA4 and decoded[i][0] <= opcodes.OP_PUSHDATA4 and decoded[i][0]>0:
-            continue  # Opcodes below OP_PUSHDATA4 all just push data onto stack, and are equivalent.
-        if to_match[i] != decoded[i][0]:
+        op = decoded[i][0]
+        if to_match[i] == opcodes.OP_PUSHDATA4 and op <= opcodes.OP_PUSHDATA4 and op > 0:
+            # Opcodes below OP_PUSHDATA4 just push data onto stack, and are equivalent.
+            # Note we explicitly don't match OP_0, OP_1 through OP_16 and OP1_NEGATE here
+            continue
+        if to_match[i] != op:
             return False
     return True
 
@@ -358,19 +361,14 @@ def deserialize(raw):
 
 
 # pay & redeem scripts
-
-
-
 def multisig_script(public_keys, m):
     n = len(public_keys)
     assert n <= 15
     assert m <= n
-    op_m = format(opcodes.OP_1 + m - 1, 'x')
-    op_n = format(opcodes.OP_1 + n - 1, 'x')
-    keylist = [op_push(len(k)//2) + k for k in public_keys]
-    return op_m + ''.join(keylist) + op_n + 'ae'
-
-
+    op_m = push_script_bytes(bytes([m])).hex()
+    op_n = push_script_bytes(bytes([n])).hex()
+    keylist = [push_script(k) for k in public_keys]
+    return op_m + ''.join(keylist) + op_n + bytes([opcodes.OP_CHECKMULTISIG]).hex()
 
 
 class Transaction:
@@ -416,6 +414,12 @@ class Transaction:
         # Values in this dict are advisory only and may or may not always be
         # there!
         self.ephemeral = dict()
+
+    def is_memory_compact(self):
+        """Returns True if the tx is stored in memory only as self.raw (serialized) and has no deserialized data
+        structures currently in memory. """
+        return (self.raw is not None
+                and self._inputs is None and self._outputs is None and self.locktime == 0 and self.version == 1)
 
     def set_sign_schnorr(self, b):
         self._sign_schnorr = b

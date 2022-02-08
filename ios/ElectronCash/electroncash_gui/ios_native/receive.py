@@ -12,7 +12,7 @@ from electroncash import WalletStorage, Wallet
 from electroncash.util import timestamp_to_datetime, format_time
 from electroncash.i18n import _, language
 from electroncash.address import Address, ScriptOutput
-from electroncash.paymentrequest import PR_UNPAID, PR_EXPIRED, PR_UNKNOWN, PR_PAID
+from electroncash.paymentrequest import PR_UNCONFIRMED, PR_UNPAID, PR_EXPIRED, PR_UNKNOWN, PR_PAID
 from electroncash import bitcoin
 import electroncash.web as web
 import sys, traceback, time
@@ -25,13 +25,15 @@ from collections import namedtuple
 pr_icons = {
     PR_UNPAID:"unpaid.png",
     PR_PAID:"confirmed.png",
-    PR_EXPIRED:"expired.png"
+    PR_EXPIRED:"expired.png",
+    PR_UNCONFIRMED:"unconfirmed.png",
 }
 
 pr_tooltips = {
     PR_UNPAID:'Pending',
     PR_PAID:'Paid',
-    PR_EXPIRED:'Expired'
+    PR_EXPIRED:'Expired',
+    PR_UNCONFIRMED:'Unconfirmed',
 }
 
 ReqItem = namedtuple("ReqItem", "dateStr addrStr signedBy message amountStr statusStr addr iconSign iconStatus fiatStr timestamp expiration expirationStr amount fiat")

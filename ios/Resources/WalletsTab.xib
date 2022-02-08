@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="14313.18" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
-    <device id="retina4_7" orientation="portrait">
-        <adaptation id="fullscreen"/>
-    </device>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="19455" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina4_7" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14283.14"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="19454"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
         <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
-        <navigationController title="Wallets" id="I1r-GR-R05" customClass="WalletsNav">
+        <navigationController title="Wallets" wantsFullScreenLayout="YES" extendedLayoutIncludesOpaqueBars="YES" id="I1r-GR-R05" customClass="WalletsNav">
             <tabBarItem key="tabBarItem" title="Wallets" image="tab_wallets.png" id="mSo-HW-HDn"/>
             <simulatedTabBarMetrics key="simulatedBottomBarMetrics"/>
             <navigationBar key="navigationBar" contentMode="scaleToFill" barStyle="black" translucent="NO" backIndicatorImage="Back_Chevron_White.png" backIndicatorTransitionMaskImage="Back_Chevron_White.png" id="6um-IK-2g2">
@@ -21,6 +19,49 @@
                 <color key="backgroundColor" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
                 <color key="tintColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                 <color key="barTintColor" red="0.33333333333333331" green="0.54509803921568623" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                <textAttributes key="titleTextAttributes">
+                    <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                </textAttributes>
+                <textAttributes key="largeTitleTextAttributes">
+                    <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                </textAttributes>
+                <navigationBarAppearance key="standardAppearance">
+                    <color key="backgroundColor" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                    <color key="shadowColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    <textAttributes key="titleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                    <textAttributes key="largeTitleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                </navigationBarAppearance>
+                <navigationBarAppearance key="compactAppearance">
+                    <color key="backgroundColor" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                    <textAttributes key="titleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                    <textAttributes key="largeTitleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                </navigationBarAppearance>
+                <navigationBarAppearance key="scrollEdgeAppearance">
+                    <color key="backgroundColor" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                    <textAttributes key="titleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                    <textAttributes key="largeTitleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                </navigationBarAppearance>
+                <navigationBarAppearance key="compactScrollEdgeAppearance">
+                    <color key="backgroundColor" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                    <textAttributes key="titleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                    <textAttributes key="largeTitleTextAttributes">
+                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </textAttributes>
+                </navigationBarAppearance>
                 <connections>
                     <outletCollection property="gestureRecognizers" destination="1Xa-I9-r22" appends="YES" id="S4V-cy-DGz"/>
                 </connections>
@@ -32,7 +73,7 @@
                         <viewControllerLayoutGuide type="bottom" id="x1s-vf-ZhE"/>
                     </layoutGuides>
                     <view key="view" contentMode="scaleToFill" id="gET-pO-SCv">
-                        <rect key="frame" x="0.0" y="0.0" width="375" height="603"/>
+                        <rect key="frame" x="0.0" y="0.0" width="375" height="623"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <view clipsSubviews="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="xTn-fY-y6D" userLabel="BlueBarTop">
@@ -54,7 +95,7 @@
                                 </connections>
                             </view>
                             <view hidden="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Mg4-cl-SaW" userLabel="NoReqsView">
-                                <rect key="frame" x="89.5" y="223.5" width="196" height="107"/>
+                                <rect key="frame" x="89.5" y="233.5" width="196" height="107"/>
                                 <subviews>
                                     <imageView userInteractionEnabled="NO" tag="4040" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="empty_table_icon.png" translatesAutoresizingMaskIntoConstraints="NO" id="mu2-Qr-shs">
                                         <rect key="frame" x="67" y="0.0" width="62" height="36"/>
@@ -96,7 +137,7 @@
                                 </connections>
                             </view>
                             <view hidden="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="heh-Ue-jMi" userLabel="NoTXsView">
-                                <rect key="frame" x="89.5" y="223.5" width="196" height="107"/>
+                                <rect key="frame" x="89.5" y="233.5" width="196" height="107"/>
                                 <subviews>
                                     <imageView userInteractionEnabled="NO" tag="4040" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="empty_table_icon.png" translatesAutoresizingMaskIntoConstraints="NO" id="dNj-eP-Aky">
                                         <rect key="frame" x="67" y="0.0" width="62" height="36"/>
@@ -138,7 +179,7 @@
                                 </connections>
                             </view>
                             <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" style="plain" separatorStyle="default" rowHeight="76" sectionHeaderHeight="28" sectionFooterHeight="28" translatesAutoresizingMaskIntoConstraints="NO" id="u0V-Yv-emp" userLabel="TxsTableView">
-                                <rect key="frame" x="0.0" y="124" width="375" height="345"/>
+                                <rect key="frame" x="0.0" y="124" width="375" height="365"/>
                                 <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                                 <constraints>
                                     <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="100" id="D8E-bI-U0a"/>
@@ -150,7 +191,7 @@
                                 </connections>
                             </tableView>
                             <tableView hidden="YES" clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" style="plain" separatorStyle="default" rowHeight="105" sectionHeaderHeight="28" sectionFooterHeight="28" translatesAutoresizingMaskIntoConstraints="NO" id="SEd-Hd-vMb" userLabel="ReqsTableView">
-                                <rect key="frame" x="0.0" y="124" width="375" height="345"/>
+                                <rect key="frame" x="0.0" y="124" width="375" height="365"/>
                                 <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                                 <inset key="separatorInset" minX="0.0" minY="0.0" maxX="0.0" maxY="0.0"/>
                                 <connections>
@@ -158,8 +199,8 @@
                                     <outlet property="delegate" destination="vtb-qn-tmr" id="B51-sC-9ed"/>
                                 </connections>
                             </tableView>
-                            <button opaque="NO" clipsSubviews="YES" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="rlV-nI-e8g">
-                                <rect key="frame" x="15" y="488" width="167" height="50"/>
+                            <button opaque="NO" clipsSubviews="YES" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="rlV-nI-e8g">
+                                <rect key="frame" x="15" y="508" width="167" height="50"/>
                                 <color key="backgroundColor" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="50" id="HjB-FK-ybq"/>
@@ -177,8 +218,8 @@
                                     <action selector="onSendBut" destination="5hO-gj-WnP" eventType="primaryActionTriggered" id="4Pv-Pa-PXY"/>
                                 </connections>
                             </button>
-                            <button opaque="NO" clipsSubviews="YES" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ncr-lp-w8U">
-                                <rect key="frame" x="193" y="488" width="167" height="50"/>
+                            <button opaque="NO" clipsSubviews="YES" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ncr-lp-w8U">
+                                <rect key="frame" x="193" y="508" width="167" height="50"/>
                                 <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="18"/>
                                 <state key="normal" title="Receive">
@@ -223,13 +264,13 @@
                                         <nil key="highlightedColor"/>
                                     </label>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="252" verticalHuggingPriority="251" horizontalCompressionResistancePriority="1000" text="2.0938" textAlignment="justified" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumScaleFactor="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="BuO-xT-ft9">
-                                        <rect key="frame" x="57" y="23" width="99" height="33.5"/>
+                                        <rect key="frame" x="57" y="23" width="98" height="33.5"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="28"/>
                                         <color key="textColor" red="0.25490196078431371" green="0.25490196078431371" blue="0.25490196078431371" alpha="1" colorSpace="deviceRGB"/>
                                         <nil key="highlightedColor"/>
                                     </label>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="mBCH" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumScaleFactor="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="WuM-H7-ckL">
-                                        <rect key="frame" x="160" y="35.5" width="185" height="17.5"/>
+                                        <rect key="frame" x="159" y="35.5" width="186" height="17.5"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                         <color key="textColor" red="0.25490196079999999" green="0.25490196079999999" blue="0.25490196079999999" alpha="1" colorSpace="deviceRGB"/>
                                         <nil key="highlightedColor"/>
@@ -283,6 +324,7 @@
                                 </userDefinedRuntimeAttributes>
                             </view>
                         </subviews>
+                        <viewLayoutGuide key="safeArea" id="8EI-S0-Lm1"/>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                         <constraints>
                             <constraint firstItem="xTn-fY-y6D" firstAttribute="leading" secondItem="gET-pO-SCv" secondAttribute="leading" id="0ka-Rv-mGL"/>
@@ -314,7 +356,6 @@
                             <constraint firstItem="Ncr-lp-w8U" firstAttribute="width" secondItem="rlV-nI-e8g" secondAttribute="width" id="zKE-ql-GYN"/>
                             <constraint firstAttribute="trailing" secondItem="xTn-fY-y6D" secondAttribute="trailing" id="zpm-RN-3v8"/>
                         </constraints>
-                        <viewLayoutGuide key="safeArea" id="8EI-S0-Lm1"/>
                     </view>
                     <toolbarItems/>
                     <navigationItem key="navigationItem" id="kcT-cH-aZz">
@@ -412,7 +453,7 @@
                 </viewController>
             </viewControllers>
             <toolbar key="toolbar" opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" id="MVg-ih-rly">
-                <rect key="frame" x="0.0" y="-64" width="0.0" height="0.0"/>
+                <rect key="frame" x="0.0" y="-44" width="0.0" height="0.0"/>
                 <autoresizingMask key="autoresizingMask"/>
             </toolbar>
             <connections>

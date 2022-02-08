@@ -35,6 +35,12 @@ abstract class AlertDialogFragment : DialogFragment() {
     var suppressView = false
     var focusOnStop = View.NO_ID
 
+    fun setArguments(block: Bundle.() -> Unit): AlertDialogFragment {
+        val args = arguments ?: Bundle()
+        setArguments(args.apply(block))
+        return this
+    }
+
     override fun onCreateDialog(savedInstanceState: Bundle?): AlertDialog {
         val builder = AlertDialog.Builder(context!!)
         onBuildDialog(builder)
@@ -246,12 +252,8 @@ abstract class TaskDialog<Result> : DialogFragment() {
     private fun onFinished(body: () -> Unit) {
         if (model.state == Thread.State.RUNNABLE) {
             model.state = Thread.State.TERMINATED
-
-            // If we're inside onStart, fragment transactions are unsafe (#2154).
-            postToUiThread {
-                body()
-                dismiss()
-            }
+            body()
+            dismiss()
         }
     }
 

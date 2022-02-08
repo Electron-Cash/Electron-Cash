@@ -40,7 +40,7 @@ class PopupWidget(QWidget):
         self.pointerPos = self.LeftSide
         self._timer = None
         self.activation_hides = activation_hides
-        self.dark_mode = dark_mode
+        self.dark_mode = dark_mode and sys.platform.lower() != "darwin"
 
         #self.resize(200, 50)
 
@@ -115,41 +115,45 @@ class PopupWidget(QWidget):
         r = QRectF(self.rect())
 
         if self.pointerPos == self.LeftSide:
-            PPIX_X = self.LR_MARGIN; PPIX_Y = PPIX_X*2.0
+            PPIX_X = self.LR_MARGIN
+            PPIX_Y = PPIX_X * 2.0
             points = [
-                QPointF(QPoint(r.x()+PPIX_X, r.height()/2.0 - PPIX_Y/2.0)),
-                QPointF(QPoint(r.x()+PPIX_X, r.height()/2.0 + PPIX_Y/2.0)),
-                QPointF(QPoint(r.x(), r.height() / 2.0))
+                QPointF(r.x() + PPIX_X, r.height() / 2.0 - PPIX_Y / 2.0),
+                QPointF(r.x() + PPIX_X, r.height() / 2.0 + PPIX_Y / 2.0),
+                QPointF(r.x(), r.height() / 2.0),
             ]
 
             p.drawPolygon(*points)
 
         if self.pointerPos == self.RightSide:
-            PPIX_X = self.LR_MARGIN; PPIX_Y = PPIX_X*2.0
+            PPIX_X = self.LR_MARGIN
+            PPIX_Y = PPIX_X * 2.0
             points = [
-                QPointF(QPoint(r.right()-PPIX_X, r.height()/2.0 - PPIX_Y/2.0)),
-                QPointF(QPoint(r.right()-PPIX_X, r.height()/2.0 + PPIX_Y/2.0)),
-                QPointF(QPoint(r.right(), r.height() / 2.0))
+                QPointF(r.right()-PPIX_X, r.height()/2.0 - PPIX_Y/2.0),
+                QPointF(r.right()-PPIX_X, r.height()/2.0 + PPIX_Y/2.0),
+                QPointF(r.right(), r.height() / 2.0),
             ]
 
             p.drawPolygon(*points)
 
         if self.pointerPos == self.TopSide:
-            PPIX_Y = self.TB_MARGIN; PPIX_X = PPIX_Y*2.0
+            PPIX_Y = self.TB_MARGIN
+            PPIX_X = PPIX_Y*2.0
             points = [
-                QPointF(QPoint(r.x()+r.width()/2.0 - PPIX_X/2.0, r.top() + PPIX_Y)),
-                QPointF(QPoint(r.x()+r.width()/2.0 + PPIX_X/2.0, r.top() + PPIX_Y)),
-                QPointF(QPoint(r.x()+r.width()/2.0, r.top()))
+                QPointF(r.x()+r.width()/2.0 - PPIX_X/2.0, r.top() + PPIX_Y),
+                QPointF(r.x()+r.width()/2.0 + PPIX_X/2.0, r.top() + PPIX_Y),
+                QPointF(r.x()+r.width()/2.0, r.top()),
             ]
 
             p.drawPolygon(*points)
 
         if self.pointerPos == self.BottomSide:
-            PPIX_Y = self.TB_MARGIN; PPIX_X = PPIX_Y*2.0
+            PPIX_Y = self.TB_MARGIN
+            PPIX_X = PPIX_Y*2.0
             points = [
-                QPointF(QPoint(r.x()+r.width()/2.0 - PPIX_X/2.0, r.bottom() - PPIX_Y)),
-                QPointF(QPoint(r.x()+r.width()/2.0 + PPIX_X/2.0, r.bottom() - PPIX_Y)),
-                QPointF(QPoint(r.x()+r.width()/2.0, r.bottom()))
+                QPointF(r.x()+r.width()/2.0 - PPIX_X/2.0, r.bottom() - PPIX_Y),
+                QPointF(r.x()+r.width()/2.0 + PPIX_X/2.0, r.bottom() - PPIX_Y),
+                QPointF(r.x()+r.width()/2.0, r.bottom()),
             ]
 
             p.drawPolygon(*points)

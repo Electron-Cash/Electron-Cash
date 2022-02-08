@@ -28,6 +28,7 @@
 
 import queue
 import socket
+import weakref
 from functools import partial
 
 from PyQt5.QtGui import *
@@ -49,11 +50,14 @@ from .utils import UserPortValidator
 protocol_names = ['TCP', 'SSL']
 protocol_letters = 'ts'
 
-class NetworkDialog(MessageBoxMixin, QDialog):
+
+class NetworkDialog(MessageBoxMixin, OnDestroyedMixin, QDialog):
     network_updated_signal = pyqtSignal()
 
     def __init__(self, network, config):
         QDialog.__init__(self)
+        OnDestroyedMixin.__init__(self)
+        self.weak_network = network and weakref.ref(network)
         self.setWindowTitle(_('Network'))
         self.setMinimumSize(500, 350)
         self.nlayout = NetworkChoiceLayout(self, network, config)
@@ -74,13 +78,23 @@ class NetworkDialog(MessageBoxMixin, QDialog):
         self.refresh_timer.timeout.connect(self.network_updated_signal.emit)
         self.refresh_timer.setInterval(500)
 
+    def on_destroyed(self, obj):
+        if self.is_destroyed:
+            return
+        OnDestroyedMixin.on_destroyed(self, obj)
+        network = self.weak_network and self.weak_network()
+        if network:
+            network.unregister_callback(self.on_network)
+            print_error("NetworkDialog: unregistered callback")
+
     def jumpto(self, location : str):
         self.nlayout.jumpto(location)
 
     def on_network(self, event, *args):
         ''' This may run in network thread '''
         #print_error("[NetworkDialog] on_network:",event,*args)
-        self.network_updated_signal.emit() # this enqueues call to on_update in GUI thread
+        if not self.is_destroyed:
+            self.network_updated_signal.emit()  # this enqueues call to on_update in GUI thread
 
     @rate_limited(0.333) # limit network window updates to max 3 per second. More frequent isn't that useful anyway -- and on large wallets/big synchs the network spams us with events which we would rather collapse into 1
     def on_update(self):
@@ -159,7 +173,7 @@ class NodesListWidget(QTreeWidget):
         menu.exec_(self.viewport().mapToGlobal(position))
 
     def keyPressEvent(self, event):
-        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+        if event.key() in {Qt.Key_F2, Qt.Key_Return}:
             item, col = self.currentItem(), self.currentColumn()
             if item and col > -1:
                 self.on_activated(item, col)
@@ -390,10 +404,11 @@ class ServerListWidget(QTreeWidget):
             self.setAutoScroll(val)
 
 
-class NetworkChoiceLayout(QObject, PrintError):
+class NetworkChoiceLayout(QObject, OnDestroyedMixin, PrintError):
 
     def __init__(self, parent, network, config, wizard=False):
-        super().__init__(parent)
+        QObject.__init__(self, parent)
+        OnDestroyedMixin.__init__(self)
         self.network = network
         self.config = config
         self.protocol = None
@@ -723,7 +738,7 @@ class NetworkChoiceLayout(QObject, PrintError):
 
     @in_main_thread
     def on_tor_port_changed(self, controller: TorController):
-        if not controller.active_socks_port or not controller.is_enabled() or not self.tor_use:
+        if self.is_destroyed or not controller.active_socks_port or not controller.is_enabled() or not self.tor_use:
             return
 
         # The Network class handles actually changing the port, we just
@@ -741,7 +756,7 @@ class NetworkChoiceLayout(QObject, PrintError):
             # Disallow changing the proxy settings when Tor is in use
             b = False
         for w in [self.proxy_mode, self.proxy_host, self.proxy_port, self.proxy_user, self.proxy_password]:
-            w.setEnabled(b)
+            w.setEnabled(bool(b))
 
     def get_set_server_flags(self):
         return (self.config.is_modifiable('server'),
@@ -927,11 +942,11 @@ class NetworkChoiceLayout(QObject, PrintError):
     def set_proxy(self):
         host, port, protocol, proxy, auto_connect = self.network.get_parameters()
         if self.proxy_cb.isChecked():
-            proxy = { 'mode':str(self.proxy_mode.currentText()).lower(),
-                      'host':str(self.proxy_host.text()),
-                      'port':str(self.proxy_port.text()),
-                      'user':str(self.proxy_user.text()),
-                      'password':str(self.proxy_password.text())}
+            proxy = {'mode':str(self.proxy_mode.currentText()).lower(),
+                     'host':str(self.proxy_host.text()),
+                     'port':str(self.proxy_port.text()),
+                     'user':str(self.proxy_user.text()),
+                     'password':str(self.proxy_password.text())}
         else:
             proxy = None
         self.network.set_parameters(host, port, protocol, proxy, auto_connect)
@@ -980,6 +995,8 @@ class NetworkChoiceLayout(QObject, PrintError):
 
     @in_main_thread
     def on_tor_status_changed(self, controller):
+        if self.is_destroyed:
+            return
         if controller.status == TorController.Status.ERRORED and self.tabs.isVisible():
             tbname = self._tor_client_names[self.network.tor_controller.tor_binary_type]
             msg = _("The {tor_binary_name} client experienced an error or could not be started.").format(tor_binary_name=tbname)
@@ -990,7 +1007,7 @@ class NetworkChoiceLayout(QObject, PrintError):
         self.network.tor_controller.set_socks_port(socks_port)
 
     def on_custom_port_cb_click(self, b):
-        self.tor_socks_port.setEnabled(b)
+        self.tor_socks_port.setEnabled(bool(b))
         if not b:
             self.tor_socks_port.setText("0")
             self.set_tor_socks_port()
@@ -1059,15 +1076,18 @@ class NetworkChoiceLayout(QObject, PrintError):
         return False
 
 
-class TorDetector(QThread):
+class TorDetector(QThread, OnDestroyedMixin):
     found_proxy = pyqtSignal(object)
 
     def __init__(self, parent, network):
-        super().__init__(parent)
+        QThread.__init__(self, parent)
+        OnDestroyedMixin.__init__(self)
         self.network = network
         self.network.tor_controller.active_port_changed.append_weak(self.on_tor_port_changed)
 
     def on_tor_port_changed(self, controller: TorController):
+        if self.is_destroyed:
+            return
         if controller.active_socks_port and self.isRunning():
             self.stopQ.put('kick')
 

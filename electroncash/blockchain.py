@@ -33,56 +33,69 @@ from . import util
 
 from .bitcoin import *
 
+
 class VerifyError(Exception):
-    '''Exception used for blockchain verification errors.'''
+    """Exception used for blockchain verification errors."""
+
 
 CHUNK_FORKS = -3
 CHUNK_BAD = -2
 CHUNK_LACKED_PROOF = -1
 CHUNK_ACCEPTED = 0
 
-def bits_to_work(bits):
-    return (1 << 256) // (bits_to_target(bits) + 1)
-
-def bits_to_target(bits):
-    if bits == 0:
-        return 0
-    size = bits >> 24
-    assert size <= 0x1d
-
-    word = bits & 0x00ffffff
-    assert 0x8000 <= word <= 0x7fffff
-
-    if size <= 3:
-        return word >> (8 * (3 - size))
-    else:
-        return word << (8 * (size - 3))
-
-def target_to_bits(target):
-    if target == 0:
-        return 0
-    target = min(target, MAX_TARGET)
-    size = (target.bit_length() + 7) // 8
-    mask64 = 0xffffffffffffffff
-    if size <= 3:
-        compact = (target & mask64) << (8 * (3 - size))
-    else:
-        compact = (target >> (8 * (size - 3))) & mask64
-
-    if compact & 0x00800000:
-        compact >>= 8
-        size += 1
-    assert compact == (compact & 0x007fffff)
-    assert size < 256
-    return compact | size << 24
-
-HEADER_SIZE = 80 # bytes
+HEADER_SIZE = 80  # bytes
 MAX_BITS = 0x1d00ffff
-MAX_TARGET = bits_to_target(MAX_BITS)
+# see https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/blob/v24.0.0/src/chainparams.cpp#L98
+# Note: If we decide to support REGTEST this will need to come from regtest's networks.py params!
+MAX_TARGET = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff  # compact: 0x1d00ffff
 # indicates no header in data file
 NULL_HEADER = bytes([0]) * HEADER_SIZE
 NULL_HASH_BYTES = bytes([0]) * 32
 NULL_HASH_HEX = NULL_HASH_BYTES.hex()
+
+
+def bits_to_work(bits):
+    return (1 << 256) // (bits_to_target(bits) + 1)
+
+
+def bits_to_target(bits: int) -> int:
+    # arith_uint256::SetCompact in Bitcoin Cash Node
+    # see https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/blob/v24.0.0/src/arith_uint256.cpp#L208
+    if not (0 <= bits < (1 << 32)):
+        raise Exception(f"bits should be uint32. got {bits!r}")
+    bitsN = (bits >> 24) & 0xff
+    bitsBase = bits & 0x7fffff
+    if bitsN <= 3:
+        target = bitsBase >> (8 * (3 - bitsN))
+    else:
+        target = bitsBase << (8 * (bitsN - 3))
+    if target != 0 and bits & 0x800000 != 0:
+        # Bit number 24 (0x800000) represents the sign of N
+        raise Exception("target cannot be negative")
+    if (target != 0 and
+        (bitsN > 34 or
+         (bitsN > 33 and bitsBase > 0xff) or
+         (bitsN > 32 and bitsBase > 0xffff))):
+        raise Exception("target has overflown")
+    return target
+
+
+def target_to_bits(target: int) -> int:
+    # arith_uint256::GetCompact in Bitcoin Cash Node
+    # see https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/blob/v24.0.0/src/arith_uint256.cpp#L230
+    c = target.to_bytes(length=32, byteorder='big')
+    bitsN = len(c)
+    while bitsN > 0 and c[0] == 0:
+        c = c[1:]
+        bitsN -= 1
+        if len(c) < 3:
+            c += b'\x00'
+    bitsBase = int.from_bytes(c[:3], byteorder='big')
+    if bitsBase >= 0x800000:
+        bitsN += 1
+        bitsBase >>= 8
+    return bitsN << 24 | bitsBase
+
 
 def serialize_header(res):
     s = int_to_hex(res.get('version'), 4) \

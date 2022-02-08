@@ -37,10 +37,18 @@ import stem.process
 import stem.control
 import stem
 
-from .. import util
+from .. import util, version
 from ..util import PrintError
 from ..utils import Event
 from ..simple_config import SimpleConfig
+
+
+# Python 3.10 workaround for stem package which is using collections.Iterable (removed in 3.10)
+if sys.version_info >= (3, 10):
+    if hasattr(stem, '__version__') and version.parse_package_version(stem.__version__)[:2] <= (1, 8):
+        import collections.abc
+        # monkey-patch collections.Iterable back since stem.control expects to see this name
+        stem.control.collections.Iterable = collections.abc.Iterable
 
 
 _TOR_ENABLED_KEY = 'tor_enabled'

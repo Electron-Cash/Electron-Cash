@@ -212,8 +212,8 @@ class QrReaderCameraDialog(PrintError, MessageBoxMixin, QDialog):
         """
         Returns a QRect that is scan_size x scan_size in the middle of the resolution
         """
-        scan_pos_x = (resolution.width() - scan_size) / 2
-        scan_pos_y = (resolution.height() - scan_size) / 2
+        scan_pos_x = int((resolution.width() - scan_size) / 2)
+        scan_pos_y = int((resolution.height() - scan_size) / 2)
         return QRect(scan_pos_x, scan_pos_y, scan_size, scan_size)
 
     @staticmethod

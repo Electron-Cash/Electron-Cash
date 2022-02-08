@@ -32,8 +32,8 @@ def QColorLerp(a: QColor, b: QColor, t: float):
     t = max(min(t, 1.0), 0.0)
     i_t = 1.0 - t
     return QColor(
-        (a.red()   * i_t) + (b.red()   * t),
-        (a.green() * i_t) + (b.green() * t),
-        (a.blue()  * i_t) + (b.blue()  * t),
-        (a.alpha() * i_t) + (b.alpha() * t),
+        int((a.red()   * i_t) + (b.red()   * t)),
+        int((a.green() * i_t) + (b.green() * t)),
+        int((a.blue()  * i_t) + (b.blue()  * t)),
+        int((a.alpha() * i_t) + (b.alpha() * t)),
     )

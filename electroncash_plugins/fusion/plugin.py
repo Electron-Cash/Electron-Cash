@@ -34,17 +34,19 @@ import weakref
 
 from typing import Optional, Tuple
 
-from electroncash.address import Address
-from electroncash.bitcoin import COINBASE_MATURITY
+from electroncash.address import Address, OpCodes
+from electroncash.bitcoin import COINBASE_MATURITY, TYPE_SCRIPT
 from electroncash.plugins import BasePlugin, hook, daemon_command
 from electroncash.i18n import _, ngettext, pgettext
 from electroncash.util import profiler, PrintError, InvalidPassword
-from electroncash import Network, networks
+from electroncash import Network, networks, Transaction
 
 from .conf import Conf, Global
 from .fusion import Fusion, can_fuse_from, can_fuse_to, is_tor_port, MIN_TX_COMPONENTS
 from .server import FusionServer
 from .covert import limiter
+from .protocol import Protocol
+from .util import get_coin_name
 
 import random  # only used to select random coins
 
@@ -70,6 +72,12 @@ assert DEFAULT_MAX_COINS > 10
 MAX_AUTOFUSIONS_PER_WALLET = 10
 
 CONSOLIDATE_MAX_OUTPUTS = MIN_TX_COMPONENTS // 3
+
+# Threshold for the amount (sats) for a wallet to be fully fused. This is to avoid refuse when dusted.
+FUSE_DEPTH_THRESHOLD = 0.95
+
+# We don't allow a fuse depth beyond this in the wallet UI
+MAX_LIMIT_FUSE_DEPTH = 10
 
 pnp = None
 def get_upnp():
@@ -293,6 +301,7 @@ class FusionPlugin(BasePlugin):
 
         self.fusions = weakref.WeakKeyDictionary()
         self.autofusing_wallets = weakref.WeakKeyDictionary()  # wallet -> password
+        self.registered_network_callback = False
 
         self.t_last_net_ok = time.monotonic()
 
@@ -310,6 +319,11 @@ class FusionPlugin(BasePlugin):
     def on_close(self,):
         super().on_close()
         self.stop_fusion_server()
+        if self.registered_network_callback:
+            self.registered_network_callback = False
+            network = Network.get_instance()
+            if network:
+                network.unregister_callback(self.on_wallet_transaction)
         self.active = False
 
     def fullname(self):
@@ -319,7 +333,7 @@ class FusionPlugin(BasePlugin):
         return _("CashFusion Protocol")
 
     def is_available(self):
-        return networks.net is not networks.TaxCoinNet
+        return True
 
     def set_remote_donation_address(self, address : str):
         self.remote_donation_address = ((isinstance(address, str) and address) or '')[:100]
@@ -466,6 +480,10 @@ class FusionPlugin(BasePlugin):
             wallet._fusions = weakref.WeakSet()
             # fusions that were auto-started.
             wallet._fusions_auto = weakref.WeakSet()
+            # caache: stores a map of txid -> fusion_depth (or False if txid is not a fuz tx)
+            wallet._cashfusion_is_fuz_txid_cache = dict()
+            # cache: stores a map of address -> fusion_depth if the address has fuz utxos
+            wallet._cashfusion_address_cache = dict()
             # all accesses to the above must be protected by wallet.lock
 
         if Conf(wallet).autofuse:
@@ -473,6 +491,9 @@ class FusionPlugin(BasePlugin):
                 self.enable_autofusing(wallet, password)
             except InvalidPassword:
                 self.disable_autofusing(wallet)
+        if not self.registered_network_callback and wallet.network:
+            wallet.network.register_callback(self.on_wallet_transaction, ['new_transaction'])
+            self.registered_network_callback = True
 
     def remove_wallet(self, wallet):
         ''' Detach the provided wallet; returns list of active fusion threads. '''
@@ -484,6 +505,8 @@ class FusionPlugin(BasePlugin):
                 fusions = list(wallet._fusions)
                 del wallet._fusions
                 del wallet._fusions_auto
+                del wallet._cashfusion_is_fuz_txid_cache
+                del wallet._cashfusion_address_cache
         except AttributeError:
             pass
         return [f for f in fusions if f.is_alive()]
@@ -596,6 +619,19 @@ class FusionPlugin(BasePlugin):
                     for f in list(wallet._fusions_auto):
                         f.stop('Wallet has unconfirmed coins... waiting.', not_if_running = True)
                     continue
+
+                fuse_depth = Conf(wallet).fuse_depth
+                if fuse_depth > 0:
+                    sum_eligible_values = 0
+                    sum_fuz_values = 0
+                    for eaddr, ecoins in eligible:
+                        ecoins_value = sum(ecoin['value'] for ecoin in ecoins)
+                        sum_eligible_values += ecoins_value
+                        if self.is_fuz_address(wallet, eaddr, require_depth=fuse_depth-1):
+                            sum_fuz_values += ecoins_value
+                    if sum_eligible_values != 0 and sum_fuz_values / sum_eligible_values >= FUSE_DEPTH_THRESHOLD:
+                        continue
+
                 if not dont_start_fusions and num_auto < min(target_num_auto, MAX_AUTOFUSIONS_PER_WALLET):
                     # we don't have enough auto-fusions running, so start one
                     fraction = get_target_params_2(wallet_conf, sum_value)
@@ -652,6 +688,162 @@ class FusionPlugin(BasePlugin):
         (as opposed to the donation address we announce if we are a server). '''
         if self.remote_donation_address and Address.is_valid(self.remote_donation_address):
             return (self.fullname() + " " + _("Server") + ": " + self.get_server()[0], Address.from_string(self.remote_donation_address))
+
+    @staticmethod
+    def wallet_can_fuse(wallet) -> bool:
+        return can_fuse_from(wallet) and can_fuse_to(wallet)
+
+    @staticmethod
+    def is_fuz_coin(wallet, coin, *, require_depth=0) -> Optional[bool]:
+        """ Returns True if the coin in question is definitely a CashFusion coin (uses heuristic matching),
+        or False if the coin in question is not from a CashFusion tx. Returns None if the tx for the coin
+        is not (yet) known to the wallet (None == inconclusive answer, caller may wish to try again later).
+        If require_depth is > 0, check recursively; will return True if all ancestors of the coin
+        up to require_depth are also CashFusion transactions belonging to this wallet.
+
+        Precondition: wallet must be a fusion wallet. """
+
+        require_depth = min(max(0, require_depth), 900)  # paranoia: clamp to [0, 900]
+
+        cache = wallet._cashfusion_is_fuz_txid_cache
+        assert isinstance(cache, dict)
+        txid = coin['prevout_hash']
+        # check cache, if cache hit, return answer and avoid the lookup below
+        cached_val = cache.get(txid, None)
+        if cached_val is not None:
+            # cache stores either False, or a depth for which the predicate is true
+            if cached_val is False:
+                return False
+            elif cached_val >= require_depth:
+                return True
+
+        my_addresses_seen = set()
+
+        def check_is_fuz_tx():
+            tx = wallet.transactions.get(txid, None)
+            if tx is None:
+                # Not found in wallet.transactions so its fuz status is as yet "unknown". Indicate this.
+                return None
+            inputs = tx.inputs()
+            outputs = tx.outputs()
+            # We expect: OP_RETURN (4) FUZ\x00
+            fuz_prefix = bytes((OpCodes.OP_RETURN, len(Protocol.FUSE_ID))) + Protocol.FUSE_ID
+            # Step 1 - does it have the proper OP_RETURN lokad prefix?
+            for typ, dest, amt in outputs:
+                if amt == 0 and typ == TYPE_SCRIPT and dest.script.startswith(fuz_prefix):
+                    break  # lokad found, proceed to Step 2 below
+            else:
+                # Nope, lokad prefix not found
+                return False
+            # Step 2 - are at least 1 of the inputs from me? (DoS prevention measure)
+            for inp in inputs:
+                inp_addr = inp.get('address', None)
+                if inp_addr is not None and (inp_addr in my_addresses_seen or wallet.is_mine(inp_addr)):
+                    my_addresses_seen.add(inp_addr)
+                    if require_depth == 0:
+                        return True  # This transaction is a CashFusion tx
+                    # [Optional] Step 3 - Check if all ancestors up to required_depth are also fusions
+                    if not FusionPlugin.is_fuz_coin(wallet, inp, require_depth=require_depth-1):
+                        # require_depth specified and not all required_depth parents were CashFusion
+                        return False
+            if my_addresses_seen:
+                # require_depth > 0: This tx + all wallet ancestors were CashFusion transactions up to require_depth
+                return True
+            # Failure -- this tx has the lokad but no inputs are "from me".
+            wallet.print_error(f"CashFusion: txid \"{txid}\" has a CashFusion-style OP_RETURN but none of the "
+                               f"inputs are from this wallet. This is UNEXPECTED!")
+            return False
+        # /check_is_fuz_tx
+
+        answer = check_is_fuz_tx()
+        if isinstance(answer, bool):
+            # maybe cache the answer if it's a definitive answer True/False
+            if require_depth == 0:
+                # we got an answer for this coin's tx itself
+                if not answer:
+                    cache[txid] = False
+                elif not cached_val:
+                    # only set the cached val if it was missing previously, to avoid overwriting higher values
+                    cache[txid] = 0
+            elif answer and (cached_val is None or cached_val < require_depth):
+                # indicate true up to the depth we just checked
+                cache[txid] = require_depth
+            elif not answer and isinstance(cached_val, int) and cached_val >= require_depth:
+                # this should never happen
+                wallet.print_error(f"CashFusion: WARNING txid \"{txid}\" has inconsistent state in "
+                                   f"the _cashfusion_is_fuz_txid_cache")
+            if answer:
+                # remember this address as being a "fuzed" address and cache the positive reply
+                cache2 = wallet._cashfusion_address_cache
+                assert isinstance(cache2, dict)
+                addr = coin.get('address', None)
+                if addr:
+                    my_addresses_seen.add(addr)
+                for addr in my_addresses_seen:
+                    depth = cache2.get(addr, None)
+                    if depth is None or depth < require_depth:
+                        cache2[addr] = require_depth
+        return answer
+
+    @classmethod
+    def get_coin_fuz_count(cls, wallet, coin, *, require_depth=0):
+        """ Will return a fuz count for a coin. Unfused or unknown coins have count 0, coins
+        that appear in a fuz tx have count 1, coins whose wallet parent txs are all fuz are 2, 3, etc
+        depending on how far back the fuz perdicate is satisfied.
+
+        This function only checks up to 10 ancestors deep so tha maximum return value is 10.
+
+        Precondition: wallet must be a fusion wallet. """
+
+        require_depth = min(max(require_depth, 0), MAX_LIMIT_FUSE_DEPTH - 1)
+        cached_ct = wallet._cashfusion_is_fuz_txid_cache.get(coin['prevout_hash'])
+        if isinstance(cached_ct, int) and cached_ct >= require_depth:
+            return cached_ct + 1
+        ret = 0
+        for i in range(cached_ct or 0, require_depth + 1, 1):
+            ret = i
+            if not cls.is_fuz_coin(wallet, coin, require_depth=i):
+                break
+        return ret
+
+    @classmethod
+    def is_fuz_address(cls, wallet, address, *, require_depth=0):
+        """ Returns True if address contains any fused UTXOs.
+            Optionally, specify require_depth, in which case True is returned
+            if any UTXOs for this address are sufficiently fused to the
+            specified depth.
+
+            If you want thread safety, caller must hold wallet locks.
+
+            Precondition: wallet must be a fusion wallet. """
+
+        assert isinstance(address, Address)
+        require_depth = max(require_depth, 0)
+
+        cache = wallet._cashfusion_address_cache
+        assert isinstance(cache, dict)
+        cached_val = cache.get(address, None)
+        if cached_val is not None and cached_val >= require_depth:
+            return True
+
+        utxos = wallet.get_addr_utxo(address)
+        for coin in utxos.values():
+            if cls.is_fuz_coin(wallet, coin, require_depth=require_depth):
+                if cached_val is None or cached_val < require_depth:
+                    cache[address] = require_depth
+                return True
+        return False
+
+    @staticmethod
+    def on_wallet_transaction(event, *args):
+        """ Network object callback. Always called in the Network object's thread. """
+        if event == 'new_transaction':
+            # if this is a fusion wallet, clear the is_fuz_address() cache when new transactions arrive
+            # since we may have spent some utxos and so the cache needs to be invalidated
+            wallet = args[1]
+            if hasattr(wallet, '_cashfusion_address_cache'):
+                with wallet.lock:
+                    wallet._cashfusion_address_cache.clear()
 
     @daemon_command
     def fusion_server_start(self, daemon, config):

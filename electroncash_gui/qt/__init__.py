@@ -761,7 +761,7 @@ class ElectrumGui(QObject, PrintError):
             interval = 10.0*1e3 # do it very soon (in 10 seconds)
         else:
             interval = 4.0*3600.0*1e3 # once every 4 hours (in ms)
-        self.update_checker_timer.start(interval)
+        self.update_checker_timer.start(int(interval))
         self.print_error("Auto update check: interval set to {} seconds".format(interval//1e3))
 
     def _stop_auto_update_timer(self):
@@ -1008,6 +1008,9 @@ class ElectrumGui(QObject, PrintError):
             event = QEvent(QEvent.Clipboard)
             self.app.sendEvent(self.app.clipboard(), event)
             self.tray.hide()
+            if self.nd:
+                self.nd.deleteLater()
+                self.nd = None
         self.app.aboutToQuit.connect(clean_up)
 
         Exception_Hook(self.config) # This wouldn't work anyway unless the app event loop is active, so we must install it once here and no earlier.

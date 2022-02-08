@@ -146,16 +146,16 @@ class NetworkDialogVC(UIViewController):
         onTfChgBlock = Block(onTfChg)
         for v in views:
             tag = v.tag
-            if isinstance(v, UIButton) and tag in BUTTON_TAGS:
+            if isinstance(v, UIButton) and tag == BUTTON_TAGS:
                 v.handleControlEvent_withBlock_(UIControlEventPrimaryActionTriggered, showHelpBlock)
-            elif isinstance(v, UISwitch) and tag is TAG_AUTOSERVER_SW:
+            elif isinstance(v, UISwitch) and tag == TAG_AUTOSERVER_SW:
                 self.autoServerSW = v
                 v.handleControlEvent_withBlock_(UIControlEventPrimaryActionTriggered, onAutoServerSW)
             elif isinstance(v, UITextField) and tag in (TAG_HOST_TF, TAG_PORT_TF):
                 v.delegate = self
-                if tag is TAG_HOST_TF: self.hostTF = v
-                elif tag is TAG_PORT_TF: self.portTF = v
-                v.handleControlEvent_withBlock_(UIControlEventEditingChanged,onTfChgBlock)
+                if tag == TAG_HOST_TF: self.hostTF = v
+                elif tag == TAG_PORT_TF: self.portTF = v
+                v.handleControlEvent_withBlock_(UIControlEventEditingChanged, onTfChgBlock)
             # assign views we are interested in to our properties
             if tag == TAG_SERVER_LBL: self.serverLbl = v
             elif tag == TAG_STATUS_LBL: self.statusLbl = v
@@ -472,7 +472,8 @@ class NetworkDialogVC(UIViewController):
         host, port, protocol, proxy, auto_connect = network.get_parameters()
         host = str(self.hostTF.text)
         port = str(self.portTF.text)
-        auto_connect = self.autoServerSW.isOn()
+        auto_connect = bool(self.autoServerSW.isOn())
+        network.set_whitelist_only(auto_connect)
         network.set_parameters(host, port, protocol, proxy, auto_connect)
 
     @objc_method
@@ -488,16 +489,16 @@ class NetworkDialogVC(UIViewController):
 def showHelpForButton(oid : objc_id) -> None:
     tag = int(ObjCInstance(oid).tag)
     msg = _("Unknown")
-    if tag is TAG_HELP_STATUS:
+    if tag == TAG_HELP_STATUS:
         msg = ' '.join([
             _("Electron Cash connects to several nodes in order to download block headers and find out the longest blockchain."),
             _("This blockchain is used to verify the transactions sent by your transaction server.")
         ])
-    elif tag is TAG_HELP_SERVER:
+    elif tag == TAG_HELP_SERVER:
         msg = _("Electron Cash sends your wallet addresses to a single server, in order to receive your transaction history.")
-    elif tag is TAG_HELP_BLOCKCHAIN:
+    elif tag == TAG_HELP_BLOCKCHAIN:
         msg = _('This is the height of your local copy of the blockchain.')
-    elif tag is TAG_HELP_AUTOSERVER:
+    elif tag == TAG_HELP_AUTOSERVER:
         msg = ' '.join([
             _("If auto-connect is enabled, Electron Cash will always use a server that is on the longest blockchain."),
             _("If it is disabled, you have to choose a server you want to use. Electron Cash will warn you if your server is lagging.")

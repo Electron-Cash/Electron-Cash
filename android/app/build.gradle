@@ -33,7 +33,7 @@ android {
         if (ecVersion == null) {
             throw new GradleException("Couldn't find version number")
         }
-        def BUILD_NUM = 3  // Distinguish multiple releases with the same version number.
+        def BUILD_NUM = 5  // Distinguish multiple releases with the same version number.
         versionName "$ecVersion-$BUILD_NUM"
         def verParsed = ecVersion.split(/\./).collect { Integer.parseInt(it) }
         versionCode((verParsed[0] * 1000000) + (verParsed[1] * 10000) + (verParsed[2] * 100) +
@@ -64,7 +64,7 @@ android {
             python {
                 srcDir REPO_ROOT
                 include "electroncash/"
-                exclude "electroncash/locale/"
+                exclude "**/*.po", "**/*.pot"  // The .mo files are used at runtime.
                 include "electroncash_gui/__init__.py"
                 include "electroncash_plugins/__init__.py"
 
@@ -136,7 +136,9 @@ afterEvaluate {
         } else {
             executable "python$pyVersion"
         }
-        args scriptFilename, STRINGS_DIR
+        args scriptFilename
+        args "--out", STRINGS_DIR
+        args "--ignore-unknown-keywords", "tor_binary_name_capitalized"  // See #1989.
     }
     for (variant in android.applicationVariants) {
         tasks.getByName("generate${variant.name.capitalize()}Resources")
@@ -150,7 +152,7 @@ afterEvaluate {
         dependsOn ("deleteStrings", "generateStrings")
     }
 
-    // Remove unnecessary requirements (#2162).
+    // Remove unnecessary or duplicate requirements.
     task("generateRequirementsTxt") {
         inputs.file "$REPO_ROOT/contrib/deterministic-build/requirements.txt"
         outputs.file REQUIREMENTS_TXT
@@ -160,7 +162,7 @@ afterEvaluate {
                 file(inputs.files.singleFile).eachLine { line ->
                     buffer.append(line + "\n")
                     if (!line.endsWith("\\")) {
-                        if (!(buffer =~ /^(pip|QDarkStyle|setuptools|wheel)==/)) {
+                        if (!(buffer =~ /^(cffi|pip|QDarkStyle|setuptools|wheel)==/)) {
                             output.print(buffer)
                         }
                         buffer.setLength(0)

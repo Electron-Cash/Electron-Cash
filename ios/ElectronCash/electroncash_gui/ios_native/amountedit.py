@@ -117,13 +117,13 @@ class BTCAmountEdit(UITextField):
                 self.unitLabel.frame = f
                 supf = f
                 supf.size.width += 10.0 # 10 pix padding on right
-                self.unitLabel.superview().frame = supf
+                utils.boilerplate.get_superview(self.unitLabel).frame = supf
                 spacf = CGRectMake(f.size.width,0.0,10.0,f.size.height)
-                self.unitLabel.superview().viewWithTag_(2).frame = spacf
+                utils.boilerplate.get_superview(self.unitLabel).viewWithTag_(2).frame = spacf
             else:
                 # unit label has a fixed size, with a 10 pix padding
                 w = py_from_ns(self.fixedUnitLabelWidth)
-                sup = self.unitLabel.superview()
+                sup = utils.boilerplate.get_superview(self.unitLabel)
                 spac = sup.viewWithTag_(2)
                 sz = self.unitLabel.attributedText.size()
                 sz.width = w
@@ -136,7 +136,7 @@ class BTCAmountEdit(UITextField):
     def leftViewRectForBounds_(self, bounds : CGRect) -> CGRect:
         r = send_super(__class__, self, 'leftViewRectForBounds:', bounds, argtypes=[CGRect], restype=CGRect)
         if self.unitLabel:
-            sz = self.unitLabel.superview().bounds.size
+            sz = utils.boilerplate.get_superview(self.unitLabel).bounds.size
             return CGRectOffset(r, bounds.size.width - sz.width, 0)
         return r
     
@@ -144,7 +144,7 @@ class BTCAmountEdit(UITextField):
     def clearButtonRectForBounds_(self, bounds : CGRect) -> CGRect:
         r =  send_super(__class__, self, 'clearButtonRectForBounds:', bounds, argtypes=[CGRect], restype=CGRect)   
         if self.unitLabel:
-            sz = self.unitLabel.superview().bounds.size
+            sz = utils.boilerplate.get_superview(self.unitLabel).bounds.size
             return CGRectOffset(r, -sz.width, 0)
         return r
 
@@ -153,7 +153,7 @@ class BTCAmountEdit(UITextField):
         r = bounds
         r.origin.x = 0
         if self.unitLabel:
-            sz = self.unitLabel.superview().bounds.size
+            sz = utils.boilerplate.get_superview(self.unitLabel).bounds.size
             r.size.width -= (20 + sz.width)
         return r
         
@@ -162,7 +162,7 @@ class BTCAmountEdit(UITextField):
         rect = bounds
         rect.origin.x = 0
         if self.unitLabel:
-            sz = self.unitLabel.superview().bounds.size
+            sz = utils.boilerplate.get_superview(self.unitLabel).bounds.size
             rect.size.width -= (20 + sz.width)
         return rect
     

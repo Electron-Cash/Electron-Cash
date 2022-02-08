@@ -63,7 +63,12 @@ fun toSatoshis(s: String) : Long {
     val unit = Math.pow(10.0, unitPlaces.toDouble())
     try {
         // toDouble accepts only the English number format: see comment above.
-        return Math.round(s.toDouble() * unit)
+        val result = Math.round(s.toDouble() * unit)
+        return if (result == Long.MAX_VALUE) {
+            throw ToastException(R.string.Invalid_amount)
+        } else {
+            result
+        }
     } catch (e: NumberFormatException) {
         throw ToastException(R.string.Invalid_amount)
     }
@@ -158,7 +163,7 @@ fun copyToClipboard(text: CharSequence, what: Int? = null) {
     @Suppress("DEPRECATION")
     (getSystemService(ClipboardManager::class)).text = text
     val message = if (what == null) app.getString(R.string.text_copied)
-                  else app.getString(R.string._s_copied, app.getString(what))
+                  else app.getString(R.string.___copied_to, app.getString(what))
     toast(message, Toast.LENGTH_SHORT)
 }
 
@@ -218,8 +223,9 @@ class BoundViewHolder<T: Any>(val binding: ViewDataBinding)
 }
 
 
-class MenuAdapter(context: Context, val menu: Menu)
-    : ArrayAdapter<String>(context, android.R.layout.simple_spinner_item, menuToList(menu)) {
+open class SimpleArrayAdapter(context: Context, objects: List<String>)
+    : ArrayAdapter<String>(context, android.R.layout.simple_spinner_item, objects) {
+
     init {
         if (context === app) {
             // This resulted in white-on-white text on older API levels (e.g. 18).
@@ -228,6 +234,10 @@ class MenuAdapter(context: Context, val menu: Menu)
         }
         setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
     }
+}
+
+class MenuAdapter(context: Context, val menu: Menu)
+    : SimpleArrayAdapter(context, menuToList(menu)) {
 
     constructor(context: Context, menuId: Int)
         : this(context, inflateMenu(menuId))
@@ -249,4 +259,24 @@ private fun menuToList(menu: Menu): List<String> {
         result.add(menu.getItem(i).title.toString())
     }
     return result
+}
+
+
+fun baseEncode(hex: String, base: Int): String {
+    val bytes = py.builtins.get("bytes")!!.callAttr("fromhex", hex)
+    return libBitcoin.callAttr("base_encode", bytes, base).toString()
+}
+
+fun baseDecode(s: String, base: Int): String {
+    return libBitcoin.callAttr("base_decode", s, null, base)
+                     .callAttr("hex").toString()
+}
+
+
+/**
+ * Decide whether to use Schnorr signatures.
+ * Schnorr signing is supported by standard and imported private key wallets.
+ */
+fun signSchnorr(): Boolean {
+    return daemonModel.walletType in listOf("standard", "imported_privkey")
 }

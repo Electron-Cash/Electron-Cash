@@ -60,12 +60,14 @@ PR_UNPAID  = 0
 PR_EXPIRED = 1
 PR_UNKNOWN = 2     # sent but not propagated
 PR_PAID    = 3     # send and propagated
+PR_UNCONFIRMED = 7 # paid and confirmations = 0 (7 used to match Electrum)
 
 pr_tooltips = {
     PR_UNPAID:_('Pending'),
     PR_UNKNOWN:_('Unknown'),
     PR_PAID:_('Paid'),
-    PR_EXPIRED:_('Expired')
+    PR_EXPIRED:_('Expired'),
+    PR_UNCONFIRMED: _('Unconfirmed')
 }
 
 del _
@@ -247,7 +249,7 @@ class PaymentRequest:
             return False
 
     def has_expired(self):
-        return self.details.expires and self.details.expires < int(time.time())
+        return bool(self.details.expires and self.details.expires < int(time.time()))
 
     def get_expiration_date(self):
         return self.details.expires

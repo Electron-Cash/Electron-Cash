@@ -383,7 +383,7 @@ class ScriptOutput(ScriptOutputBase):
         class MyBCDataStream(BCDataStream):
             def push_data(self, data):
                 self.input = self.input or bytearray()
-                self.input += Script.push_data(data)
+                self.input += Script.push_data(data, minimal=False)
         bcd = MyBCDataStream()
         bcd.write(cls._protocol_prefix)  # OP_RETURN -> 0x6a + 0x4 (pushdata 4 bytes) + 0x01010101 (protocol code)
         bcd.push_data(name.encode('ascii'))

@@ -155,7 +155,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.externalpluginsdialog = None
         self.hardwarewalletdialog = None
         self.require_fee_update = False
-        self.tx_sound = self.setup_tx_rcv_sound()
         self.cashaddr_toggled_signal = self.gui_object.cashaddr_toggled_signal  # alias for backwards compatibility for plugins -- this signal used to live in each window and has since been refactored to gui-object where it belongs (since it's really an app-global setting)
         self.force_use_single_change_addr = None  # this is set by the CashShuffle plugin to a single string that will go into the tool-tip explaining why this preference option is disabled (see self.settings_dialog)
         self.tl_windows = []
@@ -251,29 +250,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         gui_object.timer.timeout.connect(self.timer_actions)
         self.fetch_alias()
-
-    def setup_tx_rcv_sound(self):
-        """Used only in the 'ard moné edition"""
-        if networks.net is not networks.TaxCoinNet:
-            return
-        try:
-            import PyQt5.QtMultimedia
-            from PyQt5.QtCore import QUrl, QResource
-            from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
-            fileName = os.path.join(os.path.dirname(__file__), "data", "ard_mone.mp3")
-            url = QUrl.fromLocalFile(fileName)
-            self.print_error("Sound effect: loading from", url.toLocalFile())
-            player = QMediaPlayer(self)
-            player.setMedia(QMediaContent(url))
-            player.setVolume(100)
-            self.print_error("Sound effect: regustered successfully")
-            return player
-        except Exception as e:
-            self.print_error("Sound effect: Failed:", str(e))
-            return
-
-
-
 
     _first_shown = True
     def showEvent(self, event):
@@ -498,7 +474,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.password_menu.setEnabled(self.wallet.can_change_password())
         self.import_privkey_menu.setVisible(self.wallet.can_import_privkey())
         self.import_address_menu.setVisible(self.wallet.can_import_address())
-        self.export_menu.setEnabled(self.wallet.can_export())
+        self.export_menu.setEnabled(bool(self.wallet.can_export()))
 
     def warn_if_watching_only(self):
         if self.wallet.is_watching_only():
@@ -607,7 +583,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             def loader(k):
                 return lambda: gui_object.new_window(k)
             self.recently_visited_menu.addAction(b, loader(k)).setShortcut(QKeySequence("Ctrl+%d"%(i+1)))
-        self.recently_visited_menu.setEnabled(len(recent))
+        self.recently_visited_menu.setEnabled(bool(len(recent)))
 
     def get_wallet_folder(self):
         return self.gui_object.get_wallet_folder()
@@ -773,7 +749,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         QMessageBox.about(self, "Electron Cash",
             "<p><font size=+3><b>Electron Cash</b></font></p><p>" + _("Version") + f" {self.wallet.electrum_version}" + "</p>" +
             '<span style="font-size:11pt; font-weight:500;"><p>' +
-            _("Copyright © {year_start}-{year_end} Electron Cash LLC and the Electron Cash developers.").format(year_start=2017, year_end=2021) +
+            _("Copyright © {year_start}-{year_end} Electron Cash LLC and the Electron Cash developers.").format(year_start=2017, year_end=2022) +
             "</p><p>" + _("darkdetect for macOS © 2019 Alberto Sottile") + "</p>"
             "</span>" +
             '<span style="font-weight:200;"><p>' +
@@ -968,7 +944,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     _("Balance: {amount_and_unit}").format(
                         amount_and_unit=self.format_amount_and_units(c))
                 ]
-
                 if u:
                     text_items.append(_("[{amount} unconfirmed]").format(
                         amount=self.format_amount(u, True).strip()))
@@ -1006,10 +981,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         self.tray.setToolTip("%s (%s)" % (text, self.wallet.basename()))
         self.balance_label.setText(text)
-        self.status_button.setIcon( icon )
+        self.status_button.setIcon(icon)
         self.status_button.setStatusTip( status_tip )
         run_hook('window_update_status', self)
-
 
     def update_wallet(self):
         self.need_update.set() # will enqueue an _update_wallet() call in at most 0.5 seconds from now.
@@ -1632,9 +1606,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.max_button.setFixedWidth(140)
         self.max_button.setCheckable(True)
         grid.addWidget(self.max_button, 5, 3)
-        hbox = QHBoxLayout()
+        hbox = self.send_tab_extra_plugin_controls_hbox = QHBoxLayout()
         hbox.addStretch(1)
-        grid.addLayout(hbox, 5, 4)
+        grid.addLayout(hbox, 5, 4, 1, -1)
 
         msg = _('Bitcoin Cash transactions are in general not free. A transaction fee is paid by the sender of the funds.') + '\n\n'\
               + _('The amount of fee can be decided freely by the sender. However, transactions with low fees take more time to be processed.') + '\n\n'\
@@ -2876,7 +2850,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.update_available_button.setVisible(bool(self.gui_object.new_version_available))  # if hidden now gets unhidden by on_update_available when a new version comes in
 
         self.lock_icon = QIcon()
-        self.password_button = StatusBarButton(self.lock_icon, _("Password"), self.change_password_dialog )
+        self.password_button = StatusBarButton(self.lock_icon, _("Password"), self.change_password_dialog)
         sb.addPermanentWidget(self.password_button)
 
         self.addr_converter_button = StatusBarButton(
@@ -2889,8 +2863,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.addr_converter_button.setHidden(self.gui_object.is_cashaddr_status_button_hidden())
         self.gui_object.cashaddr_status_button_hidden_signal.connect(self.addr_converter_button.setHidden)
 
-        sb.addPermanentWidget(StatusBarButton(QIcon(":icons/preferences.svg"), _("Preferences"), self.settings_dialog ) )
-        self.seed_button = StatusBarButton(QIcon(":icons/seed.png"), _("Seed"), self.show_seed_dialog )
+        q_icon_prefs = QIcon(":icons/preferences.svg"), _("Preferences"), self.settings_dialog
+        sb.addPermanentWidget(StatusBarButton(*q_icon_prefs))
+        q_icon_seed = QIcon(":icons/seed.png"), _("Seed"), self.show_seed_dialog
+        self.seed_button = StatusBarButton(*q_icon_seed)
         sb.addPermanentWidget(self.seed_button)
         weakSelf = Weak.ref(self)
         gui_object = self.gui_object
@@ -4421,7 +4397,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if self.wallet.use_change != usechange_result:
                     self.wallet.use_change = usechange_result
                     self.wallet.storage.put('use_change', self.wallet.use_change)
-                    multiple_cb.setEnabled(self.wallet.use_change)
+                    multiple_cb.setEnabled(bool(self.wallet.use_change))
             usechange_cb.stateChanged.connect(on_usechange)
         per_wallet_tx_widgets.append((usechange_cb, None))
 
@@ -4433,9 +4409,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if isinstance(self.force_use_single_change_addr, str):
                 multiple_cb.setToolTip(self.force_use_single_change_addr)
             else:
-                multuple_cb.setToolTip('')
+                multiple_cb.setToolTip('')
         else:
-            multiple_cb.setEnabled(self.wallet.use_change)
+            multiple_cb.setEnabled(bool(self.wallet.use_change))
             multiple_cb.setToolTip('\n'.join([
                 _('In some cases, use up to 3 change addresses in order to break '
                   'up large coin amounts and obfuscate the recipient address.'),
@@ -4597,7 +4573,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             fiat_widgets.append((fiat_address_checkbox, None))
 
         else:
-            # For testnet(s) and for --taxcoin we do not support Fiat display
+            # For testnet(s) where we do not support Fiat display
             lbl = QLabel(_("Fiat display is not supported on this chain."))
             lbl.setAlignment(Qt.AlignHCenter|Qt.AlignVCenter)
             f = lbl.font()
@@ -4868,10 +4844,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 cb = QCheckBox(descr['fullname'])
                 weakCb = Weak.ref(cb)
                 plugin_is_loaded = p is not None
-                cb_enabled = (not plugin_is_loaded and plugins.is_internal_plugin_available(name, self.wallet)
-                              or plugin_is_loaded and p.can_user_disable())
+                cb_enabled = bool(not plugin_is_loaded and plugins.is_internal_plugin_available(name, self.wallet)
+                                  or plugin_is_loaded and p.can_user_disable())
                 cb.setEnabled(cb_enabled)
-                cb.setChecked(plugin_is_loaded and p.is_enabled())
+                cb.setChecked(bool(plugin_is_loaded and p.is_enabled()))
                 grid.addWidget(cb, i, 0)
                 enable_settings_widget(p, name, i)
                 cb.clicked.connect(partial(do_toggle, weakCb, name, i))
@@ -4912,62 +4888,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.hardwarewalletdialog = d
         d.exec_()
         self.hardwarewalletdialog = None # allow python to GC
-
-    def cpfp(self, parent_tx, new_tx):
-        total_size = parent_tx.estimated_size() + new_tx.estimated_size()
-        d = WindowModalDialog(self.top_level_window(), _('Child Pays for Parent'))
-        vbox = QVBoxLayout(d)
-        msg = (
-            "A CPFP is a transaction that sends an unconfirmed output back to "
-            "yourself, with a high fee. The goal is to have miners confirm "
-            "the parent transaction in order to get the fee attached to the "
-            "child transaction.")
-        vbox.addWidget(WWLabel(_(msg)))
-        msg2 = ("The proposed fee is computed using your "
-            "fee/kB settings, applied to the total size of both child and "
-            "parent transactions. After you broadcast a CPFP transaction, "
-            "it is normal to see a new unconfirmed transaction in your history.")
-        vbox.addWidget(WWLabel(_(msg2)))
-        grid = QGridLayout()
-        grid.addWidget(QLabel(_('Total size') + ':'), 0, 0)
-        grid.addWidget(QLabel(_('{total_size} bytes').format(total_size=total_size)), 0, 1)
-        max_fee = new_tx.output_value()
-        grid.addWidget(QLabel(_('Input amount') + ':'), 1, 0)
-        grid.addWidget(QLabel(self.format_amount(max_fee) + ' ' + self.base_unit()), 1, 1)
-        output_amount = QLabel('')
-        grid.addWidget(QLabel(_('Output amount') + ':'), 2, 0)
-        grid.addWidget(output_amount, 2, 1)
-        fee_e = BTCAmountEdit(self.get_decimal_point)
-        def f(x):
-            a = max_fee - fee_e.get_amount()
-            output_amount.setText((self.format_amount(a) + ' ' + self.base_unit()) if a else '')
-        fee_e.textChanged.connect(f)
-        fee = self.config.fee_per_kb() * total_size / 1000
-        fee_e.setAmount(fee)
-        grid.addWidget(QLabel(_('Fee' + ':')), 3, 0)
-        grid.addWidget(fee_e, 3, 1)
-        def on_rate(dyn, pos, fee_rate):
-            fee = fee_rate * total_size / 1000
-            fee = min(max_fee, fee)
-            fee_e.setAmount(fee)
-        fee_slider = FeeSlider(self, self.config, on_rate)
-        fee_slider.update()
-        grid.addWidget(fee_slider, 4, 1)
-        vbox.addLayout(grid)
-        vbox.addLayout(Buttons(CancelButton(d), OkButton(d)))
-        result = d.exec_()
-        d.setParent(None) # So Python can GC
-        if not result:
-            return
-        fee = fee_e.get_amount()
-        if fee > max_fee:
-            self.show_error(_('Max fee exceeded'))
-            return
-        new_tx = self.wallet.cpfp(parent_tx, fee)
-        if new_tx is None:
-            self.show_error(_('CPFP no longer valid'))
-            return
-        self.show_transaction(new_tx)
 
     def rebuild_history(self):
         if self.gui_object.warn_if_no_network(self):
@@ -5375,6 +5295,3 @@ class TxUpdateMgr(QObject, PrintError):
                                           .format(n_cashacct, ca_text))
                         else:
                             parent.notify(_("New transaction: {}").format(ca_text))
-                    # Play the sound effect ('ard moné edition only)
-                    if parent.tx_sound:
-                        parent.tx_sound.play()

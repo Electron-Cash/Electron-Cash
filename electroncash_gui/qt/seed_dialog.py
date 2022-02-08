@@ -181,7 +181,7 @@ class SeedLayout(QVBoxLayout):
             status = ('checksum: ' + ('ok' if is_checksum else 'failed')) if is_wordlist else 'unknown wordlist'
             label = 'BIP39' + ' (%s)'%status
         self.seed_type_label.setText(label)
-        self.parent.next_button.setEnabled(b)
+        self.parent.next_button.setEnabled(bool(b))
         if may_clear_warning:
             self.seed_warning.setText('')
 
@@ -200,7 +200,7 @@ class KeysLayout(QVBoxLayout):
         return self.text_e.text()
 
     def on_edit(self):
-        b = self.is_valid(self.get_text())
+        b = bool(self.is_valid(self.get_text()))
         self.parent.next_button.setEnabled(b)
 
 

@@ -261,6 +261,12 @@ class CoinGecko(ExchangeBase):
         return dict([(dt.utcfromtimestamp(h[0]/1000).strftime('%Y-%m-%d'), h[1])
                      for h in history['prices']])
 
+class BitstampYadio(ExchangeBase):
+    def get_rates(self, ccy):
+        json_usd = self.get_json('www.bitstamp.net', '/api/v2/ticker/bchusd')
+        json_ars = self.get_json('api.yadio.io', '/exrates/ARS')
+        return {'ARS': PyDecimal(json_usd['last']) / PyDecimal(json_ars['ARS']['USD'])}
+
 
 def dictinvert(d):
     inv = {}
@@ -374,10 +380,10 @@ class FxThread(ThreadJob):
     @staticmethod
     def is_supported():
         """Fiat currency is only supported on BCH MainNet, for all other chains it is not supported."""
-        return not networks.net.TESTNET and networks.net is not networks.TaxCoinNet
+        return not networks.net.TESTNET
 
     def is_enabled(self):
-        return self.is_supported() and self.config.get('use_exchange_rate', DEFAULT_ENABLED)
+        return bool(self.is_supported() and self.config.get('use_exchange_rate', DEFAULT_ENABLED))
 
     def set_enabled(self, b):
         return self.config.set_key('use_exchange_rate', bool(b))

@@ -281,6 +281,10 @@ class ElectrumGui(PrintError):
         utils.NSLog("GUI instance created, splash screen 2 presented")
 
     def createAndShowUI(self):
+        # First we set-up the iOS 15+ work-around colors..
+        CustomNavController.topNavBGColor = utils.uicolor_custom('nav')
+        CustomNavController.topNavTextColor = UIColor.whiteColor
+
         self.helper = GuiHelper.alloc().init()
 
         self.tabController = MyTabBarController.alloc().init().autorelease()
@@ -1238,9 +1242,15 @@ class ElectrumGui(PrintError):
             amount = out.get('amount')
             label = out.get('label')
             message = out.get('message')
+            op_return = out.get('op_return')
+            op_return_raw = out.get('op_return_raw')
+            op_return_is_raw = False
+            if op_return_raw is not None:
+                op_return_is_raw = True
+                op_return = op_return_raw
             # use label as description (not BIP21 compliant)
             if self.sendVC:
-                self.sendVC.onPayTo_message_amount_(address,message,amount)
+                self.sendVC.onPayTo_message_amount_opReturn_isRaw_(address,message,amount,op_return,op_return_is_raw)
                 return True
             else:
                 self.show_error("Oops! Something went wrong! Email the developers!")
@@ -1474,9 +1484,13 @@ class ElectrumGui(PrintError):
         self.daemon = None
         self.dismiss_downloading_notif()
         utils.cleanup_tmp_dir()
+        wd = wallets.WalletsMgr.wallets_dir()
+        if wd: utils.cleanup_wallet_dir(wd)  # on newer iOS for some reason *.tmp.PID remain..
 
     def start_daemon(self):
         if self.daemon_is_running(): return
+        wd = wallets.WalletsMgr.wallets_dir()
+        if wd: utils.cleanup_wallet_dir(wd)  # on newer iOS for some reason *.tmp.PID remain..
         import electroncash.daemon as ed
         try:
             # Force remove of lock file so the code below cuts to the chase and starts a new daemon without

@@ -37,5 +37,5 @@ class FixedAspectRatioSvgWidget(QSvgWidget):
     def sizeHint(self) -> QSize:
         svg_size = super().sizeHint()
         aspect_ratio = svg_size.width() / svg_size.height()
-        size_hint = QSize(self._width, self._width / aspect_ratio)
+        size_hint = QSize(int(self._width), int(self._width / aspect_ratio))
         return size_hint
