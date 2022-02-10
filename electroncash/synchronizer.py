@@ -126,6 +126,12 @@ class Synchronizer(ThreadJob):
         if not addr:
             return  # Bad server response?
         history = self.wallet.get_address_history(addr)
+
+        for tx_hash, tx_height in history:
+            if tx_height <= 0 and tx_hash not in self.network.dsp_subscriptions:
+                # There was one unconfirmed tx when the wallet opened
+                self.network.subscribe_to_dsproof(tx_hash, self.dsproof_callback)
+
         if self.get_status(history) != result:
             if self.requested_histories.get(scripthash) is None:
                 self.requested_histories[scripthash] = result
@@ -164,6 +170,14 @@ class Synchronizer(ThreadJob):
         elif self.get_status(hist) != server_status:
             self.print_error("error: status mismatch: {}".format(addr))
         else:
+            for tx_hash, tx_height in hist:
+                if tx_height > 0:
+                    if tx_hash in self.network.dsp_subscriptions:
+                        self.wallet.remove_detected_dsproof(tx_hash)
+                        self.network.unsubscribe_to_dsproof(tx_hash, [])
+                else:
+                    if self.network.force_dsproof and tx_hash not in self.network.dsp_subscriptions:
+                        self.network.subscribe_to_dsproof(tx_hash, self.dsproof_callback)
             # Store received history
             self.wallet.receive_history_callback(addr, hist, tx_fees)
             # Request transactions we don't have
@@ -208,6 +222,25 @@ class Synchronizer(ThreadJob):
         if not self.requested_tx:
             self.network.trigger_callback('wallet_updated', self.wallet)
 
+    def dsproof_callback(self, response):
+        _, result, error = self.parse_response(response)
+
+        if error:
+            return
+
+        # From subscription.
+        # I don't understand why the result is in the params dict...
+        if 'params' in response and len(response['params']) == 2:
+            _, result = response['params']
+
+        if result is None:
+            return
+
+        if 'descendants' in result:
+            txids = [s for s in result['descendants'] if not self.wallet.is_dsp_detected(s)]
+            if txids:
+                self.wallet.add_detected_dsproofs(txids)
+                self.network.trigger_callback('new_dsproof', self.wallet, result)
 
     def request_missing_txs(self, hist):
         # "hist" is a list of [tx_hash, tx_height] lists

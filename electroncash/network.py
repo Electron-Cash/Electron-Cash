@@ -276,6 +276,8 @@ class Network(util.DaemonThread):
         self.banner = ''
         self.donation_address = ''
         self.relay_fee = None
+        self.force_dsproof = self.config.get('dsproof', False)
+
         # callbacks passed with subscriptions
         self.subscriptions = defaultdict(list)
         self.sub_cache = {}                     # note: needs self.interface_lock
@@ -303,6 +305,7 @@ class Network(util.DaemonThread):
         self.connecting = set()
         self.requested_chunks = set()
         self.socket_queue = queue.Queue()
+        self.dsp_subscriptions = []
         if Network.INSTANCE:
             # This happens on iOS which kills and restarts the daemon on app sleep/wake
             self.print_error("A new instance has started and is replacing the old one.")
@@ -724,6 +727,12 @@ class Network(util.DaemonThread):
             server = pick_random_server(hostmap, exclude_set=self.blacklisted_servers)
         return server
 
+    def toogle_dsproof_interface(self, force_dsproof):
+        self.force_dsproof = force_dsproof
+        if force_dsproof and 'dsproof' in self.interface.features:
+            if not self.interface.features['dsproof']:
+                self.switch_to_random_interface()
+
     def switch_to_random_interface(self):
         """Switch to a random connected server other than the current one"""
         servers = self.get_interfaces()    # Those in connected state
@@ -765,6 +774,12 @@ class Network(util.DaemonThread):
             # stop any current interface in order to terminate subscriptions
             # fixme: we don't want to close headers sub
             #self.close_interface(self.interface)
+            if self.force_dsproof and 'dsproof' in i.features:
+                if not i.features['dsproof']:
+                    self.connection_down(server, blacklist=False)
+                    return
+            elif self.force_dsproof:
+                return
             self.interface = i
             self.send_subscriptions()
             self.set_status('connected')
@@ -853,7 +868,12 @@ class Network(util.DaemonThread):
             except Exception as e:
                 self.print_error(f"bad server response for {method}: {repr(e)} / {response}")
                 self.connection_down(interface.server)
-
+        elif method == 'server.features':
+            if error is None and isinstance(result, dict):
+                if 'dsproof' in result:
+                    interface.features['dsproof'] = True
+                else:
+                    interface.features['dsproof'] = False
         for callback in callbacks:
             callback(response)
 
@@ -914,6 +934,20 @@ class Network(util.DaemonThread):
         msgs = [('blockchain.scripthash.subscribe', [sh])
                 for sh in scripthashes]
         self.send(msgs, callback)
+
+    def subscribe_to_dsproof(self, txid, callback):
+        if txid in self.dsp_subscriptions:
+            return
+        self.dsp_subscriptions.append(txid)
+        msg = [[('blockchain.transaction.dsproof.subscribe'), [txid]]]
+        self.send(msg, callback)
+
+    def unsubscribe_to_dsproof(self, txid, callback):
+        if txid not in self.dsp_subscriptions:
+            return
+        self.dsp_subscriptions.remove(txid)
+        msg = [[('blockchain.transaction.dsproof.unsubscribe'), [txid]]]
+        self.send(msg, callback)
 
     def request_scripthash_history(self, sh, callback):
         self.send([('blockchain.scripthash.get_history', [sh])], callback)
@@ -1035,6 +1069,7 @@ class Network(util.DaemonThread):
         self.queue_request('server.version', params, interface)
         # The interface will immediately respond with it's last known header.
         self.queue_request('blockchain.headers.subscribe', [], interface)
+        self.queue_request('server.features', [], interface)
 
         if server_key == self.default_server:
             self.switch_to_interface(server_key, self.SWITCH_DEFAULT)

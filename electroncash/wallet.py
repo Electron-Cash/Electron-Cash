@@ -277,6 +277,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.invoices = InvoiceStore(self.storage)
         self.contacts = Contacts(self.storage)
 
+        # txid's with network-triggered double spend proofs
+        self._detected_dsproofs = []
+
         # cashacct is started in start_threads, but it needs to have relevant
         # data here, before the below calls happen
         self.cashacct.load()
@@ -2701,6 +2704,21 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # 'ask me per tx', so for now True -> 2.
         self.storage.put('sign_schnorr', 2 if b else 0)
 
+    def is_dsp_detected(self, txid):
+        return True if txid in self._detected_dsproofs else False
+
+    def add_detected_dsproofs(self, txids):
+        with self.lock:
+            for t in txids:
+                if t not in self._detected_dsproofs:
+                    self._detected_dsproofs.append(t)
+
+    def remove_detected_dsproof(self, txid):
+        with self.lock:
+            if txid in self._detected_dsproofs:
+                self._detected_dsproofs.remove(txid)
+                return True
+            return False
 
 class Simple_Wallet(Abstract_Wallet):
     # wallet with a single keystore

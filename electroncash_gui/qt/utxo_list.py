@@ -137,6 +137,7 @@ class UTXOList(MyTreeWidget):
                 tool_tip0 = self.wallet.cashacct.fmt_info(ca_info, emoji=True)
             height = x['height']
             is_immature = x['coinbase'] and height > local_maturity_height
+            dsp_detected = self.wallet.is_dsp_detected(x['prevout_hash'])
             name = self.get_name(x)
             name_short = self.get_name_short(x)
             label = self.wallet.get_label(x['prevout_hash'])
@@ -153,6 +154,8 @@ class UTXOList(MyTreeWidget):
             utxo_item.setFont(2, self.monospaceFont)
             utxo_item.setFont(4, self.monospaceFont)
             utxo_item.setData(0, self.DataRoles.name, name)
+            if dsp_detected:
+                for i in range(self.columnCount()): utxo_item.setBackground(i, QBrush(QColor("#FF0000")))
             a_frozen = self.wallet.is_frozen(address)
             c_frozen = x['is_frozen_coin']
             toolTipMisc = ''

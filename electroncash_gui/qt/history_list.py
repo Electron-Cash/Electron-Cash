@@ -137,8 +137,9 @@ class HistoryList(MyTreeWidget):
                 # This flag is checked in main_window.py, TxUpadteMgr class.
                 self.has_unknown_balances = True
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
+            dsp_detected = self.wallet.is_dsp_detected(tx_hash)
             has_invoice = self.wallet.invoices.paid.get(tx_hash)
-            icon = self._get_icon_for_status(status)
+            icon = self._get_icon_for_status(status) if not dsp_detected else self._get_icon_for_status(0)
             v_str = self.parent.format_amount(value, True, whitespaces=True)
             balance_str = self.parent.format_amount(balance, whitespaces=True)
             entry = ['', tx_hash, status_str, label, v_str, balance_str]
@@ -148,8 +149,12 @@ class HistoryList(MyTreeWidget):
                     text = fx.historical_value_str(amount, date)
                     entry.append(text)
             item = SortableTreeWidgetItem(entry)
+            if dsp_detected:
+                for i in range(self.columnCount()): item.setBackground(i, QBrush(QColor("#FF0000")))
+                item.setToolTip(0, _("Conflicting transaction detected"))
+            else:
+                item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
             if icon: item.setIcon(0, icon)
-            item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
             item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             if has_invoice:
                 item.setIcon(3, self.invoiceIcon)
