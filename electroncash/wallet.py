@@ -2592,14 +2592,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def is_hardware(self):
         return any([isinstance(k, Hardware_KeyStore) for k in self.get_keystores()])
 
-    def add_address(self, address):
+    def add_address(self, address, *, for_change=False):
         assert isinstance(address, Address)
-        self._addr_bal_cache.pop(address, None)  # paranoia, not really necessary -- just want to maintain the invariant that when we modify address history below we invalidate cache.
+        # paranoia, not really necessary -- just want to maintain the invariant that when we modify address history
+        # below we invalidate cache.
+        self._addr_bal_cache.pop(address, None)
         self.invalidate_address_set_cache()
         if address not in self._history:
             self._history[address] = []
         if self.synchronizer:
-            self.synchronizer.add(address)
+            self.synchronizer.add(address, for_change=for_change)
         self.cashacct.on_address_addition(address)
 
     def has_password(self):
@@ -3061,7 +3063,7 @@ class Deterministic_Wallet(Abstract_Wallet):
             addr_list.append(address)
             if save:
                 self.save_addresses()
-            self.add_address(address)
+            self.add_address(address, for_change=for_change)
             return address
 
     def synchronize_sequence(self, for_change):
