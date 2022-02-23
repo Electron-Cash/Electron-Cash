@@ -133,7 +133,9 @@ class Synchronizer(ThreadJob):
     def on_address_status(self, response):
         if self.cleaned_up:
             self.print_error("Already cleaned-up, ignoring stale reponse:", response)
-            self._release()  # defensive programming: make doubly sure we aren't registered to receive any callbacks from netwok class and cancel subscriptions again.
+            # defensive programming: make doubly sure we aren't registered to receive any callbacks from network class
+            # and cancel subscriptions again.
+            self._release()
             return
         params, result, error = self.parse_response(response)
         if error:
