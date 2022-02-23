@@ -95,7 +95,7 @@ class Synchronizer(ThreadJob):
         unregister ourselves as a job from within the Network thread itself. """
         self._need_release = False
         self.cleaned_up = True
-        self.network.unsubscribe(self.on_address_status)
+        self.network.unsubscribe_from_scripthashes(self.h2addr.keys(), self.on_address_status)
         self.network.cancel_requests(self.on_address_status)
         self.network.cancel_requests(self.on_address_history)
         self.network.cancel_requests(self.tx_response)
