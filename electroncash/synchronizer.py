@@ -3,6 +3,9 @@
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2014 Thomas Voegtlin
 #
+# Electron Cash - Bitcoin Cash thin client
+# Copyright (C) 2017-2022 The Electron Cash Developers
+#
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
 # (the "Software"), to deal in the Software without restriction,
@@ -24,6 +27,7 @@
 # SOFTWARE.
 
 from threading import Lock
+from typing import Iterable, Tuple
 import hashlib
 import traceback
 
@@ -34,15 +38,14 @@ from .bitcoin import InvalidXKeyFormat
 
 
 class Synchronizer(ThreadJob):
-    '''The synchronizer keeps the wallet up-to-date with its set of
+    """The synchronizer keeps the wallet up-to-date with its set of
     addresses and their transactions.  It subscribes over the network
     to wallet addresses, gets the wallet to generate new addresses
     when necessary, requests the transaction history of any addresses
     we don't have the full history of, and requests binary transaction
     data of any transactions the wallet doesn't have.
 
-    External interface: __init__() and add() member functions.
-    '''
+    External interface: __init__() and add() member functions."""
 
     def __init__(self, wallet, network):
         self.wallet = wallet
@@ -77,9 +80,9 @@ class Synchronizer(ThreadJob):
                 and not self.requested_hashes)
 
     def _release(self):
-        ''' Called from the Network (DaemonThread) -- to prevent race conditions
+        """ Called from the Network (DaemonThread) -- to prevent race conditions
         with network, we remove data structures related to the network and
-        unregister ourselves as a job from within the Network thread itself. '''
+        unregister ourselves as a job from within the Network thread itself. """
         self._need_release = False
         self.cleaned_up = True
         self.network.unsubscribe(self.on_address_status)
@@ -89,12 +92,12 @@ class Synchronizer(ThreadJob):
         self.network.remove_jobs([self])
 
     def release(self):
-        ''' Called from main thread, enqueues a 'release' to happen in the
-        Network thread. '''
+        """ Called from main thread, enqueues a 'release' to happen in the
+        Network thread. """
         self._need_release = True
 
     def add(self, address):
-        '''This can be called from the proxy or GUI threads.'''
+        """ This can be called from the proxy or GUI threads. """
         with self.lock:
             self.new_addresses.add(address)
 
@@ -105,13 +108,14 @@ class Synchronizer(ThreadJob):
         self.network.subscribe_to_scripthashes(hashes, self.on_address_status)
         self.requested_hashes |= set(hashes)
 
-    def get_status(self, h):
-        if not h:
+    @staticmethod
+    def get_status(hist: Iterable[Tuple[str, int]]):
+        if not hist:
             return None
-        status = ''
-        for tx_hash, height in h:
-            status += tx_hash + ':%d:' % height
-        return bh2u(hashlib.sha256(status.encode('ascii')).digest())
+        status = bytearray()
+        for tx_hash, height in hist:
+            status.extend(f"{tx_hash}:{height:d}:".encode('ascii'))
+        return bh2u(hashlib.sha256(status).digest())
 
     def on_address_status(self, response):
         if self.cleaned_up:
@@ -208,8 +212,7 @@ class Synchronizer(ThreadJob):
         if not self.requested_tx:
             self.network.trigger_callback('wallet_updated', self.wallet)
 
-
-    def request_missing_txs(self, hist):
+    def request_missing_txs(self, hist: Iterable[Tuple[str, int]]):
         # "hist" is a list of [tx_hash, tx_height] lists
         requests = []
         for tx_hash, tx_height in hist:
@@ -221,14 +224,11 @@ class Synchronizer(ThreadJob):
             self.requested_tx[tx_hash] = tx_height
         self.network.send(requests, self.tx_response)
 
-
     def initialize(self):
-        '''Check the initial state of the wallet.  Subscribe to all its
+        """ Check the initial state of the wallet.  Subscribe to all its
         addresses, and request any transactions in its address history
-        we don't have.
-        '''
-        # FIXME: encapsulation
-        for history in self.wallet._history.values():
+        we don't have. """
+        for history in self.wallet.get_history_values():
             self.request_missing_txs(history)
 
         if self.requested_tx:
@@ -236,7 +236,7 @@ class Synchronizer(ThreadJob):
         self.subscribe_to_addresses(self.wallet.get_addresses())
 
     def run(self):
-        '''Called from the network proxy thread main loop.'''
+        """ Called from the network proxy thread main loop. """
         if self._need_release:
             self._release()
         if self.cleaned_up:
@@ -268,7 +268,9 @@ class Synchronizer(ThreadJob):
             # encountering such wallets.
             # See #1164
             if networks.net.TESTNET:
-                self.print_stderr("*** ERROR *** Bad format testnet xkey detected. Synchronizer will no longer proceed to synchronize. Please regenerate this testnet wallet from seed to fix this error.")
+                self.print_stderr("*** ERROR *** Bad format testnet xkey detected. Synchronizer will no longer"
+                                  " proceed to synchronize. Please regenerate this testnet wallet from seed to"
+                                  " fix this error.")
                 self._release()
             else:
                 raise

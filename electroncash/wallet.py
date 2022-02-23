@@ -1,6 +1,9 @@
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2015 Thomas Voegtlin
 #
+# Electron Cash - Bitcoin Cash thin client
+# Copyright (C) 2017-2022 The Electron Cash Developers
+#
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
 # (the "Software"), to deal in the Software without restriction,
@@ -40,7 +43,7 @@ import time
 from collections import defaultdict, namedtuple
 from enum import Enum, auto
 from functools import partial
-from typing import Set, Tuple, Union
+from typing import Set, Tuple, Union, ValuesView
 
 from .i18n import ngettext
 from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time,
@@ -697,7 +700,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if txs:
             self._addr_bal_cache = {}  # this is probably not necessary -- as the receive_history_callback will invalidate bad cache items -- but just to be paranoid we clear the whole balance cache on reorg anyway as a safety measure
         for tx_hash in txs:
-            self._update_request_statuses_touched_by_tx(tx_hash)    
+            self._update_request_statuses_touched_by_tx(tx_hash)
         return txs
 
     def get_local_height(self):
@@ -2700,6 +2703,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # Note: we will have '1' at some point in the future which will mean:
         # 'ask me per tx', so for now True -> 2.
         self.storage.put('sign_schnorr', 2 if b else 0)
+
+    def get_history_values(self) -> ValuesView[Tuple[str, int]]:
+        """ Returns the an iterable (view) of all the List[tx_hash, height] pairs for each address in the wallet."""
+        return self._history.values()
 
 
 class Simple_Wallet(Abstract_Wallet):
