@@ -172,10 +172,6 @@ class Synchronizer(ThreadJob):
         # tx_fees
         tx_fees = [(item['tx_hash'], item.get('fee')) for item in result]
         tx_fees = dict(filter(lambda x:x[1] is not None, tx_fees))
-        # Note if the server hasn't been patched to sort the items properly
-        if hist != sorted(hist, key=lambda x:x[1]):
-            which = self.network.interface or self
-            which.print_error("serving improperly sorted address histories")
         # Check that txids are unique
         if len(hashes) != len(result):
             self.print_error("error: server history has non-unique txids: {}"
