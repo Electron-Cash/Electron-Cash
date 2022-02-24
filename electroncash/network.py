@@ -911,7 +911,7 @@ class Network(util.DaemonThread):
             # Response is now in canonical form
             self.process_response(interface, request, response, callbacks)
 
-    def subscribe_to_scripthashes(self, scripthashes, callback):
+    def subscribe_to_scripthashes(self, scripthashes: Iterable[str], callback):
         msgs = [('blockchain.scripthash.subscribe', [sh])
                 for sh in scripthashes]
         self.send(msgs, callback)

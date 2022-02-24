@@ -112,14 +112,15 @@ class Synchronizer(ThreadJob):
             if not for_change:
                 self.new_addresses.add(address)
             else:
+                # we use a dict here to preserve order -- this is an "ordered set"
                 self.new_addresses_for_change[address] = None
 
     def subscribe_to_addresses(self, addresses: Iterable[Address], *, for_change=False):
-        hashes = [addr.to_scripthash_hex() for addr in addresses]
+        hashes2addr = {addr.to_scripthash_hex(): addr for addr in addresses}
         # Keep a hash -> address mapping
-        self.h2addr.update({hash: addr for hash, addr in zip(hashes, addresses)})
-        self.network.subscribe_to_scripthashes(hashes, self.on_address_status)
-        self.requested_hashes |= set(hashes)
+        self.h2addr.update(hashes2addr)
+        self.network.subscribe_to_scripthashes(hashes2addr.keys(), self.on_address_status)
+        self.requested_hashes |= set(hashes2addr.keys())
 
     @staticmethod
     def get_status(hist: Iterable[Tuple[str, int]]):
