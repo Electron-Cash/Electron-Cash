@@ -43,7 +43,7 @@ import time
 from collections import defaultdict, namedtuple
 from enum import Enum, auto
 from functools import partial
-from typing import Set, Tuple, Union, ValuesView
+from typing import ItemsView, List, Optional, Set, Tuple, Union, ValuesView
 
 from .i18n import ngettext
 from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time,
@@ -191,8 +191,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.thread = None  # this is used by the qt main_window to store a QThread. We just make sure it's always defined as an attribute here.
         self.network = None
         # verifier (SPV) and synchronizer are started in start_threads
-        self.synchronizer = None
-        self.verifier = None
+        self.verifier: Optional[SPV] = None
+        self.synchronizer: Optional[Synchronizer] = None
         self.weak_window = None  # Some of the GUI classes, such as the Qt ElectrumWindow, use this to refer back to themselves.  This should always be a weakref.ref (Weak.ref), or None
         # CashAccounts subsystem. Its network-dependent layer is started in
         # start_threads. Note: object instantiation should be lightweight here.
@@ -1461,7 +1461,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # inform slp subsystem as well
             self.slp.rm_tx(tx_hash)
 
-
     def receive_tx_callback(self, tx_hash, tx, tx_height):
         self.add_transaction(tx_hash, tx)
         self.add_unverified_tx(tx_hash, tx_height)
@@ -1525,7 +1524,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     TxHistory = namedtuple("TxHistory", "tx_hash, height, conf, timestamp, amount, balance")
 
-    def get_history(self, domain=None, *, reverse=False):
+    def get_history(self, domain=None, *, reverse=False) -> List[TxHistory]:
         # get domain
         if domain is None:
             domain = self.get_addresses()
@@ -2709,6 +2708,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def get_history_values(self) -> ValuesView[Tuple[str, int]]:
         """ Returns the an iterable (view) of all the List[tx_hash, height] pairs for each address in the wallet."""
         return self._history.values()
+
+    def get_history_items(self) -> ItemsView[Address, List[Tuple[str, int]]]:
+        return self._history.items()
 
 
 class Simple_Wallet(Abstract_Wallet):

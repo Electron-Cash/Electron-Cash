@@ -26,8 +26,9 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from collections import defaultdict
 from threading import Lock
-from typing import Dict, Iterable, Set, Tuple
+from typing import DefaultDict, Dict, Iterable, Optional, Set, Tuple
 import hashlib
 import sys
 import traceback
@@ -35,7 +36,7 @@ import warnings
 
 from .address import Address
 from .transaction import Transaction
-from .util import ThreadJob, bh2u
+from .util import ThreadJob, bh2u, Monotonic
 from . import networks
 from .bitcoin import InvalidXKeyFormat
 
@@ -50,7 +51,7 @@ class Synchronizer(ThreadJob):
 
     External interface: __init__() and add() member functions."""
 
-    def __init__(self, wallet, network):
+    def __init__(self, wallet, network, *, limit_change_subs=0):
         self.wallet = wallet
         self.network = network
         self.cleaned_up = False
@@ -62,12 +63,24 @@ class Synchronizer(ThreadJob):
             # This is because we require ordered dictionaries.
             warnings.warn("CPython 3.6+ or Python 3.7+ is required for class Synchronizer to operate correctly."
                           " Please switch Python versions!", RuntimeWarning, stacklevel=2)
-        self.new_addresses_for_change: Dict[Address, type(None)] = dict()  # Basically, an ordered set of Addresses
-        # Entries are (tx_hash, tx_height) tuples
-        self.requested_tx = {}
+        # Basically, an ordered set of Addresses
+        self.new_addresses_for_change: Dict[Address, None] = dict()
+        # Mapping of tx_hash -> tx_height
+        self.requested_tx: Dict[str, int] = dict()
+        # Mapping of scripthash -> set of requested tx_hashes
+        self.requested_tx_by_sh: DefaultDict[str, Set[str]] = defaultdict(set)
         self.requested_histories = {}
         self.requested_hashes = set()
-        self.h2addr = {}
+        self.change_sh_ctr = Monotonic(locking=True)
+        # all known change address scripthashes -> their order seen
+        self.change_scripthashes: DefaultDict[str, int] = defaultdict(self.change_sh_ctr)
+        # set of all change address scripthashes that we are currently subscribed to
+        self.change_subs = set()
+        # set of all "used", 0 balance change sh's
+        self.change_subs_expiry_candidates: Set[str] = set()
+        # mapping of scripthash -> Address
+        self.h2addr: Dict[str, Address] = {}
+        self.limit_change_subs = limit_change_subs
         self.lock = Lock()
         self._tick_ct = 0
         self.initialize()
@@ -86,8 +99,7 @@ class Synchronizer(ThreadJob):
                 self.print_error("response error:", response)
 
     def is_up_to_date(self):
-        return (not self.requested_tx and not self.requested_histories
-                and not self.requested_hashes)
+        return not self.requested_tx and not self.requested_histories and not self.requested_hashes
 
     def _release(self):
         """ Called from the Network (DaemonThread) -- to prevent race conditions
@@ -117,10 +129,19 @@ class Synchronizer(ThreadJob):
 
     def subscribe_to_addresses(self, addresses: Iterable[Address], *, for_change=False):
         hashes2addr = {addr.to_scripthash_hex(): addr for addr in addresses}
+        if not hashes2addr:
+            return  # Nothing to do!
         # Keep a hash -> address mapping
         self.h2addr.update(hashes2addr)
+        hashes_set = set(hashes2addr.keys())
+        self.requested_hashes |= hashes_set
+        if for_change and self.limit_change_subs:
+            for sh in hashes2addr.keys():  # Iterate in order (dicts are ordered)
+                # This is a defaultdict, accessing it will add a counted item if not there
+                self.change_scripthashes[sh]
+            self.change_subs |= hashes_set
+        # Nit: we use hashes2addr.keys() here to preserve order
         self.network.subscribe_to_scripthashes(hashes2addr.keys(), self.on_address_status)
-        self.requested_hashes |= set(hashes2addr.keys())
 
     @staticmethod
     def get_status(hist: Iterable[Tuple[str, int]]):
@@ -130,6 +151,30 @@ class Synchronizer(ThreadJob):
         for tx_hash, height in hist:
             status.extend(f"{tx_hash}:{height:d}:".encode('ascii'))
         return bh2u(hashlib.sha256(status).digest())
+
+    def check_change_sh(self, sh: str):
+        if not self.limit_change_subs:
+            # If not limiting change subs, this subsystem is not used so no need to maintain data structures below...
+            return
+        if (not sh or sh not in self.change_scripthashes or sh in self.requested_tx_by_sh
+                or sh in self.requested_histories or sh not in (self.change_subs - self.requested_hashes)):
+            # this scripthash is either not change or is not subbed or is not yet "stable", discard and abort early
+            self.change_subs_expiry_candidates.discard(sh)
+            return
+        addr = self.h2addr.get(sh)
+        if not addr:
+            return
+        hlen = len(self.wallet.get_address_history(addr))  # O(1) lookup into a dict
+        if hlen == 2:  # Only "expire" old change address with precisely 1 input tx and 1 spending tx
+            bal = self.wallet.get_addr_balance(addr)  # Potentially fast lookup since addr_balance gets cached
+        else:
+            bal = None
+        if bal is not None and not any(bal):
+            # Candidate for expiry: has history of size 2 and also 0 balance
+            self.change_subs_expiry_candidates.add(sh)
+        else:
+            # Not a candidate for expiry
+            self.change_subs_expiry_candidates.discard(sh)
 
     def on_address_status(self, response):
         if self.cleaned_up:
@@ -149,10 +194,11 @@ class Synchronizer(ThreadJob):
         if self.get_status(history) != result:
             if self.requested_histories.get(scripthash) is None:
                 self.requested_histories[scripthash] = result
-                self.network.request_scripthash_history(scripthash,
-                                                        self.on_address_history)
+                self.network.request_scripthash_history(scripthash, self.on_address_history)
         # remove addr from list only after it is added to requested_histories
         self.requested_hashes.discard(scripthash)  # Notifications won't be in
+        # See if now the change address needs to be recategorized
+        self.check_change_sh(scripthash)
 
     def on_address_history(self, response):
         if self.cleaned_up:
@@ -183,9 +229,11 @@ class Synchronizer(ThreadJob):
             # Store received history
             self.wallet.receive_history_callback(addr, hist, tx_fees)
             # Request transactions we don't have
-            self.request_missing_txs(hist)
+            self.request_missing_txs(hist, scripthash)
+        # Check that this scripthash is a candidate for purge
+        self.check_change_sh(scripthash)
 
-    def tx_response(self, response):
+    def tx_response(self, response, scripthash: Optional[str]):
         if self.cleaned_up:
             return
         params, result, error = self.parse_response(response)
@@ -194,37 +242,49 @@ class Synchronizer(ThreadJob):
         # on bad server reply or reorg.
         # see Electrum commit 7b8114f865f644c5611c3bb849c4f4fc6ce9e376 fix#5122
         tx_height = self.requested_tx.pop(tx_hash, 0)
-        if error:
-            # was some response error. note we popped the tx already
-            # we assume a blockchain reorg happened and tx disappeared.
-            self.print_error("error for tx_hash {}, skipping".format(tx_hash))
-            return
-        try:
-            tx = Transaction(result)
-            tx.deserialize()
-        except Exception:
-            traceback.print_exc()
-            self.print_msg("cannot deserialize transaction, skipping", tx_hash)
-            return
-        # Paranoia - in case server is malicious and serves bogus tx.
-        # We must do this because verifier verifies merkle_proof based on this
-        # tx_hash.
-        chk_txid = tx.txid_fast()
-        if tx_hash != chk_txid:
-            self.print_error("received tx does not match expected txid ({} != {}), skipping"
-                             .format(tx_hash, chk_txid))
-            return
-        del chk_txid
-        # /Paranoia
-        self.wallet.receive_tx_callback(tx_hash, tx, tx_height)
-        self.print_error("received tx %s height: %d bytes: %d" %
-                         (tx_hash, tx_height, len(tx.raw)))
-        # callbacks
-        self.network.trigger_callback('new_transaction', tx, self.wallet)
-        if not self.requested_tx:
-            self.network.trigger_callback('wallet_updated', self.wallet)
+        # Maintain the requested_tx_by_sh dict
+        if scripthash in self.requested_tx_by_sh:
+            self.requested_tx_by_sh[scripthash].discard(tx_hash)
+            if not self.requested_tx_by_sh[scripthash]:
+                del self.requested_tx_by_sh[scripthash]
 
-    def request_missing_txs(self, hist: Iterable[Tuple[str, int]]):
+        def process():
+            if error:
+                # was some response error. note we popped the tx already
+                # we assume a blockchain reorg happened and tx disappeared.
+                self.print_error("error for tx_hash {}, skipping".format(tx_hash))
+                return
+            try:
+                tx = Transaction(result)
+                tx.deserialize()
+            except Exception:
+                traceback.print_exc()
+                self.print_msg("cannot deserialize transaction, skipping", tx_hash)
+                return
+            # Paranoia - in case server is malicious and serves bogus tx.
+            # We must do this because verifier verifies merkle_proof based on this
+            # tx_hash.
+            chk_txid = tx.txid_fast()
+            if tx_hash != chk_txid:
+                self.print_error("received tx does not match expected txid ({} != {}), skipping"
+                                 .format(tx_hash, chk_txid))
+                return
+            del chk_txid
+            # /Paranoia
+            self.wallet.receive_tx_callback(tx_hash, tx, tx_height)
+            self.print_error("received tx %s height: %d bytes: %d" %
+                             (tx_hash, tx_height, len(tx.raw)))
+            # callbacks
+            self.network.trigger_callback('new_transaction', tx, self.wallet)
+            if not self.requested_tx:
+                self.network.trigger_callback('wallet_updated', self.wallet)
+
+        process()
+
+        # wallet balance updated for this sh, check if it is a candidate for purge
+        self.check_change_sh(scripthash)
+
+    def request_missing_txs(self, hist: Iterable[Tuple[str, int]], scripthash: Optional[str]) -> bool:
         # "hist" is a list of [tx_hash, tx_height] lists
         requests = []
         for tx_hash, tx_height in hist:
@@ -234,14 +294,24 @@ class Synchronizer(ThreadJob):
                 continue
             requests.append(('blockchain.transaction.get', [tx_hash]))
             self.requested_tx[tx_hash] = tx_height
-        self.network.send(requests, self.tx_response)
+            if self.limit_change_subs and scripthash is not None:
+                self.requested_tx_by_sh[scripthash].add(tx_hash)
+        if requests:
+            self.network.send(requests, lambda response: self.tx_response(response, scripthash))
+            return True
+        return False
 
     def initialize(self):
         """ Check the initial state of the wallet.  Subscribe to all its
         addresses, and request any transactions in its address history
         we don't have. """
-        for history in self.wallet.get_history_values():
-            self.request_missing_txs(history)
+        if self.limit_change_subs:
+            for addr, history in self.wallet.get_history_items():
+                self.request_missing_txs(history, addr.to_scripthash_hex())
+        else:
+            # If not using the limit_change_subs feature, save CPU cycles by not computing scripthashes
+            for history in self.wallet.get_history_values():
+                self.request_missing_txs(history, None)
 
         if self.requested_tx:
             self.print_error("missing tx", self.requested_tx)
