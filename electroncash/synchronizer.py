@@ -52,6 +52,7 @@ class Synchronizer(ThreadJob):
     External interface: __init__() and add() member functions."""
 
     def __init__(self, wallet, network, *, limit_change_subs=0):
+        assert limit_change_subs >= 0  # Disallow negative values here as they will create problems
         self.wallet = wallet
         self.network = network
         self.cleaned_up = False
@@ -75,7 +76,7 @@ class Synchronizer(ThreadJob):
         # all known change address scripthashes -> their order seen
         self.change_scripthashes: DefaultDict[str, int] = defaultdict(self.change_sh_ctr)
         # set of all change address scripthashes that we are currently subscribed to
-        self.change_subs = set()
+        self.change_subs: Set[str] = set()
         # set of all "used", 0 balance change sh's
         self.change_subs_expiry_candidates: Set[str] = set()
         # mapping of scripthash -> Address
@@ -127,6 +128,30 @@ class Synchronizer(ThreadJob):
                 # we use a dict here to preserve order -- this is an "ordered set"
                 self.new_addresses_for_change[address] = None
 
+    def check_change_subs_limits(self):
+        if not self.limit_change_subs:
+            return
+        active = self.change_subs_active
+        ctr = len(active) - self.limit_change_subs
+        if ctr <= 0:
+            return
+        candidates = sorted(self.change_subs_expiry_candidates, key=lambda x: self.change_scripthashes.get(x, 2**64))
+        unsubs = []
+        for scripthash in candidates:
+            if ctr <= 0:
+                break
+            if scripthash not in active:
+                continue
+            unsubs.append(scripthash)
+            self.change_subs_expiry_candidates.discard(scripthash)
+            self.change_subs.discard(scripthash)
+            ctr -= 1
+        if unsubs:
+            self.print_error(f"change_subs limit reached ({self.limit_change_subs}), unsubscribing from"
+                             f" {len(unsubs)} old change scripthashes,"
+                             f" change scripthash subs ct now: {len(self.change_subs)}")
+            self.network.unsubscribe_from_scripthashes(unsubs, self.on_address_status)
+
     def subscribe_to_addresses(self, addresses: Iterable[Address], *, for_change=False):
         hashes2addr = {addr.to_scripthash_hex(): addr for addr in addresses}
         if not hashes2addr:
@@ -142,6 +167,8 @@ class Synchronizer(ThreadJob):
             self.change_subs |= hashes_set
         # Nit: we use hashes2addr.keys() here to preserve order
         self.network.subscribe_to_scripthashes(hashes2addr.keys(), self.on_address_status)
+        if for_change:
+            self.check_change_subs_limits()
 
     @staticmethod
     def get_status(hist: Iterable[Tuple[str, int]]):
@@ -152,12 +179,16 @@ class Synchronizer(ThreadJob):
             status.extend(f"{tx_hash}:{height:d}:".encode('ascii'))
         return bh2u(hashlib.sha256(status).digest())
 
+    @property
+    def change_subs_active(self) -> Set[str]:
+        return self.change_subs - self.requested_hashes
+
     def check_change_sh(self, sh: str):
         if not self.limit_change_subs:
             # If not limiting change subs, this subsystem is not used so no need to maintain data structures below...
             return
         if (not sh or sh not in self.change_scripthashes or sh in self.requested_tx_by_sh
-                or sh in self.requested_histories or sh not in (self.change_subs - self.requested_hashes)):
+                or sh in self.requested_histories or sh not in self.change_subs_active):
             # this scripthash is either not change or is not subbed or is not yet "stable", discard and abort early
             self.change_subs_expiry_candidates.discard(sh)
             return
@@ -315,8 +346,38 @@ class Synchronizer(ThreadJob):
 
         if self.requested_tx:
             self.print_error("missing tx", self.requested_tx)
+
         self.subscribe_to_addresses(self.wallet.get_receiving_addresses())
-        self.subscribe_to_addresses(self.wallet.get_change_addresses(), for_change=True)
+        if not self.limit_change_subs:
+            self.subscribe_to_addresses(self.wallet.get_change_addresses(), for_change=True)
+        else:
+            # Subs limiting for change addrs in place, do it in the network thread next time we run, grabbing
+            # self.limit_change_subs addresses at a time
+            with self.lock:
+                self.new_addresses_for_change.update({addr: None for addr in self.wallet.get_change_addresses()})
+
+    def pop_new_addresses(self) -> Tuple[Set[Address], Iterable[Address]]:
+        with self.lock:
+            # Pop all queued receiving
+            addresses = self.new_addresses
+            self.new_addresses = set()
+            if not self.limit_change_subs:
+                # Pop all queued change addrs
+                addresses_for_change = self.new_addresses_for_change.keys()
+                self.new_addresses_for_change = dict()
+            else:
+                # Change address subs limiting in place, only grab first self.limit_change_subs new change addresses
+                addresses_for_change = list(self.new_addresses_for_change.keys())[:self.limit_change_subs]
+                # only grab change addresses if this set + queued subs requests are under the limit
+                if len(self.requested_hashes) < self.limit_change_subs:
+                    addresses_for_change = addresses_for_change[:self.limit_change_subs - len(self.requested_hashes)]
+                    for addr in addresses_for_change:
+                        # delete the keys we just grabbed
+                        self.new_addresses_for_change.pop(addr, None)
+                else:
+                    # Do nothing this time around
+                    addresses_for_change = []
+        return addresses, addresses_for_change
 
     def run(self):
         """ Called from the network proxy thread main loop. """
@@ -334,11 +395,7 @@ class Synchronizer(ThreadJob):
             self.wallet.synchronize()
 
             # 2. Subscribe to new addresses
-            with self.lock:
-                addresses = self.new_addresses
-                self.new_addresses = set()
-                addresses_for_change = list(self.new_addresses_for_change.keys())
-                self.new_addresses_for_change = dict()
+            addresses, addresses_for_change = self.pop_new_addresses()
             if addresses:
                 self.subscribe_to_addresses(addresses)
             if addresses_for_change:
