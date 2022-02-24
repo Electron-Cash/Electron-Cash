@@ -83,12 +83,12 @@ class Synchronizer(ThreadJob):
         self.lock = Lock()
         self._tick_ct = 0
         self.limit_change_subs = max(self.wallet.limit_change_addr_subs, 0)  # Disallow negatives; they create problems
-        self.initialize()
+        self._initialize()
 
     def diagnostic_name(self):
         return f"{__class__.__name__}/{self.wallet.diagnostic_name()}"
 
-    def parse_response(self, response):
+    def _parse_response(self, response):
         error = True
         try:
             if not response: return None, None, error
@@ -107,10 +107,10 @@ class Synchronizer(ThreadJob):
         unregister ourselves as a job from within the Network thread itself. """
         self._need_release = False
         self.cleaned_up = True
-        self.network.unsubscribe_from_scripthashes(self.h2addr.keys(), self.on_address_status)
-        self.network.cancel_requests(self.on_address_status)
-        self.network.cancel_requests(self.on_address_history)
-        self.network.cancel_requests(self.tx_response)
+        self.network.unsubscribe_from_scripthashes(self.h2addr.keys(), self._on_address_status)
+        self.network.cancel_requests(self._on_address_status)
+        self.network.cancel_requests(self._on_address_history)
+        self.network.cancel_requests(self._tx_response)
         self.network.remove_jobs([self])
 
     def release(self):
@@ -127,7 +127,7 @@ class Synchronizer(ThreadJob):
                 # we use a dict here to preserve order -- this is an "ordered set"
                 self.new_addresses_for_change[address] = None
 
-    def check_change_subs_limits(self):
+    def _check_change_subs_limits(self):
         if not self.limit_change_subs:
             return
         active = self.change_subs_active
@@ -149,9 +149,9 @@ class Synchronizer(ThreadJob):
             self.print_error(f"change_subs limit reached ({self.limit_change_subs}), unsubscribing from"
                              f" {len(unsubs)} old change scripthashes,"
                              f" change scripthash subs ct now: {len(self.change_subs)}")
-            self.network.unsubscribe_from_scripthashes(unsubs, self.on_address_status)
+            self.network.unsubscribe_from_scripthashes(unsubs, self._on_address_status)
 
-    def subscribe_to_addresses(self, addresses: Iterable[Address], *, for_change=False):
+    def _subscribe_to_addresses(self, addresses: Iterable[Address], *, for_change=False):
         hashes2addr = {addr.to_scripthash_hex(): addr for addr in addresses}
         if not hashes2addr:
             return  # Nothing to do!
@@ -165,9 +165,9 @@ class Synchronizer(ThreadJob):
                 self.change_scripthashes[sh]
             self.change_subs |= hashes_set
         # Nit: we use hashes2addr.keys() here to preserve order
-        self.network.subscribe_to_scripthashes(hashes2addr.keys(), self.on_address_status)
+        self.network.subscribe_to_scripthashes(hashes2addr.keys(), self._on_address_status)
         if for_change:
-            self.check_change_subs_limits()
+            self._check_change_subs_limits()
 
     @staticmethod
     def get_status(hist: Iterable[Tuple[str, int]]):
@@ -182,7 +182,7 @@ class Synchronizer(ThreadJob):
     def change_subs_active(self) -> Set[str]:
         return self.change_subs - self.requested_hashes
 
-    def check_change_sh(self, sh: str):
+    def _check_change_scripthash(self, sh: str):
         if not self.limit_change_subs:
             # If not limiting change subs, this subsystem is not used so no need to maintain data structures below...
             return
@@ -206,14 +206,14 @@ class Synchronizer(ThreadJob):
             # Not a candidate for expiry
             self.change_subs_expiry_candidates.discard(sh)
 
-    def on_address_status(self, response):
+    def _on_address_status(self, response):
         if self.cleaned_up:
             self.print_error("Already cleaned-up, ignoring stale reponse:", response)
             # defensive programming: make doubly sure we aren't registered to receive any callbacks from network class
             # and cancel subscriptions again.
             self._release()
             return
-        params, result, error = self.parse_response(response)
+        params, result, error = self._parse_response(response)
         if error:
             return
         scripthash = params[0]
@@ -224,16 +224,16 @@ class Synchronizer(ThreadJob):
         if self.get_status(history) != result:
             if self.requested_histories.get(scripthash) is None:
                 self.requested_histories[scripthash] = result
-                self.network.request_scripthash_history(scripthash, self.on_address_history)
+                self.network.request_scripthash_history(scripthash, self._on_address_history)
         # remove addr from list only after it is added to requested_histories
         self.requested_hashes.discard(scripthash)  # Notifications won't be in
         # See if now the change address needs to be recategorized
-        self.check_change_sh(scripthash)
+        self._check_change_scripthash(scripthash)
 
-    def on_address_history(self, response):
+    def _on_address_history(self, response):
         if self.cleaned_up:
             return
-        params, result, error = self.parse_response(response)
+        params, result, error = self._parse_response(response)
         if error:
             return
         scripthash = params[0]
@@ -259,14 +259,14 @@ class Synchronizer(ThreadJob):
             # Store received history
             self.wallet.receive_history_callback(addr, hist, tx_fees)
             # Request transactions we don't have
-            self.request_missing_txs(hist, scripthash)
+            self._request_missing_txs(hist, scripthash)
         # Check that this scripthash is a candidate for purge
-        self.check_change_sh(scripthash)
+        self._check_change_scripthash(scripthash)
 
-    def tx_response(self, response, scripthash: Optional[str]):
+    def _tx_response(self, response, scripthash: Optional[str]):
         if self.cleaned_up:
             return
-        params, result, error = self.parse_response(response)
+        params, result, error = self._parse_response(response)
         tx_hash = params[0] or ''
         # unconditionally pop. so we don't end up in a "not up to date" state
         # on bad server reply or reorg.
@@ -312,9 +312,9 @@ class Synchronizer(ThreadJob):
         process()
 
         # wallet balance updated for this sh, check if it is a candidate for purge
-        self.check_change_sh(scripthash)
+        self._check_change_scripthash(scripthash)
 
-    def request_missing_txs(self, hist: Iterable[Tuple[str, int]], scripthash: Optional[str]) -> bool:
+    def _request_missing_txs(self, hist: Iterable[Tuple[str, int]], scripthash: Optional[str]) -> bool:
         # "hist" is a list of [tx_hash, tx_height] lists
         requests = []
         for tx_hash, tx_height in hist:
@@ -327,35 +327,35 @@ class Synchronizer(ThreadJob):
             if self.limit_change_subs and scripthash is not None:
                 self.requested_tx_by_sh[scripthash].add(tx_hash)
         if requests:
-            self.network.send(requests, lambda response: self.tx_response(response, scripthash))
+            self.network.send(requests, lambda response: self._tx_response(response, scripthash))
             return True
         return False
 
-    def initialize(self):
+    def _initialize(self):
         """ Check the initial state of the wallet.  Subscribe to all its
         addresses, and request any transactions in its address history
         we don't have. """
         if self.limit_change_subs:
             for addr, history in self.wallet.get_history_items():
-                self.request_missing_txs(history, addr.to_scripthash_hex())
+                self._request_missing_txs(history, addr.to_scripthash_hex())
         else:
             # If not using the limit_change_subs feature, save CPU cycles by not computing scripthashes
             for history in self.wallet.get_history_values():
-                self.request_missing_txs(history, None)
+                self._request_missing_txs(history, None)
 
         if self.requested_tx:
             self.print_error("missing tx", self.requested_tx)
 
-        self.subscribe_to_addresses(self.wallet.get_receiving_addresses())
+        self._subscribe_to_addresses(self.wallet.get_receiving_addresses())
         if not self.limit_change_subs:
-            self.subscribe_to_addresses(self.wallet.get_change_addresses(), for_change=True)
+            self._subscribe_to_addresses(self.wallet.get_change_addresses(), for_change=True)
         else:
             # Subs limiting for change addrs in place, do it in the network thread next time we run, grabbing
             # self.limit_change_subs addresses at a time
             with self.lock:
                 self.new_addresses_for_change.update({addr: None for addr in self.wallet.get_change_addresses()})
 
-    def pop_new_addresses(self) -> Tuple[Set[Address], Iterable[Address]]:
+    def _pop_new_addresses(self) -> Tuple[Set[Address], Iterable[Address]]:
         with self.lock:
             # Pop all queued receiving
             addresses = self.new_addresses
@@ -394,11 +394,11 @@ class Synchronizer(ThreadJob):
             self.wallet.synchronize()
 
             # 2. Subscribe to new addresses
-            addresses, addresses_for_change = self.pop_new_addresses()
+            addresses, addresses_for_change = self._pop_new_addresses()
             if addresses:
-                self.subscribe_to_addresses(addresses)
+                self._subscribe_to_addresses(addresses)
             if addresses_for_change:
-                self.subscribe_to_addresses(addresses_for_change, for_change=True)
+                self._subscribe_to_addresses(addresses_for_change, for_change=True)
 
             # 3. Detect if situation has changed
             up_to_date = self.is_up_to_date()
