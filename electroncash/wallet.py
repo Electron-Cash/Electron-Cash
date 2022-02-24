@@ -2712,6 +2712,21 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def get_history_items(self) -> ItemsView[Address, List[Tuple[str, int]]]:
         return self._history.items()
 
+    DEFAULT_CHANGE_ADDR_SUBS_LIMIT = 1000
+
+    @property
+    def limit_change_addr_subs(self) -> int:
+        """Returns positive nonzero if old change subs limiting is set in wallet storage, otherwise returns 0"""
+        val = int(self.storage.get('limit_change_addr_subs', self.DEFAULT_CHANGE_ADDR_SUBS_LIMIT))
+        if val >= 0:
+            return val
+        return self.DEFAULT_CHANGE_ADDR_SUBS_LIMIT
+
+    @limit_change_addr_subs.setter
+    def limit_change_addr_subs(self, val: int):
+        val = max(val or 0, 0)  # Guard against bool, None, or negative
+        self.storage.put('limit_change_addr_subs', int(val))
+
 
 class Simple_Wallet(Abstract_Wallet):
     # wallet with a single keystore

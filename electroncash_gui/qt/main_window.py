@@ -4477,6 +4477,53 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             use_schnorr_cb.setToolTip(no_schnorr_reason[0])
         per_wallet_tx_widgets.append((use_schnorr_cb, None))
 
+        # Retire old change addresses
+        limit_change_w = QWidget()
+        vb = QVBoxLayout(limit_change_w)
+        vb.setContentsMargins(0, 0, 0, 0)
+        limit_change_chk = QCheckBox(_("Retire unnused change addresses"))
+        limit_change_chk.setChecked(self.wallet.limit_change_addr_subs > 0)
+        vb.addWidget(limit_change_chk)
+        limit_change_inner_w = QWidget()
+        hb = QHBoxLayout(limit_change_inner_w)
+        hb.addSpacing(24)
+        hb.setContentsMargins(0, 0, 0, 0)
+        limit_change_sb = QSpinBox()
+        limit_change_sb.setMinimum(0)
+        limit_change_sb.setMaximum(2**31 - 1)
+        limit_change_sb.setValue(self.wallet.limit_change_addr_subs or self.wallet.DEFAULT_CHANGE_ADDR_SUBS_LIMIT)
+        l1 = QLabel(_("Retire if older than:"))
+        f = l1.font()
+        f.setPointSize(f.pointSize() - 1)
+        l1.setFont(f)
+        hb.addWidget(l1)
+        hb.addWidget(limit_change_sb)
+        l2 = QLabel(_("from latest index"))
+        l2.setFont(f)
+        hb.addWidget(l2)
+        limit_change_sb.setFont(f)
+        orig_limit_change_subs = self.wallet.limit_change_addr_subs
+        def limit_change_subs_changed():
+            limit_change_inner_w.setEnabled(limit_change_chk.isChecked())
+            self.wallet.limit_change_addr_subs = limit_change_sb.value() if limit_change_chk.isChecked() else 0
+            if self.wallet.limit_change_addr_subs != orig_limit_change_subs:
+                self.need_restart = True
+        limit_change_inner_w.setEnabled(limit_change_chk.isChecked())
+        limit_change_sb.valueChanged.connect(limit_change_subs_changed)
+        limit_change_chk.stateChanged.connect(limit_change_subs_changed)
+        vb.addWidget(limit_change_inner_w)
+        vb.addStretch(1)
+        limit_change_w.setToolTip("<p>" + _("If checked, change addresses with no balance and trivial history which are"
+                                            " sufficeintly old will not be subscribed-to on the server, in order"
+                                            " to save resources.") + "</p>" +
+                                  "<p>" + _("Disable this option if you plan on receiving funds using your old change"
+                                            " addresses or if you suspect your old change addresses"
+                                            " may have unseen funds on them.") + "</p>")
+        limit_change_inner_w.setToolTip("<p>" + _("Specify how old a change address must be in order to be considered"
+                                                  " for retirement. This value is in terms of address index position"
+                                                  " from the most recent change address.") + "</o>")
+        per_wallet_tx_widgets.append((limit_change_w, None))
+
         # Fiat Tab (only build it if not on testnet)
         #
         # Note that at the present time self.fx is always defined, including for --offline mode;
@@ -4645,7 +4692,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         run_hook('close_settings_dialog')
         if self.need_restart:
-            self.show_message(_('Please restart Electron Cash to activate the new GUI settings'), title=_('Success'))
+            self.show_message(_('Please restart Electron Cash to activate the new settings'), title=_('Success'))
 
     def closeEvent(self, event):
         # It seems in some rare cases this closeEvent() is called twice.
