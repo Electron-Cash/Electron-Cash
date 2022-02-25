@@ -2729,6 +2729,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         val = max(val or 0, 0)  # Guard against bool, None, or negative
         self.storage.put('limit_change_addr_subs', int(val))
 
+    def is_retired_change_addr(self, addr: Address) -> bool:
+        """ Returns True if the address in question is in the "retired change address" set (set maintained by
+        the synchronizer).  If the network is not started (offline mode), will always return False. """
+        assert isinstance(addr, Address)
+        if not self.synchronizer:
+            return False
+        sh = addr.to_scripthash_hex()
+        return sh in self.synchronizer.change_scripthashes_that_are_retired
+
 
 class Simple_Wallet(Abstract_Wallet):
     # wallet with a single keystore
