@@ -343,7 +343,6 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
     # Address formats
     FMT_CASHADDR = 0
     FMT_LEGACY = 1
-    FMT_BITPAY = 2   # Supported temporarily only for compatibility
 
     _NUM_FMTS = 3  # <-- Be sure to update this if you add a format above!
 
@@ -402,11 +401,9 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
             raise AddressError('invalid address: {}'.format(string))
 
         verbyte, hash160 = raw[0], raw[1:]
-        if verbyte in [net.ADDRTYPE_P2PKH,
-                       net.ADDRTYPE_P2PKH_BITPAY]:
+        if verbyte == net.ADDRTYPE_P2PKH:
             kind = cls.ADDR_P2PKH
-        elif verbyte in [net.ADDRTYPE_P2SH,
-                         net.ADDRTYPE_P2SH_BITPAY]:
+        elif verbyte == net.ADDRTYPE_P2SH:
             kind = cls.ADDR_P2SH
         else:
             raise AddressError('unknown version byte: {}'.format(verbyte))
@@ -473,9 +470,7 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
         verbyte = raw[0]
         legacy_formats = (
             net.ADDRTYPE_P2PKH,
-            net.ADDRTYPE_P2PKH_BITPAY,
-            net.ADDRTYPE_P2SH,
-            net.ADDRTYPE_P2SH_BITPAY,
+            net.ADDRTYPE_P2SH
         )
         return verbyte in legacy_formats
 
@@ -509,11 +504,6 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
                     verbyte = net.ADDRTYPE_P2PKH
                 else:
                     verbyte = net.ADDRTYPE_P2SH
-            elif fmt == self.FMT_BITPAY:
-                if self.kind == self.ADDR_P2PKH:
-                    verbyte = net.ADDRTYPE_P2PKH_BITPAY
-                else:
-                    verbyte = net.ADDRTYPE_P2SH_BITPAY
             else:
                 # This should never be reached due to cache-lookup check above. But leaving it in as it's a harmless sanity check.
                 raise AddressError('unrecognised format')

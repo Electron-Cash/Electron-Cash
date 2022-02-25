@@ -48,9 +48,7 @@ class MainNet(AbstractNet):
     TESTNET = False
     WIF_PREFIX = 0x80
     ADDRTYPE_P2PKH = 0
-    ADDRTYPE_P2PKH_BITPAY = 28
     ADDRTYPE_P2SH = 5
-    ADDRTYPE_P2SH_BITPAY = 40
     CASHADDR_PREFIX = "bitcoincash"
     HEADERS_URL = "http://bitcoincash.com/files/blockchain_headers"  # Unused
     GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
@@ -96,9 +94,7 @@ class TestNet(AbstractNet):
     TESTNET = True
     WIF_PREFIX = 0xef
     ADDRTYPE_P2PKH = 111
-    ADDRTYPE_P2PKH_BITPAY = 111  # Unsure
     ADDRTYPE_P2SH = 196
-    ADDRTYPE_P2SH_BITPAY = 196  # Unsure
     CASHADDR_PREFIX = "bchtest"
     HEADERS_URL = "http://bitcoincash.com/files/testnet_headers"  # Unused
     GENESIS = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"

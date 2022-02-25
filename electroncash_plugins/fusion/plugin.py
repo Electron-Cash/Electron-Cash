@@ -73,8 +73,8 @@ MAX_AUTOFUSIONS_PER_WALLET = 10
 
 CONSOLIDATE_MAX_OUTPUTS = MIN_TX_COMPONENTS // 3
 
-# Threshold for the amount (sats) for a wallet to be fully fused. This is to avoid refuse when dusted.
-FUSE_DEPTH_THRESHOLD = 0.95
+# Threshold for proportion of total wallet value fused before stopping fusion. This avoids re-fusion due to dust.
+FUSE_DEPTH_THRESHOLD = 0.999
 
 # We don't allow a fuse depth beyond this in the wallet UI
 MAX_LIMIT_FUSE_DEPTH = 10
@@ -629,7 +629,7 @@ class FusionPlugin(BasePlugin):
                         sum_eligible_values += ecoins_value
                         if self.is_fuz_address(wallet, eaddr, require_depth=fuse_depth-1):
                             sum_fuz_values += ecoins_value
-                    if sum_eligible_values != 0 and sum_fuz_values / sum_eligible_values >= FUSE_DEPTH_THRESHOLD:
+                    if (sum_eligible_values != 0) and (sum_fuz_values / sum_eligible_values >= FUSE_DEPTH_THRESHOLD):
                         continue
 
                 if not dont_start_fusions and num_auto < min(target_num_auto, MAX_AUTOFUSIONS_PER_WALLET):
