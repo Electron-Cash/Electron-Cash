@@ -134,7 +134,8 @@ class Synchronizer(ThreadJob):
         ctr = len(active) - self.limit_change_subs
         if ctr <= 0:
             return
-        candidates = sorted(self.change_subs_expiry_candidates, key=lambda x: self.change_scripthashes.get(x, 2**64))
+        huge_int = 2**64
+        candidates = sorted(self.change_subs_expiry_candidates, key=lambda x: self.change_scripthashes.get(x, huge_int))
         unsubs = []
         for scripthash in candidates:
             if ctr <= 0:
