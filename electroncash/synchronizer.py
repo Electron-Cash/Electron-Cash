@@ -79,17 +79,17 @@ class Synchronizer(ThreadJob):
         self.change_subs: Set[str] = set()
         # set of all "used", 0 balance change sh's
         self.change_subs_expiry_candidates: Set[str] = set()
+        # mapping of scripthash -> Address
+        self.h2addr: Dict[str, Address] = {}
+        self.lock = Lock()
+        self._tick_ct = 0
+        self.limit_change_subs = max(self.wallet.limit_change_addr_subs, 0)  # Disallow negatives; they create problems
         # set of all change address scripthashes that are retired and should be ignored
         if self.limit_change_subs:
             self.change_scripthashes_that_are_retired = set(self.wallet.storage.get(
                 'synchronizer_retired_change_scripthashes', []))
         else:
             self.change_scripthashes_that_are_retired = set()
-        # mapping of scripthash -> Address
-        self.h2addr: Dict[str, Address] = {}
-        self.lock = Lock()
-        self._tick_ct = 0
-        self.limit_change_subs = max(self.wallet.limit_change_addr_subs, 0)  # Disallow negatives; they create problems
         self._initialize()
 
     def clear_retired_change_addrs(self):
