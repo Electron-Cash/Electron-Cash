@@ -4509,6 +4509,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.wallet.limit_change_addr_subs = limit_change_sb.value() if limit_change_chk.isChecked() else 0
             if self.wallet.limit_change_addr_subs != orig_limit_change_subs:
                 need_wallet_reopen = True
+                if self.wallet.synchronizer:
+                    self.wallet.synchronizer.clear_retired_change_addrs()
         limit_change_inner_w.setEnabled(limit_change_chk.isChecked())
         limit_change_sb.valueChanged.connect(limit_change_subs_changed)
         limit_change_chk.stateChanged.connect(limit_change_subs_changed)

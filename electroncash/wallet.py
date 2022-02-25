@@ -2143,6 +2143,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # thread-safe fashion from within the thread where they normally
             # operate on their data structures.
             self.cashacct.stop()
+            self.synchronizer.save()
             self.synchronizer.release()
             self.verifier.release()
             self.synchronizer = None
@@ -2627,6 +2628,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if not self.synchronizer or not self.verifier:
             raise RuntimeError('Refusing to rebuild a stopped wallet!')
         network = self.network
+        self.synchronizer.clear_retired_change_addrs()
         self.stop_threads()
         do_addr_save = False
         with self.lock:

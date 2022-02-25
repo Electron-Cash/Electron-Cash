@@ -54,6 +54,7 @@ class Synchronizer(ThreadJob):
     def __init__(self, wallet, network):
         self.wallet = wallet
         self.network = network
+        assert self.wallet and self.wallet.storage and self.network
         self.cleaned_up = False
         self._need_release = False
         self.new_addresses: Set[Address] = set()
@@ -78,12 +79,22 @@ class Synchronizer(ThreadJob):
         self.change_subs: Set[str] = set()
         # set of all "used", 0 balance change sh's
         self.change_subs_expiry_candidates: Set[str] = set()
+        # set of all change address scripthashes that are retired and should be ignored
+        self.change_scripthashes_that_are_retired = set(self.wallet.storage.get(
+            'synchronizer_retired_change_scripthashes', []))
         # mapping of scripthash -> Address
         self.h2addr: Dict[str, Address] = {}
         self.lock = Lock()
         self._tick_ct = 0
         self.limit_change_subs = max(self.wallet.limit_change_addr_subs, 0)  # Disallow negatives; they create problems
         self._initialize()
+
+    def clear_retired_change_addrs(self):
+        self.change_scripthashes_that_are_retired.clear()
+
+    def save(self):
+        self.wallet.storage.put('synchronizer_retired_change_scripthashes',
+                                list(self.change_scripthashes_that_are_retired))
 
     def diagnostic_name(self):
         return f"{__class__.__name__}/{self.wallet.diagnostic_name()}"
@@ -143,6 +154,7 @@ class Synchronizer(ThreadJob):
             if scripthash not in active:
                 continue
             unsubs.append(scripthash)
+            self.change_scripthashes_that_are_retired.add(scripthash)
             self.change_subs_expiry_candidates.discard(scripthash)
             self.change_subs.discard(scripthash)
             ctr -= 1
@@ -159,16 +171,25 @@ class Synchronizer(ThreadJob):
         # Keep a hash -> address mapping
         self.h2addr.update(hashes2addr)
         hashes_set = set(hashes2addr.keys())
-        self.requested_hashes |= hashes_set
+        skipped_ct = 0
         if for_change and self.limit_change_subs:
-            for sh in hashes2addr.keys():  # Iterate in order (dicts are ordered)
+            for sh in list(hashes2addr.keys()):  # Iterate in order (dicts are ordered)
                 # This is a defaultdict, accessing it will add a counted item if not there
                 self.change_scripthashes[sh]
+                if sh in self.change_scripthashes_that_are_retired:
+                    # this scripthash was "retired", do not subscribe to it
+                    hashes_set.discard(sh)
+                    hashes2addr.pop(sh, None)
+                    skipped_ct += 1
             self.change_subs |= hashes_set
+        self.requested_hashes |= hashes_set
         # Nit: we use hashes2addr.keys() here to preserve order
         self.network.subscribe_to_scripthashes(hashes2addr.keys(), self._on_address_status)
         if for_change:
             self._check_change_subs_limits()
+            if skipped_ct:
+                self.print_error(f"Skipped {skipped_ct} change address scripthashes because they are in the"
+                                 f" \"retired\" set (set size: {len(self.change_scripthashes_that_are_retired)})")
 
     @staticmethod
     def get_status(hist: Iterable[Tuple[str, int]]):
