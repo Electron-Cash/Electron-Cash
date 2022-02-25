@@ -3994,6 +3994,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 super().showEvent(e)
                 self.shown_signal.emit()
         self.need_restart = False
+        need_wallet_reopen = False
         dialog_finished = False
         d = SettingsModalDialog(self.top_level_window(), _('Preferences'))
         d.setObjectName('WindowModalDialog - Preferences')
@@ -4462,7 +4463,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         legacy_p2sh_cb.stateChanged.connect(on_legacy_p2sh_cb)
         global_tx_widgets.append((legacy_p2sh_cb, None))
 
-
         # Schnorr
         use_schnorr_cb = QCheckBox(_("Sign with Schnorr signatures"))
         use_schnorr_cb.setChecked(self.wallet.is_schnorr_enabled())
@@ -4504,10 +4504,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         limit_change_sb.setFont(f)
         orig_limit_change_subs = self.wallet.limit_change_addr_subs
         def limit_change_subs_changed():
+            nonlocal need_wallet_reopen
             limit_change_inner_w.setEnabled(limit_change_chk.isChecked())
             self.wallet.limit_change_addr_subs = limit_change_sb.value() if limit_change_chk.isChecked() else 0
             if self.wallet.limit_change_addr_subs != orig_limit_change_subs:
-                self.need_restart = True
+                need_wallet_reopen = True
         limit_change_inner_w.setEnabled(limit_change_chk.isChecked())
         limit_change_sb.valueChanged.connect(limit_change_subs_changed)
         limit_change_chk.stateChanged.connect(limit_change_subs_changed)
@@ -4692,7 +4693,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         run_hook('close_settings_dialog')
         if self.need_restart:
-            self.show_message(_('Please restart Electron Cash to activate the new settings'), title=_('Success'))
+            self.show_message(_('Please restart Electron Cash to activate the new GUI settings'), title=_('Success'))
+        elif need_wallet_reopen:
+            self.show_message(_('Please close and reopen this wallet to activate the new settings'), title=_('Success'))
 
     def closeEvent(self, event):
         # It seems in some rare cases this closeEvent() is called twice.
