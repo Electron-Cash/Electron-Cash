@@ -405,6 +405,11 @@ class Synchronizer(ThreadJob):
             if up_to_date != self.wallet.is_up_to_date():
                 self.wallet.set_up_to_date(up_to_date)
                 self.network.trigger_callback('wallet_updated', self.wallet)
+
+            # 4. Every 50 ticks (approx every 5 seconds), check that we are not over the change subs limit
+            if self.limit_change_subs and up_to_date and self._tick_ct % 50 == 0:
+                self._check_change_subs_limits()
+
         except InvalidXKeyFormat:
             # Workaround to buggy testnet wallets that had the wrong xpub..
             # This is here so that the network thread doesn't get blown up when
