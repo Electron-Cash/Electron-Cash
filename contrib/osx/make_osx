@@ -193,9 +193,7 @@ python3 -m pip install -r ./contrib/deterministic-build/requirements.txt --user 
 python3 -m pip install -r ./contrib/deterministic-build/${REQUIREMENTS_BINARIES} --user || fail "Could not install binary requirements"
 
 info "Installing hardware wallet requirements..."
-# Note: We added --no-deps here because there is a bug in pysatochip-0.12.3's requirements file.
-# TODO: Remove the --no-deps argument once we move beyond pysatochip-0.12.3.
-python3 -m pip install -r ./contrib/deterministic-build/requirements-hw.txt --user --no-deps || \
+python3 -m pip install -r ./contrib/deterministic-build/requirements-hw.txt --user || \
 fail "Could not install hardware wallet requirements"
 
 info "Building $PACKAGE..."
