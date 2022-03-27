@@ -366,9 +366,11 @@ class LNS(util.PrintError):
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
 
     def invalidate(self):
+        ''' This method invalidates the lookup cache and forces the
+            LNS addresses to be refetched after 10 minute interval
+        '''
         try:
-            # ten minutes
-            QTimer.singleShot(10 * 60 * 1000, self.invalidate)
+            QTimer.singleShot(10 * 60 * 1000, self.invalidate) # ten minutes
             with self.lock:
                 self._init_data()
         except:
