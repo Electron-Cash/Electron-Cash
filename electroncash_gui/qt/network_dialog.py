@@ -36,11 +36,12 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 import PyQt5.QtCore as QtCore
 
-from electroncash import networks
+from electroncash import lns, networks
 from electroncash.i18n import _, pgettext
 from electroncash.interface import Interface
 from electroncash.network import serialize_server, deserialize_server, get_eligible_servers
 from electroncash.plugins import run_hook
+from electroncash.simple_config import SimpleConfig
 from electroncash.tor import TorController
 from electroncash.util import print_error, Weak, PrintError, in_main_thread
 
@@ -434,9 +435,12 @@ class NetworkChoiceLayout(QObject, OnDestroyedMixin, PrintError):
                     td.stop() # stops the tor detector when proxy_tab disappears
         self.proxy_tab = proxy_tab = ProxyTab()
         self.blockchain_tab = blockchain_tab = QWidget()
+        self.lns_settings_tab = lns_settings_tab = LNSSettingsWidget(self.config, tabs)
+
         tabs.addTab(blockchain_tab, _('Overview'))
         tabs.addTab(server_tab, _('Server'))
         tabs.addTab(proxy_tab, _('Proxy'))
+        tabs.addTab(lns_settings_tab, QIcon(":icons/lns.png"), _('LNS'))
 
         if wizard:
             tabs.setCurrentIndex(1)
@@ -1074,6 +1078,87 @@ class NetworkChoiceLayout(QObject, OnDestroyedMixin, PrintError):
             self.update()
             return True
         return False
+
+class LNSSettingsWidget(QWidget):
+    def __init__(self, config: SimpleConfig, parent=None):
+        super().__init__(parent)
+        self.config = config
+
+        main_layout = QVBoxLayout(self)
+
+        box = QGroupBox(_("Network"))
+        main_layout.addWidget(box, 0, Qt.AlignTop | Qt.AlignHCenter)
+        slayout = QVBoxLayout(box)
+
+        grid = QGridLayout() ; slayout.addLayout(grid)
+
+        grid.addWidget(QLabel(_("SmartBCH RPC Server")), 0, 0)
+        hbox = QHBoxLayout(); grid.addLayout(hbox, 0, 1)
+        self.combo_rpc_server = QComboBox()
+        self.combo_rpc_server.setEditable(True)
+        self.combo_rpc_server.setInsertPolicy(QComboBox.NoInsert)
+        self.combo_rpc_server.setCompleter(None)
+        self.combo_rpc_server.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_rpc_server.activated.connect(self.combo_rpc_server_activated)
+        self.combo_rpc_server.lineEdit().textEdited.connect(self.user_changed_rpc_server)
+        self.rpc_servers = lns.rpc_servers
+        self.combo_rpc_server.addItems([s for s in self.rpc_servers])
+        hbox.addWidget(self.combo_rpc_server)
+
+        grid.addWidget(QLabel(_("LNS Graph Server")), 1, 0)
+        hbox = QHBoxLayout(); grid.addLayout(hbox, 1, 1)
+        self.combo_graph_server = QComboBox()
+        self.combo_graph_server.setEditable(True)
+        self.combo_graph_server.setInsertPolicy(QComboBox.NoInsert)
+        self.combo_graph_server.setCompleter(None)
+        self.combo_graph_server.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_graph_server.activated.connect(self.combo_graph_server_activated)
+        self.combo_graph_server.lineEdit().textEdited.connect(self.user_changed_graph_server)
+        self.graph_servers = lns.graph_servers
+        self.combo_graph_server.addItems([s for s in self.graph_servers])
+        hbox.addWidget(self.combo_graph_server)
+
+        self.refresh()
+
+    def update_rpc_server(self):
+        # called initially / when config changes
+        rpc_server = self.config.get('lns_rpc_server', self.rpc_servers[0])
+        index = self.rpc_servers.index(rpc_server)
+        self.combo_rpc_server.setCurrentIndex(index)
+        self.combo_rpc_server.setEditText(rpc_server)
+
+    def combo_rpc_server_activated(self, index):
+        # only triggered when user selects a combo item
+        self.config.set_key('lns_rpc_server', self.rpc_servers[index])
+        self.refresh()
+
+    def user_changed_rpc_server(self, *args):
+        # user edited the server
+        rpc_server = self.combo_rpc_server.currentText()
+        self.config.set_key('lns_rpc_server', rpc_server)
+        self.refresh()
+
+    def update_graph_server(self):
+        # called initially / when config changes
+        graph_server = self.config.get('lns_graph_server', self.graph_servers[0])
+        index = self.graph_servers.index(graph_server)
+        self.combo_graph_server.setCurrentIndex(index)
+        self.combo_graph_server.setEditText(graph_server)
+
+    def combo_graph_server_activated(self, index):
+        # only triggered when user selects a combo item
+        self.config.set_key('lns_graph_server', self.graph_servers[index])
+        self.refresh()
+
+    def user_changed_graph_server(self, *args):
+        # user edited the server
+        graph_server = self.combo_graph_server.currentText()
+        self.config.set_key('lns_graph_server', graph_server)
+        self.refresh()
+
+    def refresh(self):
+        self.update_rpc_server()
+        self.update_graph_server()
 
 
 class TorDetector(QThread, OnDestroyedMixin):

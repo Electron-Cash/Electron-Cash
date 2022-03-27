@@ -3,6 +3,7 @@
 #
 # Electron Cash - A Bitcoin Cash SPV Wallet
 # This file Copyright (c) 2019 Calin Culianu <calin.culianu@gmail.com>
+# This file Copyright (c) 2022 mainnet_pat
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,28 +25,24 @@
 
 '''
 LNS related classes and functions.
-
-# Note that this file also contains a unique class called `ScriptOutput` (which
-# inherits from address.py's own ScriptOutput), so always import this file
-# carefully if also importing address.py.
 '''
 from PyQt5.QtCore import QTimer
 
 import json
-import re
-from sqlite3 import Date
-from numpy import isin
 import requests
 import threading
 import queue
 import random
 import time
 from collections import defaultdict, namedtuple
-from typing import List, Tuple, Dict, Union
+from typing import Tuple, List, Union
+
+from electroncash.simple_config import get_config
 from . import util
-from .address import Address, Base58, OpCodes, Script, ScriptError, UnknownAddress
-from .address import ScriptOutput as ScriptOutputBase
-from .transaction import BCDataStream, Transaction, get_address_from_output_script
+from .address import Address
+from .transaction import get_address_from_output_script
+from web3 import Web3
+from web3.contract import Contract
 
 # 'lns:' URI scheme. Not used yet. Used by Crescent Cash and Electron Cash and
 # other wallets in the future.
@@ -68,10 +65,6 @@ class Info(namedtuple("Info", "name, address, registrationDate, expiryDate")):
         d = self._asdict()
         d['address'] = self.address.to_cashaddr()
         return d
-
-graph_servers = [
-    "https://graph.bch.domains/subgraphs/name/graphprotocol/ens",
-]
 
 debug = False  # network debug setting. Set to True when developing to see more verbose information about network operations.
 timeout = 25.0  # default timeout used in various network functions, in seconds.
@@ -132,14 +125,38 @@ abi = [
       "type": "function"
     }
   ]
-from web3 import Web3
-w3 = Web3(Web3.HTTPProvider("https://smartbch.fountainhead.cash/mainnet"))
 
-'''
-contract to look up multiple LNS addresses given a list of names and coin type
-see also https://github.com/bchdomains/reverse-records/blob/442862bf42bfaaf98c9511c2a0907ee612dbde13/contracts/ReverseRecords.sol#L73
-'''
-contract = w3.eth.contract(address="0x0efB8EE0F6d6ba04F26101683F062d7Ca6F58A40", abi=abi)
+rpc_servers = [
+    "https://smartbch.fountainhead.cash/mainnet",
+    "https://smartbch.greyh.at",
+    "https://smartbch.electroncash.de",
+    "https://global.uat.cash",
+    "https://rpc.uatvo.com",
+    "https://moeing.tech:9545",
+    "http://localhost:8545"
+]
+
+graph_servers = [
+    "https://graph.bch.domains/subgraphs/name/graphprotocol/ens",
+    "https://graph.bch.domains/subgraphs/name/graphprotocol/ens-amber"
+]
+
+w3: Web3 = None
+contract: Contract = None
+
+def get_lns_contract() -> Contract:
+    global w3
+    global contract
+    rpc_server: str = get_config().get('lns_rpc_server', rpc_servers[0])
+    if not w3 or w3.provider.endpoint_uri != rpc_server:
+        w3 = Web3(Web3.HTTPProvider(rpc_server))
+        '''
+        contract to look up multiple LNS addresses given a list of names and coin type
+        see also https://github.com/bchdomains/reverse-records/blob/442862bf42bfaaf98c9511c2a0907ee612dbde13/contracts/ReverseRecords.sol#L73
+        '''
+        contract = w3.eth.contract(address="0x0efB8EE0F6d6ba04F26101683F062d7Ca6F58A40", abi=abi)
+    return contract
+
 
 def validate(name):
     if not name or not len(name):
@@ -165,6 +182,8 @@ def lookup(server, name: Union[str, List[str]], timeout=timeout, exc=[], debug=d
     complete LNS domain name.
     '''
     validate(name)
+
+    contract = get_lns_contract()
 
     url = f'{server}'
     now = int(time.time())
@@ -269,8 +288,7 @@ def lookup_asynch_all(success_cb, error_cb=None, name=None,
 
     Callbacks are called in another thread context so GUI-facing code should
     be aware of that fact (see nodes for lookup_asynch above).  '''
-    assert graph_servers, "No servers hard-coded in lns.py. FIXME!"
-    my_servers = graph_servers.copy()
+    my_servers = [get_config().get('lns_graph_server', graph_servers[0])]
     random.shuffle(my_servers)
     N = len(my_servers)
     q = queue.Queue()
