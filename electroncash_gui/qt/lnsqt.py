@@ -585,7 +585,11 @@ def lookup_lns_dialog(
             lns_string_em = wallet.lns.fmt_info(info)
             but = QPushButton(QIcon(":icons/tab_contacts.png"), "")
             if isinstance(info.address, Address):
-                if lns_string in all_lns_contacts or wallet.is_mine(info.address):
+                if lns_string not in all_lns_contacts and wallet.is_mine(info.address):
+                    # We got a result for an LNS that happens to be ours. Remember it.
+                    parent.set_contact(label=lns_string, address=info.address, typ='lns')
+                    all_lns_contacts.add(lns_string)
+                if lns_string in all_lns_contacts:
                     but.setDisabled(True)
                     but.setToolTip(_('<span style="white-space:nowrap"><b>{lns_name}</b> already in Contacts</span>').format(lns_name=lns_string_em))
                 else:
@@ -715,6 +719,7 @@ def lookup_lns_dialog(
 
     if d.exec_() == QDialog.Accepted:
         return ca.selectedItems()
+    parent.contact_list.do_update_signal.emit()  # In case they added some contacts, etc
     return None
 
 

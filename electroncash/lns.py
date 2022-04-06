@@ -419,7 +419,7 @@ class LNS(util.PrintError):
         self.verify_name_asynch(name=lns_string, success_cb=done_cb, error_cb=done_cb, timeout=timeout)
         if not done.wait(timeout=timeout) or not pb:
             return
-        return pb;
+        return pb
 
     def get_lns_names(self, domain=None, inv=False) -> List[Info]:
         ''' Returns a list of Info objects for verified LNS Names in domain.
@@ -513,7 +513,7 @@ class LNS(util.PrintError):
                     ct += 1
             if debug: self.print_error(f"verify_name_asynch: called {ct} error callbacks for #{key}")
         def on_success(res, server):
-            pb = res;
+            pb = res
             if isinstance(pb, List):
                 with self.lock:
                     for item in pb:

@@ -507,7 +507,7 @@ class PayToEdit(PrintError, ScanQRTextEdit):
                 # got some verifications...
                 # call self again, to redo the payto edit with the verified pieces
                 self._resolve_lns_names(skip_verif=True)
-                return # above call takes care of rewriting self, so just return early
+                return  # above call takes care of rewriting self, so just return early
 
         self.previous_lns_could_not_verify = need_verif
 

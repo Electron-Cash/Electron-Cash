@@ -416,6 +416,7 @@ class ContactList(PrintError, MyTreeWidget):
             # Hmm.. invalid address?
             excl_chk = set()
         wallet_lns_names = []
+        need_save = False
         # Add the [Mine] pseudo-contacts
         for lns_info in self.wallet.lns.get_wallet_lns_names():
             name = self.wallet.lns.fmt_info(lns_info)
@@ -426,6 +427,14 @@ class ContactList(PrintError, MyTreeWidget):
                 address = lns_info.address.to_ui_string(),
                 type = 'lns_W'
             ))
+            my_lns = Contact(name=name, address=lns_info.address.to_ui_string(), type='lns')
+            if not self.wallet.contacts.has(my_lns):
+                # HACK: Force-add this contract to the "saved" list since it is "mine" but it wasn't in the list before
+                # if we got here.
+                self.wallet.contacts.add(my_lns, unique=True, save=False)
+                need_save = True
+        if need_save:
+            self.wallet.contacts.save()
         return wallet_lns_names
 
     @rate_limited(0.333, ts_after=True) # We rate limit the contact list refresh no more 3 per second
