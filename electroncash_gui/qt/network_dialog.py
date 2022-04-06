@@ -1122,10 +1122,19 @@ class LNSSettingsWidget(QWidget):
 
     def update_rpc_server(self):
         # called initially / when config changes
+        n_srv = len(self.rpc_servers)
         rpc_server = self.config.get('lns_rpc_server', self.rpc_servers[0])
-        index = self.rpc_servers.index(rpc_server)
-        self.combo_rpc_server.setCurrentIndex(index)
-        self.combo_rpc_server.setEditText(rpc_server)
+        if rpc_server not in self.rpc_servers:
+            # Remove phantom item that corresponds to what the user entered
+            while n_srv < self.combo_rpc_server.count():
+                self.combo_rpc_server.removeItem(self.combo_rpc_server.count()-1)
+            self.combo_rpc_server.addItem(rpc_server)
+            self.combo_rpc_server.setCurrentIndex(n_srv)
+            self.combo_rpc_server.setEditText(rpc_server)
+        else:
+            index = self.rpc_servers.index(rpc_server)
+            self.combo_rpc_server.setCurrentIndex(index)
+            self.combo_rpc_server.setEditText(rpc_server)
 
     def combo_rpc_server_activated(self, index):
         # only triggered when user selects a combo item
@@ -1140,10 +1149,19 @@ class LNSSettingsWidget(QWidget):
 
     def update_graph_server(self):
         # called initially / when config changes
+        n_srv = len(self.graph_servers)
         graph_server = self.config.get('lns_graph_server', self.graph_servers[0])
-        index = self.graph_servers.index(graph_server)
-        self.combo_graph_server.setCurrentIndex(index)
-        self.combo_graph_server.setEditText(graph_server)
+        if graph_server not in self.graph_servers:
+            # Remove phantom item that corresponds to what the user entered
+            while n_srv < self.combo_graph_server.count():
+                self.combo_graph_server.removeItem(self.combo_graph_server.count()-1)
+            self.combo_graph_server.addItem(graph_server)
+            self.combo_graph_server.setCurrentIndex(n_srv)
+            self.combo_graph_server.setEditText(graph_server)
+        else:
+            index = self.graph_servers.index(graph_server)
+            self.combo_graph_server.setCurrentIndex(index)
+            self.combo_graph_server.setEditText(graph_server)
 
     def combo_graph_server_activated(self, index):
         # only triggered when user selects a combo item
