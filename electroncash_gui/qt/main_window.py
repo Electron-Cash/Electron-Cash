@@ -158,6 +158,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.require_fee_update = False
         self.cashaddr_toggled_signal = self.gui_object.cashaddr_toggled_signal  # alias for backwards compatibility for plugins -- this signal used to live in each window and has since been refactored to gui-object where it belongs (since it's really an app-global setting)
         self.force_use_single_change_addr = None  # this is set by the CashShuffle plugin to a single string that will go into the tool-tip explaining why this preference option is disabled (see self.settings_dialog)
+        self._update_lns_timer = QTimer(self)
+        self._update_lns_timer.timeout.connect(self.update_lns_contacts)
+        self._update_lns_timer.setInterval(600_000)  # 10 min update timer for LNS contacts
+        self._update_lns_timer.setSingleShot(False)
         self.tl_windows = []
         self.tx_external_keypairs = {}
         self._tx_dialogs = Weak.Set()
@@ -262,7 +266,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             def callback():
                 strongSelf = weakSelf()
                 if strongSelf:
-                    strongSelf.update_lns_contacts()
+                    if strongSelf.network:
+                        strongSelf.update_lns_contacts()
+                        strongSelf._update_lns_timer.start()
                     # noop on everything but linux
                     strongSelf.gui_object.lin_win_maybe_show_highdpi_caveat_msg(strongSelf)
             QTimer.singleShot(0, callback)
@@ -2784,8 +2790,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         run_hook('delete_contacts2', removed_entries)
 
-    def update_lns_contacts(self) :
-        ''' Resolves the new addresses of lns contacts and updates them '''
+    def update_lns_contacts(self):
+        """Resolves the new addresses of lns contacts and updates them"""
+        if not self.network:
+            return  # Do nothing if in offline mode
         contacts = self.contacts
         lns_contacts = [contact for contact in contacts.get_all() if contact.type == 'lns']
         lns_names = [contact.name for contact in lns_contacts]
