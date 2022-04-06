@@ -2786,30 +2786,34 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_lns_contacts(self) :
         ''' Resolves the new addresses of lns contacts and updates them '''
-        copntacts = self.contacts
-        lns_contacts = [contact for contact in copntacts.get_all() if contact.type == 'lns']
+        contacts = self.contacts
+        lns_contacts = [contact for contact in contacts.get_all() if contact.type == 'lns']
         lns_names = [contact.name for contact in lns_contacts]
         if not lns_names:
             return
 
         def thread_func():
-            updated = 0
             infos = self.wallet.lns.resolve_verify(lns_names)
             if not infos:
                 return
+            updated = []
             for contact in lns_contacts:
-                info = []
+                info = None
                 for ii in infos:
                     try:
                         if contact.name == ii.name and Address.from_string(contact.address) != ii.address:
-                            info.append(ii)
+                            info = ii
+                            break
                     except AddressError:
                         pass
                 if info:
-                    if copntacts.replace(contact, Contact(info[0].name, info[0].address.to_cashaddr(), 'lns')):
-                        updated += 1
+                    updated.append((contact, Contact(info.name, info.address.to_ui_string(), 'lns')))
             if updated:
-                self.contact_list.do_update_signal.emit()
+                def in_main_thread():
+                    for old, new in updated:
+                        contacts.replace(old, new)
+                    self.contact_list.do_update_signal.emit()
+                util.do_in_main_thread(in_main_thread)
 
         t = threading.Thread(name=f"update_lns_contacts", target=thread_func, daemon=True)
         t.start()

@@ -55,13 +55,13 @@ class ArgumentError(ValueError):
 class Info(namedtuple("Info", "name, address, registrationDate, expiryDate")):
     @classmethod
     def from_dict(cls, dict):
-        dict['address'] = Address.from_cashaddr_string(dict['address'])
+        dict['address'] = Address.from_string(dict['address'])
         tup = Info(**dict)
         return tup
 
     def to_dict(self):
         d = self._asdict()
-        d['address'] = self.address.to_cashaddr()
+        d['address'] = self.address.to_ui_string()
         return d
 
 debug = False  # network debug setting. Set to True when developing to see more verbose information about network operations.
