@@ -85,9 +85,7 @@ def verify_multiple_names(names : List[str], parent : MessageBoxMixin, wallet : 
     nnames = len(names)
     q = queue.Queue()
     def done_cb(thing):
-        if isinstance(thing, Exception):
-            raise thing
-        if isinstance(thing, List):
+        if isinstance(thing, (Exception, list)):
             q.put(thing)
         else:
             q.put(None)
@@ -101,6 +99,8 @@ def verify_multiple_names(names : List[str], parent : MessageBoxMixin, wallet : 
                 thing = q.get(timeout=timeout)
                 if thing is None:
                     errs += 1
+                elif isinstance(thing, Exception):
+                    raise thing
                 else:
                     ctr += len(thing)
             except queue.Empty:
