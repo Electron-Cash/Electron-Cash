@@ -426,7 +426,7 @@ class LNS(util.PrintError):
             if isinstance(thing, List):
                 pb = thing
             elif isinstance(thing, Exception) and isinstance(exc, list):
-                self.wallet.show_error(str(thing))
+                self.wallet.print_error(str(thing))
                 exc.append(thing)
             done.set()
         self.verify_name_asynch(name=lns_string, success_cb=done_cb, error_cb=done_cb, timeout=timeout)

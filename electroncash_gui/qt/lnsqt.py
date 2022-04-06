@@ -38,11 +38,10 @@ import time
 import requests
 from typing import Tuple, List, Callable
 from enum import IntEnum
-from electroncash import cashacct
 from electroncash import lns
 from electroncash import util
 from electroncash import web
-from electroncash.address import Address, UnknownAddress
+from electroncash.address import Address
 from electroncash.i18n import _, ngettext
 from electroncash.wallet import Abstract_Wallet
 
@@ -51,8 +50,10 @@ class VerifyingDialog(WaitingDialog):
 
     def __init__(self, parent, message, task, on_success=None, on_error=None, auto_cleanup=True,
                  *, auto_show=True, auto_exec=False, title=None, disable_escape_key=False):
-        super().__init__(parent, message, task, on_success=on_success,
-                         on_error=on_error, auto_cleanup=auto_cleanup,
+        main_thread_success_cb = lambda x: util.do_in_main_thread(on_success, x) if on_success else None
+        main_thread_error_cb = lambda x: util.do_in_main_thread(on_error, x) if on_error else None
+        super().__init__(parent, message, task, on_success=main_thread_success_cb,
+                         on_error=main_thread_error_cb, auto_cleanup=auto_cleanup,
                          auto_show=False, auto_exec=False,
                          title=title or _('Verifying LNS Name'),
                          disable_escape_key=disable_escape_key)
