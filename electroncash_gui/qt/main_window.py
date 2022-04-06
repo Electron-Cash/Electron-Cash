@@ -43,7 +43,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
 from electroncash import keystore, get_config
-from electroncash.address import Address, ScriptOutput
+from electroncash.address import Address, AddressError, ScriptOutput
 from electroncash.bitcoin import COIN, TYPE_ADDRESS, TYPE_SCRIPT
 from electroncash import networks
 from electroncash.plugins import run_hook
@@ -144,7 +144,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.fx = gui_object.daemon.fx
         self.invoices = wallet.invoices
         self.contacts = wallet.contacts
-        self.contacts.update_lns_contacts(self)
         self.tray = gui_object.tray
         self.app = gui_object.app
         self.cleaned_up = False
@@ -259,10 +258,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if event.isAccepted() and self._first_shown:
             self._first_shown = False
             weakSelf = Weak.ref(self)
-            # do this immediately after this event handler finishes -- noop on everything but linux
+            # do this immediately after this event handler finishes
             def callback():
                 strongSelf = weakSelf()
                 if strongSelf:
+                    strongSelf.update_lns_contacts()
+                    # noop on everything but linux
                     strongSelf.gui_object.lin_win_maybe_show_highdpi_caveat_msg(strongSelf)
             QTimer.singleShot(0, callback)
 
@@ -2782,6 +2783,36 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.update_completions()
 
         run_hook('delete_contacts2', removed_entries)
+
+    def update_lns_contacts(self) :
+        ''' Resolves the new addresses of lns contacts and updates them '''
+        copntacts = self.contacts
+        lns_contacts = [contact for contact in copntacts.get_all() if contact.type == 'lns']
+        lns_names = [contact.name for contact in lns_contacts]
+        if not lns_names:
+            return
+
+        def thread_func():
+            updated = 0
+            infos = self.wallet.lns.resolve_verify(lns_names)
+            if not infos:
+                return
+            for contact in lns_contacts:
+                info = []
+                for ii in infos:
+                    try:
+                        if contact.name == ii.name and Address.from_string(contact.address) != ii.address:
+                            info.append(ii)
+                    except AddressError:
+                        pass
+                if info:
+                    if copntacts.replace(contact, Contact(info[0].name, info[0].address.to_cashaddr(), 'lns')):
+                        updated += 1
+            if updated:
+                self.contact_list.do_update_signal.emit()
+
+        t = threading.Thread(name=f"update_lns_contacts", target=thread_func, daemon=True)
+        t.start()
 
     def show_invoice(self, key):
         pr = self.invoices.get(key)

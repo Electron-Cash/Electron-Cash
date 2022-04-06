@@ -26,8 +26,6 @@
 '''
 LNS related classes and functions.
 '''
-from PyQt5.QtCore import QTimer
-
 import json
 import requests
 import threading
@@ -365,23 +363,11 @@ class LNS(util.PrintError):
         self.v_by_addr = defaultdict(set) # dict of addr -> set of txid
         self.v_by_name = defaultdict(set) # dict of lowercased name -> set of txid
 
-    def invalidate(self):
-        ''' This method invalidates the lookup cache and forces the
-            LNS addresses to be refetched after 10 minute interval
-        '''
-        try:
-            QTimer.singleShot(10 * 60 * 1000, self.invalidate) # ten minutes
-            with self.lock:
-                self._init_data()
-        except:
-            pass
-
     def diagnostic_name(self):
         return f'{self.wallet.diagnostic_name()}.{__class__.__name__}'
 
     def start(self, network):
-        # start invalidation sequence
-        self.invalidate()
+        pass
 
     def stop(self):
         pass
@@ -393,7 +379,7 @@ class LNS(util.PrintError):
         return info.name
 
     @classmethod
-    def parse_string(cls, s : str) -> Tuple[str, bool]:
+    def parse_string(cls, s: str) -> Tuple[str, bool]:
         ''' Returns a (name, bool) tuple on parse success
         Bool indicates strictly formatted LNS name ending on .bch
         Does not raise, merely returns None on all errors.'''
@@ -425,9 +411,10 @@ class LNS(util.PrintError):
             nonlocal pb
             if isinstance(thing, List):
                 pb = thing
-            elif isinstance(thing, Exception) and isinstance(exc, list):
+            elif isinstance(thing, Exception):
                 self.wallet.print_error(str(thing))
-                exc.append(thing)
+                if isinstance(exc, list):
+                    exc.append(thing)
             done.set()
         self.verify_name_asynch(name=lns_string, success_cb=done_cb, error_cb=done_cb, timeout=timeout)
         if not done.wait(timeout=timeout) or not pb:
@@ -486,12 +473,10 @@ class LNS(util.PrintError):
     def get_verified(self, lns_name) -> Info:
         ''' Returns the Info object for lns_name of the form: satoshi.bch
         or None if not found in self.v_by_name '''
-        tup = self.parse_string(lns_name)
-        if tup:
-            name, _strict = tup
-            l = self.find_verified(name=name)
-            if len(l):
-                return l[0]
+        name, _strict =  self.parse_string(lns_name)
+        l = self.find_verified(name=name)
+        if l:
+            return l[0]
 
     def find_verified(self, name: str) -> List[Info]:
         ''' Returns a list of Info objects for verified LNS Names matching

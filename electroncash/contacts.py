@@ -21,7 +21,6 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-import threading
 import dns
 from dns.exception import DNSException
 import json
@@ -386,28 +385,3 @@ class Contacts(util.PrintError):
             if type is not None and c.type != type:
                 continue
             yield c
-
-    def update_lns_contacts(self, window) -> int:
-        ''' Resolves the new addresses of lns contacts and updates them '''
-
-        lns_contacts = [contact for contact in self.get_all() if contact.type == 'lns']
-        lns_names = [contact.name for contact in lns_contacts]
-        if not lns_names:
-            return
-
-        def thread_func():
-            updated = 0
-            infos = window.wallet.lns.resolve_verify(lns_names)
-            if not infos:
-                return
-            for contact in lns_contacts:
-                info = [info for info in infos if contact.name == info.name and Address.from_string(contact.address) != info.address]
-                if info:
-                    if self.replace(contact, Contact(info[0].name, info[0].address.to_cashaddr(), 'lns')):
-                        updated += 1
-            if updated:
-                window.contact_list.do_update_signal.emit()
-
-        t = threading.Thread(name=f"update_lns_contacts",
-                            target=thread_func, daemon=True)
-        t.start()
