@@ -230,10 +230,12 @@ build_the_app() {
 
         rm -rf dist/
 
-        info "Resetting modification time in C:\Python..."
+        info "Resetting modification time and .pyd PE timestamps in C:\Python..."
         # (Because we just installed a bunch of stuff)
         pushd "$WINEPREFIX"/drive_c/python$PYTHON_VERSION
         find -exec touch -d '2000-11-11T11:11:11+00:00' {} +
+        find -type f -name '*.pyd' -exec python3 "$here"/fix-pe-timestamp.py {} \;
+        sed -i '/jsonschema\.exe/d' Lib/site-packages/jsonschema-*.dist-info/RECORD
         ls -l
         popd
 

@@ -53,7 +53,9 @@ RUN echo "78b185fabdb323971d13bd329fefc8038e08559aa51c4996de18db0639a51df6 /tmp/
         # xvfb is needed to launch the Visual Studio installer
         xvfb=2:1.20.13-1ubuntu1.1 \
         # winbind is needed for the Visual Studio installer and cl.exe PDB generation
-        winbind=2:4.13.17~dfsg-0ubuntu0.21.10.1
+        winbind=2:4.13.17~dfsg-0ubuntu0.21.10.1 \
+        # python3-pefile is needed to patch the MSVC binaries using fix-pe-timestamp.py
+        python3-pefile=2021.5.24-1
 
 RUN rm -rf /var/lib/apt/lists/* && \
     apt-get autoremove -y && \
