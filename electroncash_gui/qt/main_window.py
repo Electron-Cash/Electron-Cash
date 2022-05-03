@@ -3835,7 +3835,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                          decimal_point=self.decimal_point,
                                          fee_calc_timeout=timeout,
                                          download_inputs=download_inputs,
-                                         progress_callback=update_prog)
+                                         progress_callback=update_prog,
+                                         receives_before_sends=bool(self.config.get('tx_history_receives_before_sends',
+                                                                                    True)))
         success = False
         def on_success(history):
             nonlocal success
@@ -4553,6 +4555,25 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.config.set_key('allow_legacy_p2sh', bool(b))
         legacy_p2sh_cb.stateChanged.connect(on_legacy_p2sh_cb)
         global_tx_widgets.append((legacy_p2sh_cb, None))
+
+        # Sort txns in "receives before sends" ordervs blockchain order (CTOR)
+        receives_before_sends_cb = QCheckBox(_("Display history with receives ordered before sends"))
+        receives_before_sends_cb.setChecked(self.config.get('tx_history_receives_before_sends', True))
+        receives_before_sends_cb.setToolTip(
+                                    _('If checked, the transaction history tab will display transactions in such\n'
+                                      'a way so as to avoid disconcerting negative temporary balances. Receives\n'
+                                      'of funds will always be ordered before sends appearing in the same block.\n'
+                                      'This is necessary since CTOR ordering may create non-natural tx history\n'
+                                      'ordering for confirmed transactions, leading to temporary negative balances\n'
+                                      'for intermediate transactions in a chain appearing in the same block.\n\n'
+                                      'This option works around CTOR by at least ensuring that wallet balances will\n'
+                                      'always appear positive in the history tab, even if transactions are re-ordered\n'
+                                      'due to CTOR.'))
+        def on_receives_before_sends_cb(b):
+            self.config.set_key('tx_history_receives_before_sends', b)
+            self.history_list.update()  # this won't happen too often since it's rate-limited
+        receives_before_sends_cb.stateChanged.connect(on_receives_before_sends_cb)
+        global_tx_widgets.append((receives_before_sends_cb, None))
 
         # Schnorr
         use_schnorr_cb = QCheckBox(_("Sign with Schnorr signatures"))

@@ -1528,7 +1528,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     TxHistory = namedtuple("TxHistory", "tx_hash, height, conf, timestamp, amount, balance")
 
-    def get_history(self, domain=None, *, reverse=False) -> List[TxHistory]:
+    def get_history(self, domain=None, *, reverse=False, receives_before_sends=False) -> List[TxHistory]:
         # get domain
         if domain is None:
             domain = self.get_addresses()
@@ -1550,7 +1550,19 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             delta = tx_deltas[tx_hash]
             height, conf, timestamp = self.get_tx_height(tx_hash)
             history.append((tx_hash, height, conf, timestamp, delta))
-        history.sort(key = lambda x: self.get_txpos(x[0]), reverse=True)
+
+        def sort_func_simple(h_item):
+            """Here we naively sort just by tx_pos in the block (CTOR ordering), per block"""
+            return self.get_txpos(h_item[0])
+
+        def sort_func_receives_before_sends(h_item):
+            """Here we sort in a way such that receives are always ordered before sends, per block"""
+            height, pos = self.get_txpos(h_item[0])
+            delta = h_item[4] or 0  # Guard against delta == None by forcing None -> 0
+            return height, -delta, pos
+
+        sort_func = sort_func_receives_before_sends if receives_before_sends else sort_func_simple
+        history.sort(key=sort_func, reverse=True)
 
         # 3. add balance
         c, u, x = self.get_balance(domain)
@@ -1570,7 +1582,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def export_history(self, domain=None, from_timestamp=None, to_timestamp=None, fx=None,
                        show_addresses=False, decimal_point=8,
                        *, fee_calc_timeout=10.0, download_inputs=False,
-                       progress_callback=None):
+                       progress_callback=None, receives_before_sends=False):
         ''' Export history. Used by RPC & GUI.
 
         Arg notes:
@@ -1667,7 +1679,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                                    is_diff=is_diff)
 
         # grab history
-        h = self.get_history(domain, reverse=True)
+        h = self.get_history(domain, reverse=True, receives_before_sends=receives_before_sends)
         out = []
 
         n, l = 0, max(1, float(len(h)))
