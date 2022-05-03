@@ -4554,6 +4554,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         legacy_p2sh_cb.stateChanged.connect(on_legacy_p2sh_cb)
         global_tx_widgets.append((legacy_p2sh_cb, None))
 
+        # Sort txns in natural order (TTOR) vs blockchain order (CTOR)
+        blockchain_order_cb = QCheckBox(_("Display history in blockchain order (CTOR)"))
+        blockchain_order_cb.setChecked(not self.config.get('topo_sort_tx_history', True))
+        blockchain_order_cb.setToolTip(_('If checked, the transaction history tab will display transactions in the\n'
+                                         'order in which they appear on the blockchain, which is CTOR order (sorted\n'
+                                         'by txid per block, descending). If disabled, transactions will be sorted\n'
+                                         'topologically per block (natural order).'))
+        def on_blockchain_order_cb(b):
+            self.config.set_key('topo_sort_tx_history', not b)
+            self.history_list.update()  # this won't happen too often since it's rate-limited
+        blockchain_order_cb.stateChanged.connect(on_blockchain_order_cb)
+        global_tx_widgets.append((blockchain_order_cb, None))
+
         # Schnorr
         use_schnorr_cb = QCheckBox(_("Sign with Schnorr signatures"))
         use_schnorr_cb.setChecked(self.wallet.is_schnorr_enabled())

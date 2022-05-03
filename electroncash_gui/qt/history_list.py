@@ -112,7 +112,8 @@ class HistoryList(MyTreeWidget):
     @profiler
     def on_update(self):
         self.wallet = self.parent.wallet
-        h = self.wallet.get_history(self.get_domain(), reverse=True)
+        h = self.wallet.get_history(self.get_domain(), reverse=True,
+                                    topo_sort=bool(self.config.get('topo_sort_tx_history', True)))
         sels = self.selectedItems()
         current_tx = sels[0].data(0, Qt.UserRole) if sels else None
         del sels #  make sure not to hold stale ref to C++ list of items which will be deleted in clear() call below

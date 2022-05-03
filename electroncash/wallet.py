@@ -1528,7 +1528,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     TxHistory = namedtuple("TxHistory", "tx_hash, height, conf, timestamp, amount, balance")
 
-    def get_history(self, domain=None, *, reverse=False) -> List[TxHistory]:
+    def get_history(self, domain=None, *, reverse=False, topo_sort=False) -> List[TxHistory]:
         # get domain
         if domain is None:
             domain = self.get_addresses()
@@ -1546,11 +1546,51 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         # 2. create sorted history
         history = []
-        for tx_hash in tx_deltas:
-            delta = tx_deltas[tx_hash]
-            height, conf, timestamp = self.get_tx_height(tx_hash)
-            history.append((tx_hash, height, conf, timestamp, delta))
-        history.sort(key = lambda x: self.get_txpos(x[0]), reverse=True)
+        if not topo_sort:
+            for tx_hash in tx_deltas:
+                delta = tx_deltas[tx_hash]
+                height, conf, timestamp = self.get_tx_height(tx_hash)
+                history.append((tx_hash, height, conf, timestamp, delta))
+            history.sort(key = lambda x: self.get_txpos(x[0]), reverse=True)
+        else:
+            # Sort topologically for each height
+            TxItem = namedtuple("TxItem", "tx_hash height conf timestamp delta vpos")
+            by_height = defaultdict(set)  # height -> set of txid
+            by_txid = dict()  # tx_hash -> TxItem
+            for tx_hash in tx_deltas:
+                delta = tx_deltas[tx_hash]
+                height, conf, timestamp = self.get_tx_height(tx_hash)
+                by_txid[tx_hash] = TxItem(tx_hash, height, conf, timestamp, delta, 0)
+                by_height[height].add(tx_hash)
+
+            def get_vpos(txid, txid_set, vpos=0):
+                addr_dict = self.txi.get(txid)
+                if not addr_dict: return 0  # Hmm. Missing inputs for this tx (doesn't involve wallet)
+                vpos_out = vpos
+                for _, txis in addr_dict.items():
+                    for tup in txis:
+                        ser, v = tup
+                        prev_txid = ser.split(':', 1)[0]
+                        if prev_txid in txid_set:
+                            vpos_out = max(vpos_out, get_vpos(prev_txid, txid_set, vpos+1))
+                return vpos_out
+
+            for height, txid_set in by_height.items():
+                for txid in txid_set:
+                    vpos = get_vpos(txid, txid_set)
+                    item = by_txid.pop(txid, None)
+                    assert item
+                    by_txid[txid] = TxItem(item.tx_hash, item.height, item.conf, item.timestamp, item.delta, vpos)
+                    history.append((item.tx_hash, item.height, item.conf, item.timestamp, item.delta))
+
+            def sort_func(tup):
+                txid = tup[0]
+                height, pos = self.get_txpos(txid)
+                vpos = by_txid[txid].vpos
+                return height, vpos, txid
+
+            # Sort the history in reverse order by height, vpos (topologically for each height)
+            history.sort(key=lambda tup: sort_func(tup), reverse=True)
 
         # 3. add balance
         c, u, x = self.get_balance(domain)
