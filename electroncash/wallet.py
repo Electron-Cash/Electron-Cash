@@ -1610,7 +1610,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def export_history(self, domain=None, from_timestamp=None, to_timestamp=None, fx=None,
                        show_addresses=False, decimal_point=8,
                        *, fee_calc_timeout=10.0, download_inputs=False,
-                       progress_callback=None):
+                       progress_callback=None, topo_sort=False):
         ''' Export history. Used by RPC & GUI.
 
         Arg notes:
@@ -1707,7 +1707,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                                    is_diff=is_diff)
 
         # grab history
-        h = self.get_history(domain, reverse=True)
+        h = self.get_history(domain, reverse=True, topo_sort=topo_sort)
         out = []
 
         n, l = 0, max(1, float(len(h)))
