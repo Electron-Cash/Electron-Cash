@@ -1565,7 +1565,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
             def get_vpos(txid, txid_set, vpos=0):
                 addr_dict = self.txi.get(txid)
-                if not addr_dict: return 0  # Hmm. Missing inputs for this tx (doesn't involve wallet)
+                if not addr_dict: return vpos  # Hmm. Missing inputs for this tx (doesn't involve wallet)
                 vpos_out = vpos
                 for _, txis in addr_dict.items():
                     for tup in txis:
