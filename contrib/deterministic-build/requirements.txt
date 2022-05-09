@@ -42,6 +42,9 @@ certifi==2021.10.8 \
 chardet==3.0.4 \
     --hash=sha256:84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae \
     --hash=sha256:fc323ffcaeaed0e0a02bf4d117757b98aed530d9ed4531e3e15460124c106691
+charset-normalizer==2.0.0 \
+    --hash=sha256:76fd234253352853909a367630ea0040001df0b4f6e9cb655a7bf861e81a6d32 \
+    --hash=sha256:878bfe99324a9f3191e9a0f555e52ca2e0e1ad14b69802bc3f9a7afc71ffcfa4
 colorama==0.4.3 \
     --hash=sha256:7d73d2a99753107a36ac6b455ee49046802e59d9d076ef8e47b61499fa29afff \
     --hash=sha256:e96da0d330793e2cb9485e9ddfd918d456036c7149416295932478192f4436a1
@@ -98,13 +101,9 @@ qtpy==2.0.1 \
 requests==2.27.1 \
     --hash=sha256:68d7c56fd5a8999887728ef304a6d12edc7be74f1cfa47714fc8b414525c9a61 \
     --hash=sha256:f22fa1e554c9ddfd16e6e41ac79759e17be9e492b3587efa038054674760e72d
-# Note: Each builder (WINE, Linux AppImage, osx) has its own setuptools it is
-# highly sensitive to using. For instance, 62.0.0 breaks the Linux AppImage
-# build. However, setuptools-62.0.0 is required for the WINE build. As such,
-# this should remain commented-out for now.
-#setuptools==62.0.0 \
-#    --hash=sha256:a65e3802053e99fc64c6b3b29c11132943d5b8c8facbcc461157511546510967 \
-#    --hash=sha256:7999cbd87f1b6e1f33bf47efa368b224bed5e27b5ef2c4d46580186cbcb1a86a
+setuptools==62.0.0 \
+    --hash=sha256:a65e3802053e99fc64c6b3b29c11132943d5b8c8facbcc461157511546510967 \
+    --hash=sha256:7999cbd87f1b6e1f33bf47efa368b224bed5e27b5ef2c4d46580186cbcb1a86a
 six==1.16.0 \
     --hash=sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926 \
     --hash=sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254
