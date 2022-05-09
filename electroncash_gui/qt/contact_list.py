@@ -580,7 +580,7 @@ class ContactList(PrintError, MyTreeWidget):
         )
         if items:
             info, _name = items[0]
-            self.parent.set_contact(info.name, info.address.to_ui_string(), typ='lns')
+            self.parent.set_contact(info.name, info.address.to_ui_string(), typ='lns', resolved=info)
             run_hook('update_contacts_tab', self)
 
     def ca_update_potentially_unconfirmed_registrations(self, d : Dict[str, Tuple[str, Address]]):
