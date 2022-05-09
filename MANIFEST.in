@@ -7,6 +7,7 @@ include electron-cash
 include contrib/requirements/requirements.txt
 include contrib/requirements/requirements-hw.txt
 include contrib/requirements/requirements-binaries.txt
+include contrib/requirements/requirements-web3.txt
 recursive-include electroncash *.py
 recursive-include electroncash_gui *.py
 recursive-include electroncash_plugins *.py
