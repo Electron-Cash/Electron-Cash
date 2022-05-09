@@ -227,6 +227,7 @@ build_the_app() {
         info "Installing frozen dependencies ..."
         $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements.txt || fail "Failed to install requirements"
         $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements-hw.txt || fail "Failed to install requirements-hw"
+        $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements-web3.txt || fail "Failed to install requirements-web3"
 
         pushd "$WINEPREFIX"/drive_c/electroncash
         $PYTHON setup.py install || fail "Failed setup.py install"

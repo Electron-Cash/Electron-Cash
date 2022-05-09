@@ -158,10 +158,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.require_fee_update = False
         self.cashaddr_toggled_signal = self.gui_object.cashaddr_toggled_signal  # alias for backwards compatibility for plugins -- this signal used to live in each window and has since been refactored to gui-object where it belongs (since it's really an app-global setting)
         self.force_use_single_change_addr = None  # this is set by the CashShuffle plugin to a single string that will go into the tool-tip explaining why this preference option is disabled (see self.settings_dialog)
-        self._update_lns_timer = QTimer(self)
-        self._update_lns_timer.timeout.connect(self.update_lns_contacts)
-        self._update_lns_timer.setInterval(600_000)  # 10 min update timer for LNS contacts
-        self._update_lns_timer.setSingleShot(False)
+        self.have_lns = lnsqt.available and self.wallet.lns
+        if self.have_lns:
+            self._update_lns_timer = QTimer(self)
+            self._update_lns_timer.timeout.connect(self.update_lns_contacts)
+            self._update_lns_timer.setInterval(600_000)  # 10 min update timer for LNS contacts
+            self._update_lns_timer.setSingleShot(False)
+        else:
+            self._update_lns_timer = None
         self.tl_windows = []
         self.tx_external_keypairs = {}
         self._tx_dialogs = Weak.Set()
@@ -266,9 +270,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             def callback():
                 strongSelf = weakSelf()
                 if strongSelf:
-                    if strongSelf.network:
+                    if strongSelf.network and strongSelf.have_lns:
                         strongSelf.update_lns_contacts()
-                        strongSelf._update_lns_timer.start()
+                        if strongSelf._update_lns_timer:
+                            strongSelf._update_lns_timer.start()
                     # noop on everything but linux
                     strongSelf.gui_object.lin_win_maybe_show_highdpi_caveat_msg(strongSelf)
             QTimer.singleShot(0, callback)
@@ -1926,7 +1931,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.print_error(label, "not found")
                 # could not get verified contact, don't offer it as a completion
                 return None
-        elif _type.startswith('lns'):  # picks up lns and the lns_W pseudo-contacts
+        elif self.have_lns and _type.startswith('lns'):  # picks up lns and the lns_W pseudo-contacts
             mod_type = 'lns'
             info = self.wallet.lns.get_verified(label)
             if info:
@@ -2707,6 +2712,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         unambiguously resolve the Cash Account.
 
         On failure throws up an error window and returns None.'''
+        assert lnsqt.available
         return lnsqt.resolve_lns(self.top_level_window(), name, wallet=self.wallet)
 
     def set_contact(self, label, address, typ='address', replace=None) -> Contact:
@@ -2723,15 +2729,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if typ == 'cashacct':
             tup = self.resolve_cashacct(label)  # this displays an error message for us
             if not tup:
-                self.contact_list.update() # Displays original
+                self.contact_list.update()  # Displays original
                 return
             info, label = tup
             address = info.address.to_ui_string()
             contact = Contact(name=label, address=address, type=typ)
-        elif typ == 'lns':
+        elif typ == 'lns' and self.have_lns:
             tup = self.resolve_lns(label)  # this displays an error message for us
             if not tup:
-                self.contact_list.update() # Displays original
+                self.contact_list.update()  # Displays original
                 return
             info, label = tup
             address = info.address.to_ui_string()
@@ -2792,7 +2798,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_lns_contacts(self):
         """Resolves the new addresses of lns contacts and updates them"""
-        if not self.network:
+        if not self.network or not self.have_lns:
             return  # Do nothing if in offline mode
         contacts = self.contacts
         lns_contacts = [contact for contact in contacts.get_all() if contact.type == 'lns']
@@ -3075,9 +3081,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                               add_to_contacts_button = True, pay_to_button = True)
 
     def lookup_lns_dialog(self):
+        if not self.have_lns:
+            msg = _("LNS subsystem is unavailable. This may be because the Python package <em>web3</em> "
+                    "is not installed.")
+            if sys.platform.lower() != "win32":
+                msg += "<br><br>" + _("You may try this from the command-line:")
+                msg += "<br><br><font face=\"monospace\">python3 -m pip install web3 --user</font>"
+            self.show_warning(msg=msg, rich_text=True, title=_("LNS Subsystem Unavailable"))
+            return
         blurb = "<br><br>" + _('Enter a search term or a string of the form <b>satoshi.bch</b>')
         lnsqt.lookup_lns_dialog(self, self.wallet, blurb=blurb,
-                                              add_to_contacts_button = True, pay_to_button = True)
+                                add_to_contacts_button = True, pay_to_button = True)
 
     def show_master_public_keys(self):
         dialog = WindowModalDialog(self.top_level_window(), _("Wallet Information"))

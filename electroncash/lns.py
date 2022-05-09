@@ -39,8 +39,14 @@ from electroncash.simple_config import get_config
 from . import util
 from .address import Address
 from .transaction import get_address_from_output_script
-from web3 import Web3
-from web3.contract import Contract
+try:
+    from web3 import Web3
+    from web3.contract import Contract
+    available = True
+except ImportError:
+    available = False
+    Web3 = type(None)
+    Contract = type(None)
 
 # 'lns:' URI scheme. Not used yet. Used by Crescent Cash and Electron Cash and
 # other wallets in the future.

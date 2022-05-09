@@ -45,6 +45,8 @@ from electroncash.address import Address
 from electroncash.i18n import _, ngettext
 from electroncash.wallet import Abstract_Wallet
 
+available = lns.available
+
 
 class VerifyingDialog(WaitingDialog):
 

@@ -435,12 +435,16 @@ class NetworkChoiceLayout(QObject, OnDestroyedMixin, PrintError):
                     td.stop() # stops the tor detector when proxy_tab disappears
         self.proxy_tab = proxy_tab = ProxyTab()
         self.blockchain_tab = blockchain_tab = QWidget()
-        self.lns_settings_tab = lns_settings_tab = LNSSettingsWidget(self.config, tabs)
+        if lns.available:
+            self.lns_settings_tab = lns_settings_tab = LNSSettingsWidget(self.config, tabs)
+        else:
+            self.lns_settings_tab = lns_settings_tab = None
 
         tabs.addTab(blockchain_tab, _('Overview'))
         tabs.addTab(server_tab, _('Server'))
         tabs.addTab(proxy_tab, _('Proxy'))
-        tabs.addTab(lns_settings_tab, QIcon(":icons/lns.png"), _('LNS'))
+        if lns_settings_tab:
+            tabs.addTab(lns_settings_tab, QIcon(":icons/lns.png"), _('LNS'))
 
         if wizard:
             tabs.setCurrentIndex(1)

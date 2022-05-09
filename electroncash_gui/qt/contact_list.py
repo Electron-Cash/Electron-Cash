@@ -61,6 +61,7 @@ class ContactList(PrintError, MyTreeWidget):
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
         self.wallet = parent.wallet
+        self.have_lns = self.wallet.lns and lnsqt.available
         self.setIndentation(0)
         self._edited_item_cur_sel = (None,) * 3
         self.monospace_font = QFont(MONOSPACE_FONT)
@@ -237,16 +238,18 @@ class ContactList(PrintError, MyTreeWidget):
                     _contact_d = i2c(item)
                     menu.addAction(_("Details..."), lambda: cashacctqt.cash_account_detail_dialog(self.parent, _contact_d.name))
 
-            lns_info = self.wallet.lns.get_verified(i2c(item).name)
-            if lns_info:
-                _contact_d = i2c(item)
-                menu.addAction(_("Details..."), lambda: lnsqt.lns_detail_dialog(self.parent, _contact_d.name))
+            if self.have_lns:
+                lns_info = self.wallet.lns.get_verified(i2c(item).name)
+                if lns_info:
+                    _contact_d = i2c(item)
+                    menu.addAction(_("Details..."), lambda: lnsqt.lns_detail_dialog(self.parent, _contact_d.name))
             menu.addSeparator()
 
         menu.addAction(self.icon_cashacct,
                        _("Add Contact") + " - " + _("Cash Account"), self.new_cash_account_contact_dialog)
-        menu.addAction(self.icon_lns,
-                       _("Add Contact") + " - " + _("LNS Name"), self.new_lns_contact_dialog)
+        if self.have_lns:
+            menu.addAction(self.icon_lns,
+                           _("Add Contact") + " - " + _("LNS Name"), self.new_lns_contact_dialog)
         menu.addAction(self.icon_contacts, _("Add Contact") + " - " + _("Address"), self.parent.new_contact_dialog)
         menu.addSeparator()
         menu.addAction(self.icon_cashacct,
@@ -262,9 +265,10 @@ class ContactList(PrintError, MyTreeWidget):
         a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
         a.setCheckable(True)
         a.setChecked(self.show_my_cashaccts)
-        a = menu.addAction(_("Show My LNS Names"), self.toggle_show_my_lns_names)
-        a.setCheckable(True)
-        a.setChecked(self.show_my_lns_names)
+        if self.have_lns:
+            a = menu.addAction(_("Show My LNS Names"), self.toggle_show_my_lns_names)
+            a.setCheckable(True)
+            a.setChecked(self.show_my_lns_names)
 
         if ca_unverified:
             def kick_off_verify():
@@ -341,15 +345,19 @@ class ContactList(PrintError, MyTreeWidget):
         pseudo-contacts clobbering dupes of the same type that were manually added.
         Client code should scan for type == 'cashacct' and type == 'cashacct_W'
         also for type == 'lns' and type == 'lns_W '''
-        contacts = [contact for contact in self.parent.contacts.get_all(nocopy=True) if
-            not contact.type in ['cashacct', 'lns']
-            or not Address.is_valid(contact.address)  # or if it is, it can have invalid address as it's clearly 'not mine"
-            or not self.wallet.is_mine(Address.from_string(contact.address))]
-        if 'cashacct' in include_pseudo_types:
-            contacts = contacts + self._make_wallet_cashacct_pseudo_contacts()
-        if 'lns' in include_pseudo_types:
-            contacts = contacts + self._make_wallet_lns_pseudo_contacts()
-        return contacts
+        if not include_pseudo_types:
+            return self.parent.contacts.get_all(nocopy=True)
+        else:
+            contacts = [contact for contact in self.parent.contacts.get_all(nocopy=True)
+                        if contact.type not in ['cashacct', 'lns']
+                            # or if it is, it can have invalid address as it's clearly 'not mine"
+                            or not Address.is_valid(contact.address)
+                            or not self.wallet.is_mine(Address.from_string(contact.address))]
+            if 'cashacct' in include_pseudo_types:
+                contacts = contacts + self._make_wallet_cashacct_pseudo_contacts()
+            if self.have_lns and 'lns' in include_pseudo_types:
+                contacts = contacts + self._make_wallet_lns_pseudo_contacts()
+            return contacts
 
     def _make_wallet_cashacct_pseudo_contacts(self, exclude_contacts = []) -> List[Contact]:
         ''' Returns a list of 'fake' contacts that come from the wallet's
@@ -477,12 +485,19 @@ class ContactList(PrintError, MyTreeWidget):
         pseudo_types = []
         if self.show_my_cashaccts:
             pseudo_types.append('cashacct')
-        if self.show_my_lns_names:
+        if self.have_lns and self.show_my_lns_names:
             pseudo_types.append('lns')
+        acceptable_type_set = {'cashacct', 'cashacct_W', 'cashacct_T', 'address'}
+        disabled_type_set = {'lns', 'lns_W'}
+        if self.have_lns:
+            acceptable_type_set |= disabled_type_set
+            disabled_type_set = set()
         for contact in self.get_full_contacts(include_pseudo_types=pseudo_types):
             _type, name, address = contact.type, contact.name, contact.address
             label_key = address
-            if _type in ('cashacct', 'cashacct_W', 'cashacct_T', 'lns', 'lns_W', 'address'):
+            if _type in disabled_type_set:
+                continue
+            if _type in acceptable_type_set:
                 try:
                     # try and re-parse and re-display the address based on current UI string settings
                     addy = Address.from_string(address)

@@ -229,6 +229,7 @@ contrib/make_zlib && contrib/make_libevent && contrib/make_openssl && contrib/ma
 info "Installing requirements..."
 python3 -m pip install -r ./contrib/deterministic-build/requirements.txt --user || fail "Could not install requirements"
 python3 -m pip install -r ./contrib/deterministic-build/requirements-binaries.txt --user || fail "Could not install binary requirements"
+python3 -m pip install --no-deps --no-warn-script-location -r ./contrib/deterministic-build/requirements-web3.txt --user || fail "Could not install web3 requirements"
 
 info "Installing hardware wallet requirements..."
 python3 -m pip install -r ./contrib/deterministic-build/requirements-hw.txt --user || \

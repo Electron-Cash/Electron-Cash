@@ -328,7 +328,7 @@ class PayToEdit(PrintError, ScanQRTextEdit):
         if self.is_pr:
             return
         key = str(self.toPlainText())
-        if not '@' in key:
+        if '@' not in key:
             return
         key = key.strip()  # strip whitespaces
         if key == self.previous_payto:
@@ -454,8 +454,10 @@ class PayToEdit(PrintError, ScanQRTextEdit):
     def _resolve_lns_names(self, skip_verif=False):
         ''' This should be called if not hasFocus(). Will run through the
         text in the payto and rewrite any verified LNS Names we find. '''
-        has_lns = False
         wallet = self.win.wallet
+        if not wallet.lns or not lnsqt.available:
+            return False
+        has_lns = False
         lines = self.lines()
         lines_orig = lines.copy()
         need_verif = set()

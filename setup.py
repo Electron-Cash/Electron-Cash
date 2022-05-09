@@ -19,6 +19,9 @@ with open('contrib/requirements/requirements-hw.txt') as f:
 with open('contrib/requirements/requirements-binaries.txt') as f:
     requirements_binaries = f.read().splitlines()
 
+with open('contrib/requirements/requirements-web3.txt') as f:
+    requirements_web3 = f.read().splitlines()
+
 version = imp.load_source('version', 'electroncash/version.py')
 
 if sys.version_info[:3] < (3, 6):
@@ -147,7 +150,9 @@ setup(
     extras_require={
         'hardware': requirements_hw,
         'gui': requirements_binaries,
-        'all': requirements_hw + requirements_binaries
+        # 'all' is a bit of a misnomer since it is lacking web3
+        'all': requirements_hw + requirements_binaries,
+        'web3': requirements_hw + requirements_binaries + requirements_web3,
     },
     packages=[
         'electroncash',

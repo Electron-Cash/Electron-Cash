@@ -92,10 +92,11 @@ class Contacts(util.PrintError):
                 continue # skip invalid-looking data
             address = __class__._cleanup_address(address, typ)
             if typ in ('address', 'cashacct', 'lns'):
-                if not Address.is_valid(address) \
-                    or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name)) \
-                    or (typ == 'lns' and not lns.LNS.parse_string(name)):
-                    continue # skip if if does not appear to be valid for these types
+                if (not Address.is_valid(address)
+                    or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name))
+                    or (typ == 'lns' and (not lns.available
+                                          or not lns.LNS.parse_string(name)))):
+                    continue  # skip if if does not appear to be valid for these types
             out.append( Contact(name, address, typ) )
         return out
 
