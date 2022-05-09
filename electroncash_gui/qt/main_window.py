@@ -36,7 +36,7 @@ import traceback
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 from collections import OrderedDict
-from typing import List
+from typing import List, Optional
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -2715,7 +2715,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         assert lnsqt.available
         return lnsqt.resolve_lns(self.top_level_window(), name, wallet=self.wallet)
 
-    def set_contact(self, label, address, typ='address', replace=None) -> Contact:
+    def set_contact(self, label, address, typ='address', replace=None) -> Optional[Contact]:
         ''' Returns a reference to the newly inserted Contact object.
         replace is optional and if specified, replace an existing contact,
         otherwise add a new one.
@@ -2734,7 +2734,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             info, label = tup
             address = info.address.to_ui_string()
             contact = Contact(name=label, address=address, type=typ)
-        elif typ == 'lns' and self.have_lns:
+        elif typ == 'lns':
+            if not self.have_lns:
+                return  # Ignore LNS if LNS is not enabled
             tup = self.resolve_lns(label)  # this displays an error message for us
             if not tup:
                 self.contact_list.update()  # Displays original
