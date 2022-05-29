@@ -93,6 +93,7 @@ def ripemd160(x):
         md.update(x)
         return md.digest()
     except:
+        # Fall-back to native python (in case hashlib lacks native ripemd160)
         from . import ripemd
         md = ripemd.new(x)
         return md.digest()
