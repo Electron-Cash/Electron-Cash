@@ -63,7 +63,7 @@ class UTXOList(MyTreeWidget):
         self.setSortingEnabled(True)
         self.wallet = self.parent.wallet
         self.parent.ca_address_default_changed_signal.connect(self._ca_on_address_default_change)
-        self.parent.gui_object.cashaddr_toggled_signal.connect(self.update)
+        self.parent.gui_object.cashaddr_format_changed_signal.connect(self.update)
         self.utxos = list()
         # cache some values to avoid constructing Qt objects for every pass through self.on_update (this is important for large wallets)
         self.monospaceFont = QFont(MONOSPACE_FONT)
@@ -80,7 +80,7 @@ class UTXOList(MyTreeWidget):
         self.cleaned_up = True
         try: self.parent.ca_address_default_changed_signal.disconnect(self._ca_on_address_default_change)
         except TypeError: pass
-        try: self.parent.gui_object.cashaddr_toggled_signal.disconnect(self.update)
+        try: self.parent.gui_object.cashaddr_format_changed_signal.disconnect(self.update)
         except TypeError: pass
 
     def if_not_dead(func):

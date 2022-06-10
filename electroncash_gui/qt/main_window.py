@@ -156,7 +156,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.externalpluginsdialog = None
         self.hardwarewalletdialog = None
         self.require_fee_update = False
-        self.cashaddr_toggled_signal = self.gui_object.cashaddr_toggled_signal  # alias for backwards compatibility for plugins -- this signal used to live in each window and has since been refactored to gui-object where it belongs (since it's really an app-global setting)
+        self.cashaddr_toggled_signal = self.gui_object.cashaddr_format_changed_signal  # alias for backwards compatibility for plugins -- this signal used to live in each window and has since been refactored to gui-object where it belongs (since it's really an app-global setting)
         self.force_use_single_change_addr = None  # this is set by the CashShuffle plugin to a single string that will go into the tool-tip explaining why this preference option is disabled (see self.settings_dialog)
         self.have_lns = lnsqt.available and self.wallet.lns
         if self.have_lns:
@@ -230,7 +230,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         for i in range(tabs.count()):
             self._shortcuts.add( QShortcut(QKeySequence("Alt+" + str(i + 1)), self, lambda i=i: wrtabs() and wrtabs().setCurrentIndex(i)) )
 
-        self.gui_object.cashaddr_toggled_signal.connect(self.update_cashaddr_icon)
+        self.gui_object.cashaddr_format_changed_signal.connect(self.update_cashaddr_icon)
         self.payment_request_ok_signal.connect(self.payment_request_ok)
         self.payment_request_error_signal.connect(self.payment_request_error)
         self.gui_object.update_available_signal.connect(self.on_update_available)  # shows/hides the update_available_button, emitted by update check mechanism when a new version is available
@@ -1089,7 +1089,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         label = HelpLabel(_('&Receiving address'), msg)
         label.setBuddy(self.receive_address_e)
         self.receive_address_e.textChanged.connect(self.update_receive_qr)
-        self.gui_object.cashaddr_toggled_signal.connect(self.update_receive_address_widget)
+        self.gui_object.cashaddr_format_changed_signal.connect(self.update_receive_address_widget)
+
         grid.addWidget(label, 0, 0)
         grid.addWidget(self.receive_address_e, 0, 1, 1, -1)
 
@@ -4457,7 +4458,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         gui_widgets.append((None, None)) # spacer
         address_w = QGroupBox(_('Address Format'))
         address_w.setToolTip(_('Select between Cash Address and Legacy formats for addresses'))
-        hbox = QHBoxLayout(address_w)
+        cashaddr_grid = QGridLayout(address_w)
         cashaddr_cbox = QComboBox()
         cashaddr_cbox.addItem(QIcon(':icons/tab_converter.svg'), _("CashAddr"), Address.FMT_CASHADDR)
         cashaddr_cbox.addItem(QIcon(':icons/tab_converter_bw.svg'), _("Legacy"), Address.FMT_LEGACY)
@@ -4466,12 +4467,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             fmt = int(cashaddr_cbox.currentData())
             self.gui_object.toggle_cashaddr(fmt == Address.FMT_CASHADDR)
         cashaddr_cbox.currentIndexChanged.connect(cashaddr_cbox_handler)
-        hbox.addWidget(cashaddr_cbox)
+        cashaddr_grid.addWidget(cashaddr_cbox, 0, 0)
         toggle_cashaddr_control = QCheckBox(_('Hide status button'))
         toggle_cashaddr_control.setToolTip(_('If checked, the status bar button for toggling address formats will be hidden'))
         toggle_cashaddr_control.setChecked(self.gui_object.is_cashaddr_status_button_hidden())
         toggle_cashaddr_control.toggled.connect(self.gui_object.set_cashaddr_status_button_hidden)
-        hbox.addWidget(toggle_cashaddr_control)
+        cashaddr_grid.addWidget(toggle_cashaddr_control, 0, 1)
+        force_cashaddr_prefix = QCheckBox(_('Always show Cash Address prefixes'))
+        force_cashaddr_prefix.setToolTip(_('If checked, show \'bitcoincash:\' prefix in addresses'))
+        force_cashaddr_prefix.setChecked(self.config.get('force_cashaddr_prefix', False))
+        force_cashaddr_prefix.toggled.connect(self.gui_object.force_cashaddr_prefix_button)
+        cashaddr_grid.addWidget(force_cashaddr_prefix, 1, 0, 1, 2)
         gui_widgets.append((address_w, None))
 
         gui_widgets.append((None, None)) # spacer
@@ -4834,9 +4840,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # The below shouldn't even be needed, since Qt should take care of this,
             # but Axel Gembe got a crash related to this on Python 3.7.3, PyQt 5.12.3
             # so here we are. See #1531
-            try: self.gui_object.cashaddr_toggled_signal.disconnect(self.update_cashaddr_icon)
+            try: self.gui_object.cashaddr_format_changed_signal.disconnect(self.update_cashaddr_icon)
             except TypeError: pass
-            try: self.gui_object.cashaddr_toggled_signal.disconnect(self.update_receive_address_widget)
+            try: self.gui_object.cashaddr_format_changed_signal.disconnect(self.update_receive_address_widget)
             except TypeError: pass
             try: self.gui_object.cashaddr_status_button_hidden_signal.disconnect(self.addr_converter_button.setHidden)
             except TypeError: pass

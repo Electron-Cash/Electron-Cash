@@ -323,7 +323,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 try: parent.labels_updated_signal.disconnect(self.update_tx_if_in_wallet)
                 except TypeError: pass
                 for slot in self.cashaddr_signal_slots:
-                    try: parent.gui_object.cashaddr_toggled_signal.disconnect(slot)
+                    try: parent.gui_object.cashaddr_format_changed_signal.disconnect(slot)
                     except TypeError: pass
                 self.cashaddr_signal_slots = []
 
@@ -606,7 +606,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         o_text.setTextInteractionFlags(o_text.textInteractionFlags() | Qt.LinksAccessibleByMouse | Qt.LinksAccessibleByKeyboard)
         vbox.addWidget(o_text)
         self.cashaddr_signal_slots.append(self.update_io)
-        self.main_window.gui_object.cashaddr_toggled_signal.connect(self.update_io)
+        self.main_window.gui_object.cashaddr_format_changed_signal.connect(self.update_io)
         self.update_io()
 
     def update_io(self):
@@ -727,6 +727,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             # /CashAccounts support
             # Mark B. Lundeberg's patented output formatter logic™
             if v is not None:
+                # 42 is the length of a Cash Address without prefix
                 if len(addrstr) > 42: # for long outputs, make a linebreak.
                     cursor.insertBlock()
                     addrstr = '\u21b3'

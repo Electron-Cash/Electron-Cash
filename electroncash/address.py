@@ -343,6 +343,9 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
     # Default to CashAddr
     FMT_UI = FMT_CASHADDR
 
+    # Defults to skip CashAddr prefixes (i.e. 'bitcoincash:' or 'bchtest:')
+    FMT_FORCE_PREFIX = False
+
     def __new__(cls, hash160, kind):
         assert kind in (cls.ADDR_P2PKH, cls.ADDR_P2SH)
         hash160 = to_bytes(hash160)
@@ -354,6 +357,10 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
     @classmethod
     def show_cashaddr(cls, on):
         cls.FMT_UI = cls.FMT_CASHADDR if on else cls.FMT_LEGACY
+
+    @classmethod
+    def force_cashaddr_prefix(cls, on):
+        cls.FMT_FORCE_PREFIX = on
 
     @classmethod
     def from_cashaddr_string(cls, string, *, net=None):
@@ -518,6 +525,8 @@ class Address(namedtuple("AddressTuple", "hash160 kind")):
 
     def to_ui_string(self, *, net=None):
         '''Convert to text in the current UI format choice.'''
+        if self.FMT_FORCE_PREFIX:
+            return self.to_full_ui_string(net=net)
         if net is None: net = networks.net
         return self.to_string(self.FMT_UI, net=net)
 

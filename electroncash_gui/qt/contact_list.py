@@ -79,7 +79,7 @@ class ContactList(PrintError, MyTreeWidget):
         if self.wallet.network:
             self.wallet.network.register_callback(self._ca_callback, ['ca_verified_tx', 'ca_updated_minimal_chash'] )
         self._ca_minimal_chash_updated_signal.connect(self._ca_update_chash)
-        self.parent.gui_object.cashaddr_toggled_signal.connect(self.update)
+        self.parent.gui_object.cashaddr_format_changed_signal.connect(self.update)
 
 
     def clean_up(self):
@@ -88,7 +88,7 @@ class ContactList(PrintError, MyTreeWidget):
         except TypeError: pass
         try: self.do_update_signal.disconnect(self.update)
         except TypeError: pass
-        try: self.parent.gui_object.cashaddr_toggled_signal.disconnect(self.update)
+        try: self.parent.gui_object.cashaddr_format_changed_signal.disconnect(self.update)
         except TypeError: pass
         if self.wallet.network:
             self.wallet.network.unregister_callback(self._ca_callback)

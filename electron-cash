@@ -106,6 +106,7 @@ from electroncash import daemon
 from electroncash import keystore
 from electroncash.mnemonic import Mnemonic, Mnemonic_Electrum
 from electroncash.winconsole import create_or_attach_console  # Import ok on other platforms, won't be called.
+from electroncash.address import Address
 import electroncash_plugins
 import electroncash.web as web
 
@@ -551,6 +552,11 @@ def main():
 
     # todo: defer this to gui
     config = SimpleConfig(config_options)
+
+    # These options apply to both GUI and daemon
+    Address.show_cashaddr(config.get("show_cashaddr", True))
+    Address.force_cashaddr_prefix(config.get("force_cashaddr_prefix", False))
+
     cmdname = config.get('cmd')
 
     # run non-RPC commands separately
