@@ -66,7 +66,7 @@ class AddressConsolidator:
         # output address defaults to input address if unspecified
         self.output_address = output_address or address
         self.max_tx_size = max_tx_size
-        assert self.max_tx_size < MAX_TX_SIZE
+        assert self.max_tx_size <= MAX_TX_SIZE
 
         self._coins = [
             utxo
