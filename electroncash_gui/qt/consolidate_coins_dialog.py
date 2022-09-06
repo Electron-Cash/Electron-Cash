@@ -11,11 +11,13 @@ from electroncash.consolidate import (
     MAX_TX_SIZE,
     AddressConsolidator,
 )
-from electroncash.constants import PROJECT_NAME, XEC
+
 from electroncash.transaction import Transaction
 from electroncash.wallet import Abstract_Wallet
 from electroncash_gui.qt.util import MessageBoxMixin
 
+unit = "BCH"
+sats_to_BCH_conv_factor = 100000000
 
 class TransactionsStatus(Enum):
     INTERRUPTED = "cancelled"
@@ -272,10 +274,11 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         min_value_sublayout.addWidget(self.filter_by_min_value_cb)
 
         self.minimum_value_sb = QtWidgets.QDoubleSpinBox()
+        self.minimum_value_sb.setDecimals(8)
         self.minimum_value_sb.setEnabled(False)
-        self.minimum_value_sb.setSingleStep(0.01)
+        self.minimum_value_sb.setSingleStep(0.000001)
         self.minimum_value_sb.setValue(0)
-        self.minimum_value_sb.setToolTip(f"{XEC}")
+        self.minimum_value_sb.setToolTip(f"{unit}")
         self.filter_by_min_value_cb.toggled.connect(self.minimum_value_sb.setEnabled)
         min_value_sublayout.addWidget(self.minimum_value_sb)
 
@@ -288,11 +291,12 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         max_value_sublayout.addWidget(self.filter_by_max_value_cb)
 
         self.maximum_value_sb = QtWidgets.QDoubleSpinBox()
+        self.maximum_value_sb.setDecimals(8)
         self.maximum_value_sb.setEnabled(False)
-        self.maximum_value_sb.setSingleStep(0.01)
-        self.maximum_value_sb.setMaximum(21_000_000_000_000)
-        self.maximum_value_sb.setValue(21_000_000_000_000)
-        self.maximum_value_sb.setToolTip(f"{XEC}")
+        self.maximum_value_sb.setSingleStep(0.000001)
+        self.maximum_value_sb.setMaximum(21_000_000)
+        self.maximum_value_sb.setValue(21_000_000)
+        self.maximum_value_sb.setToolTip(f"{unit}")
         self.filter_by_max_value_cb.toggled.connect(self.maximum_value_sb.setEnabled)
         max_value_sublayout.addWidget(self.maximum_value_sb)
 
@@ -313,7 +317,7 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         return (
             None
             if not self.filter_by_min_value_cb.isChecked()
-            else int(100 * self.minimum_value_sb.value())
+            else int(sats_to_BCH_conv_factor * self.minimum_value_sb.value())
         )
 
     def get_maximum_value(self) -> Optional[int]:
@@ -321,7 +325,7 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         return (
             None
             if not self.filter_by_max_value_cb.isChecked()
-            else int(100 * self.maximum_value_sb.value())
+            else int(sats_to_BCH_conv_factor * self.maximum_value_sb.value())
         )
 
 
@@ -475,12 +479,12 @@ class TransactionsPage(QtWidgets.QWizardPage):
         num_in = 0 if len(transactions) == 0 else len(transactions[0].inputs())
         self.num_in_label.setText(f"Maximum number of inputs per tx: <b>{num_in}</b>")
 
-        in_value = sum([tx.input_value() for tx in transactions]) / 100
-        out_value = sum([tx.output_value() for tx in transactions]) / 100
-        fees = sum([tx.get_fee() for tx in transactions]) / 100
-        self.in_value_label.setText(f"Input value: <b>{in_value} {XEC}</b>")
-        self.out_value_label.setText(f"Output value: <b>{out_value} {XEC}</b>")
-        self.fees_label.setText(f"Fees: <b>{fees} {XEC}</b>")
+        in_value = sum([tx.input_value() for tx in transactions]) / sats_to_BCH_conv_factor
+        out_value = sum([tx.output_value() for tx in transactions]) / sats_to_BCH_conv_factor
+        fees = sum([tx.get_fee() for tx in transactions]) / sats_to_BCH_conv_factor
+        self.in_value_label.setText(f"Input value: <b>{in_value} {unit}</b>")
+        self.out_value_label.setText(f"Output value: <b>{out_value} {unit}</b>")
+        self.fees_label.setText(f"Fees: <b>{fees} {unit}</b>")
 
     def isComplete(self) -> bool:
         return self.status == TransactionsStatus.FINISHED
