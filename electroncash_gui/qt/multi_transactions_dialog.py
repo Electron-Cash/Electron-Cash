@@ -5,9 +5,9 @@ from typing import Sequence
 from PyQt5 import QtCore, QtWidgets
 
 from electroncash import Transaction
-from electroncash.constants import XEC
 from electroncash.wallet import Abstract_Wallet
-
+unit = "BCH"
+sats_to_BCH_conv_factor = 100000000
 
 class MultiTransactionsWidget(QtWidgets.QWidget):
     """Display multiple transactions, with statistics and tools (sign, broadcast...)"""
@@ -84,12 +84,12 @@ class MultiTransactionsWidget(QtWidgets.QWidget):
         num_in = 0 if len(transactions) == 0 else len(transactions[0].inputs())
         self.num_in_label.setText(f"Number of inputs per tx: <b>{num_in}</b>")
 
-        in_value = sum([tx.input_value() for tx in transactions]) / 100
-        out_value = sum([tx.output_value() for tx in transactions]) / 100
-        fees = sum([tx.get_fee() for tx in transactions]) / 100
-        self.in_value_label.setText(f"Input value: <b>{in_value} {XEC}</b>")
-        self.out_value_label.setText(f"Output value: <b>{out_value} {XEC}</b>")
-        self.fees_label.setText(f"Fees: <b>{fees} {XEC}</b>")
+        in_value = sum([tx.input_value() for tx in transactions]) / sats_to_BCH_conv_factor
+        out_value = sum([tx.output_value() for tx in transactions]) / sats_to_BCH_conv_factor
+        fees = sum([tx.get_fee() for tx in transactions]) / sats_to_BCH_conv_factor
+        self.in_value_label.setText(f"Input value: <b>{in_value} {unit}</b>")
+        self.out_value_label.setText(f"Output value: <b>{out_value} {unit}</b>")
+        self.fees_label.setText(f"Fees: <b>{fees} {unit}</b>")
 
     def on_save_clicked(self):
         dir = QtWidgets.QFileDialog.getExistingDirectory(
