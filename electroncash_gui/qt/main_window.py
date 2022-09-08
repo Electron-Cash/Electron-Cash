@@ -38,6 +38,7 @@ from functools import partial
 from collections import OrderedDict
 from typing import List, Optional
 
+from PyQt5 import QtWidgets
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
