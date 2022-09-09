@@ -187,7 +187,7 @@ class AmountSpinBox(QtWidgets.QDoubleSpinBox):
         self.setStepType(QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType)
         self.setMaximum(21_000_000)
         self.setGroupSeparatorShown(True)
-        # Enough width to display "21 000 000,00":
+        # Enough width to display "21 000 000.00000000":
         self.setMinimumWidth(170)
 
 
@@ -229,14 +229,14 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
         self.minimum_amount_sb.setValue(0.00000546)
         self.minimum_amount_sb.valueChanged.connect(self.on_min_or_max_amount_changed)
         self.filter_by_min_value_cb = self.add_filter_by_value_line(
-            "Minimum amount (XEC)", self.minimum_amount_sb
+            f"Minimum amount ({unit})", self.minimum_amount_sb
         )
 
         self.maximum_amount_sb = AmountSpinBox()
         self.maximum_amount_sb.setValue(21_000_000)
         self.maximum_amount_sb.valueChanged.connect(self.on_min_or_max_amount_changed)
         self.filter_by_max_value_cb = self.add_filter_by_value_line(
-            "Maximum amount (XEC)", self.maximum_amount_sb
+            f"Maximum amount ({unit})", self.maximum_amount_sb
         )
 
         self.minimum_height_sb = BlockHeightSpinBox()
