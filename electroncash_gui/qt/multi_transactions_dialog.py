@@ -119,7 +119,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget, MessageBoxMixin):
                 fee = in_value - out_value
                 sum_in_value += in_value
                 sum_fees += fee
-                fee_item = QtWidgets.QTableWidgetItem(f"{fee / sats_per_unit:.2f}")
+                fee_item = QtWidgets.QTableWidgetItem(f"{fee / sats_per_unit:.8f}")
 
             self.transactions_table.setItem(
                 i, 0, QtWidgets.QTableWidgetItem(f"{len(tx.inputs())}")
@@ -128,7 +128,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget, MessageBoxMixin):
                 i, 1, QtWidgets.QTableWidgetItem(f"{len(tx.outputs())}")
             )
             self.transactions_table.setItem(
-                i, 2, QtWidgets.QTableWidgetItem(f"{out_value / sats_per_unit:.2f}")
+                i, 2, QtWidgets.QTableWidgetItem(f"{out_value / sats_per_unit:.8f}")
             )
             self.transactions_table.setItem(i, 3, fee_item)
 
@@ -144,14 +144,14 @@ class MultiTransactionsWidget(QtWidgets.QWidget, MessageBoxMixin):
             self.transactions_table.setItem(i, 4, color_item)
 
         self.out_value_label.setText(
-            f"Total output value: <b>{sum_out_value / sats_per_unit} {unit}</b>"
+            f"Total output value: <b>{sum_out_value / sats_per_unit:.8f} {unit}</b>"
         )
         if not has_missing_input_values:
             self.in_value_label.setText(
-            f"Total input value: <b>{sum_in_value / sats_per_unit} {unit}</b>"
+            f"Total input value: <b>{sum_in_value / sats_per_unit:.8f} {unit}</b>"
             )
             self.fees_label.setText(
-                f"Total fees: <b>{sum_fees / sats_per_unit} {unit}</b>"
+                f"Total fees: <b>{sum_fees / sats_per_unit:.8f} {unit}</b>"
             )
         else:
             self.in_value_label.setText("Total input value: N.A")
