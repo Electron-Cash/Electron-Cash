@@ -1,20 +1,24 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="titleTextColor">@android:color/white</item>
         <item name="subtitleTextColor">@android:color/white</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlay.v14.Material</item>
         <item name="spinnerStyle">@style/Widget.AppCompat.Spinner.Underlined</item>
         <item name="android:textDirection" tools:ignore="NewApi">locale</item>
+        <item name="actionOverflowButtonStyle">@style/OverFlow</item>
     </style>
 
     <style name="AppTheme.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
     </style>
-
+    <style name="OverFlow" parent="Widget.AppCompat.ActionButton.Overflow">
+        <item name="android:src">@drawable/ic_overflow_24dp</item>
+    </style>
     <!-- See https://plus.google.com/+AndroidDevelopers/posts/Z1Wwainpjhd -->
     <style name="AppTheme.Splash">
         <item name="android:windowBackground">@drawable/splash</item>
@@ -22,6 +26,7 @@
 
     <style name="NavigationMenuItem">
         <item name="android:ellipsize">end</item>
+        <item name="android:color">@android:color/white</item>
     </style>
 
     <style name="List">

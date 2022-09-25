@@ -33,6 +33,9 @@
             android:key="block_explorer"
             android:title="@string/block_explorer"
             tools:summary="Blockchair.com"/>
+        <ListPreference
+            android:key="dark_mode"
+            android:title="Dark Mode"/>
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/fiat">

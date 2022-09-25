@@ -97,8 +97,6 @@ class BCDataStream(object):
         except IndexError:
             raise SerializationError("attempt to read past end of buffer")
 
-        return ''
-
     def can_read_more(self) -> bool:
         if not self.input:
             return False

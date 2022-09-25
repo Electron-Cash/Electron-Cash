@@ -3,6 +3,7 @@ package org.electroncash.electroncash3
 import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.observe
 import androidx.preference.EditTextPreference
@@ -42,6 +43,16 @@ fun initSettings(): PyObject {
         }
     }
 
+    settings.getString("dark_mode").observeForever {
+        if(it.equals("YES")) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        } else if(it.equals("NO")) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        } else {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+        }
+    }
+
     val config = guiSettings.callAttr("AndroidConfig", sp)
     listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         // Make sure the Python config object has been updated before running any settings
@@ -68,6 +79,7 @@ fun setDefaultValues(sp: SharedPreferences) {
                     libWallet.get("DEFAULT_CONFIRMED_ONLY")!!.toBoolean())
 
     // Appearance
+    setDefaultValue(sp, "dark_mode", "SYSTEM")
     setDefaultValue(sp, "cashaddr_format",
                     clsAddress.get("FMT_UI") == clsAddress.get("FMT_CASHADDR"))
     setDefaultValue(sp, "base_unit", libUtil.get("DEFAULT_BASE_UNIT")!!.toString())
@@ -100,6 +112,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Appearance
         setEntries("base_unit", libUtil.get("base_units")!!)
         setEntries("block_explorer", libWeb.callAttr("BE_sorted_list"))
+        (findPreference("dark_mode") as ListPreference).apply {
+            entries = arrayOf(app.getString(R.string.enable),
+                app.getString(R.string.disable),
+                app.getString(R.string.system)) as? Array<out CharSequence>
+            entryValues = arrayOf("YES", "NO", "SYSTEM") as? Array<out CharSequence>
+        }
 
         // Fiat
         val currencies = libExchange.callAttr("get_exchanges_by_ccy", false)
