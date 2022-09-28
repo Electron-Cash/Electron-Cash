@@ -276,7 +276,7 @@ class CoinSelectionPage(QtWidgets.QWizardPage):
             button = QtWidgets.QMessageBox.warning(
                 self,
                 "SLP tokens may be lost",
-                f"{PROJECT_NAME} does not support transferring SLP tokens. If you "
+                f"Electron Cash does not support transferring SLP tokens. If you "
                 "include them in the consolidation transaction, they will be burned.",
                 buttons=QtWidgets.QMessageBox.Cancel | QtWidgets.QMessageBox.Ok,
             )
