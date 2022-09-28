@@ -38,7 +38,6 @@ from functools import partial
 from collections import OrderedDict
 from typing import List, Optional
 
-from PyQt5 import QtWidgets
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
@@ -3697,7 +3696,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
     def do_process_from_multiple_files(self):
-        filenames, _filter = QtWidgets.QFileDialog.getOpenFileNames(
+        filenames, _filter = QFileDialog.getOpenFileNames(
             self,
             "Select one or more files to open",
             self.config.get('io_dir', os.path.expanduser('~'))
