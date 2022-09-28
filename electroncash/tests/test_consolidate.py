@@ -6,7 +6,7 @@ from .. import consolidate
 from ..address import Address
 
 TEST_ADDRESS: Address = Address.from_string(
-    "ecash:qr3l6uufcuwm9prgpa6cfxnez87fzstxesp7ugp0ez"
+    "bitcoincash:qr3l6uufcuwm9prgpa6cfxnez87fzstxescngr64l4"
 )
 
 FEERATE: int = 1
