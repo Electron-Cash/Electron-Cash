@@ -3711,7 +3711,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     transactions.append(tx)
             except SerializationError as e:
                 self.show_critical(
-                    f"{PROJECT_NAME} was unable to deserialize the"
+                    f"Electron Cash was unable to deserialize the"
                     f" transaction in file {filename}:\n" + str(e)
                 )
         if not transactions:
