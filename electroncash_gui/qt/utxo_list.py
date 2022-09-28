@@ -33,6 +33,7 @@ from collections import defaultdict
 from functools import wraps
 from enum import IntEnum
 
+
 class UTXOList(MyTreeWidget):
     class Col(IntEnum):
         '''Column numbers. This is to make code in on_update easier to read.
