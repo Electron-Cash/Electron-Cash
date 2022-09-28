@@ -148,7 +148,7 @@ class MultiTransactionsWidget(QtWidgets.QWidget, MessageBoxMixin):
         )
         if not has_missing_input_values:
             self.in_value_label.setText(
-            f"Total input value: <b>{sum_in_value / sats_per_unit:.8f} {unit}</b>"
+                f"Total input value: <b>{sum_in_value / sats_per_unit:.8f} {unit}</b>"
             )
             self.fees_label.setText(
                 f"Total fees: <b>{sum_fees / sats_per_unit:.8f} {unit}</b>"
