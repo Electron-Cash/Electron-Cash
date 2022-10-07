@@ -35,12 +35,6 @@
         "s": "50002",
         "version": "1.4.1"
     },
-    "bchisbitcoin.com": {
-        "pruning": "-",
-        "s": "50002",
-        "t": "50001",
-        "version": "1.4.2"
-    },
     "blackie.c3-soft.com": {
         "pruning": "-",
         "s": "50002",
@@ -71,22 +65,11 @@
         "t": "50001",
         "version": "1.4.3"
     },
-    "ec-bcn.criptolayer.net": {
-        "pruning": "-",
-        "s": "50212",
-        "version": "1.4.1"
-    },
     "electrumx-cash.1209k.com": {
         "pruning": "-",
         "s": "50002",
         "t": "50001",
         "version": "1.4.2"
-    },
-    "greedyhog.mooo.com": {
-        "pruning": "-",
-        "s": "50002",
-        "t": "50001",
-        "version": "1.4.1"
     },
     "7nshufncf3nmp7pa42oqhnj6whsjgo2eok4jveex62tczuhvqur5ciad.onion": {
         "pruning": "-",
@@ -98,11 +81,6 @@
         "pruning": "-",
         "t": "50001",
         "version": "1.4.1"
-    },
-    "bxdp2p6abpqt5etc.onion": {
-        "pruning": "-",
-        "t": "50001",
-        "version": "1.4"
     },
     "jh3jgcrwweh6yvmprtjnp72u2hqn34nlftlg3msrr4vmlapft4yvt2id.onion": {
         "pruning": "-",
@@ -154,12 +132,6 @@
         "s": "50002",
         "t": "50001",
         "version": "1.4.2"
-    },
-    "fulcrum.devops.cash": {
-        "pruning": "-",
-        "s": "50002",
-        "t": "50001",
-        "version": "1.4.4"
     },
     "electrum.bitcoinverde.org": {
         "pruning": "-",
