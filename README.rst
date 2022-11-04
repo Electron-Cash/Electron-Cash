@@ -50,6 +50,11 @@ You can also install Electron Cash on your system, by running this command::
     sudo apt-get install python3-setuptools
     python3 setup.py install
 
+Compile the icons file for Qt::
+
+    sudo apt-get install pyqt5-dev-tools
+    pyrrc5 icons.qrc -o electroncash_gui/qt/icons.py
+
 This will download and install the Python dependencies used by
 Electron Cash, instead of using the 'packages' directory.
 
