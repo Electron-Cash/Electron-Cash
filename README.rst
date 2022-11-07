@@ -50,7 +50,7 @@ You can also install Electron Cash on your system, by running this command::
     sudo apt-get install python3-setuptools
     python3 setup.py install
 
-Compile the icons file for Qt::
+Compile the icons file for Qt (normally you can skip this step, run this command if icons are missing)::
 
     sudo apt-get install pyqt5-dev-tools
     pyrrc5 icons.qrc -o electroncash_gui/qt/icons.py
