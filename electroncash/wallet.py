@@ -92,16 +92,8 @@ from .i18n import _
 
 DEFAULT_CONFIRMED_ONLY = False
 
-def relayfee(network):
-    RELAY_FEE = 5000
-    MAX_RELAY_FEE = 50000
-    f = network.relay_fee if network and network.relay_fee else RELAY_FEE
-    return min(f, MAX_RELAY_FEE)
 
 def dust_threshold(network):
-    # Change < dust threshold is added to the tx fee
-    #return 182 * 3 * relayfee(network) / 1000 # original Electrum logic
-    #return 1 # <-- was this value until late Sept. 2018
     return 546 # hard-coded Bitcoin Cash dust threshold. Was changed to this as of Sept. 2018
 
 
@@ -1801,9 +1793,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         time_str = format_time(timestamp) if timestamp else _("unknown")
         status_str = _(TX_STATUS[status]) if status < 4 else time_str
         return status, status_str
-
-    def relayfee(self):
-        return relayfee(self.network)
 
     def dust_threshold(self):
         return dust_threshold(self.network)

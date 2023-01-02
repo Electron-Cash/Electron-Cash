@@ -48,16 +48,20 @@ from electroncash.bitcoin import COIN, TYPE_ADDRESS, TYPE_SCRIPT
 from electroncash import networks
 from electroncash.plugins import run_hook
 from electroncash.i18n import _, ngettext, pgettext
+from electroncash.transaction import (
+    OPReturn,
+    SerializationError,
+    Transaction,
+    tx_from_str,
+)
 from electroncash.util import (format_time, format_satoshis, PrintError,
                                format_satoshis_plain, NotEnoughFunds,
                                ExcessiveFee, UserCancelled, InvalidPassword,
                                bh2u, bfh, format_fee_satoshis, Weak,
                                print_error)
 import electroncash.web as web
-from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct
 from electroncash import paymentrequest
-from electroncash.transaction import OPReturn
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
 from electroncash.contacts import Contact
 from electroncash import rpa
@@ -72,6 +76,7 @@ from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
 from .transaction_dialog import show_transaction
 from .fee_slider import FeeSlider
+from .multi_transactions_dialog import MultiTransactionsDialog
 from .popup_widget import ShowPopupLabel, KillPopupLabel
 from . import cashacctqt
 from . import lnsqt
@@ -586,12 +591,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         filename, __ = QFileDialog.getOpenFileName(self, "Select your wallet file", wallet_folder)
         if not filename:
             return
-        if filename.lower().endswith('.txn'):
-            # they did File -> Open on a .txn, just do that.
-            self.do_process_from_file(fileName=filename)
-            return
         self.gui_object.new_window(filename)
-
 
     def backup_wallet(self):
         self.wallet.storage.write()  # make sure file is committed to disk
@@ -659,7 +659,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         file_menu = menubar.addMenu(_("&File"))
         self.recently_visited_menu = file_menu.addMenu(_("Open &Recent"))
-        file_menu.addAction(_("&Open") + "...", self.open_wallet).setShortcut(QKeySequence.Open)
+        file_menu.addAction(_("&Open wallet") + "...", self.open_wallet).setShortcut(QKeySequence.Open)
         file_menu.addAction(_("&New/Restore") + "...", self.new_wallet).setShortcut(QKeySequence.New)
         file_menu.addAction(_("&Save Copy As") + "...", self.backup_wallet).setShortcut(QKeySequence.SaveAs)
         file_menu.addAction(_("&Delete") + "...", self.remove_wallet)
@@ -749,6 +749,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From &Text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
         raw_transaction_menu.addAction(_("From the &Blockchain") + "...", self.do_process_from_txid, QKeySequence("Ctrl+B"))
         raw_transaction_menu.addAction(_("From &QR Code") + "...", self.read_tx_from_qrcode)
+        raw_transaction_menu.addAction(_("From &Multiple files") + "...", self.do_process_from_multiple_files)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
         if ColorScheme.dark_scheme and sys.platform != 'darwin':  # use dark icon in menu except for on macOS where we can't be sure it will look right due to the way menus work on macOS
@@ -1106,7 +1107,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = address_dialog.AddressDialog(self,  addr, windowParent=parent)
         d.exec_()
 
-    def show_transaction(self, tx, tx_desc = None):
+    def show_transaction(self, tx: Transaction, tx_desc = None):
         '''tx_desc is set only for txs created in the Send tab'''
         d = show_transaction(tx, self, tx_desc)
         self._tx_dialogs.add(d)
@@ -2307,10 +2308,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         amount = tx.output_value() if self.max_button.isChecked() else sum(map(lambda x:x[2], outputs))
         fee = tx.get_fee()
 
-        #if fee < self.wallet.relayfee() * tx.estimated_size() / 1000 and tx.requires_fee(self.wallet):
-            #self.show_error(_("This transaction requires a higher fee, or it will not be propagated by the network"))
-            #return
-
         if preview:
             # NB: this ultimately takes a deepcopy of the tx in question
             # (TxDialog always takes a deep copy).
@@ -2329,11 +2326,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             _("Amount to be sent") + ": " + self.format_amount_and_units(amount),
             _("Mining fee") + ": " + self.format_amount_and_units(fee),
         ]
-
-        x_fee = run_hook('get_tx_extra_fee', self.wallet, tx)
-        if x_fee:
-            x_fee_address, x_fee_amount = x_fee
-            msg.append( _("Additional fees") + ": " + self.format_amount_and_units(x_fee_amount) )
 
         confirm_rate = 2 * self.config.max_fee_rate()
 
@@ -3595,8 +3587,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         parent = parent or self
         return PasswordDialog(parent, msg).run()
 
-    def tx_from_text(self, txt):
-        from electroncash.transaction import tx_from_str
+    def tx_from_text(self, txt) -> Optional[Transaction]:
         try:
             txt_tx = tx_from_str(txt)
             tx = Transaction(txt_tx, sign_schnorr=self.wallet.is_schnorr_enabled())
@@ -3670,12 +3661,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self._qr_dialog = None
             self.show_error(str(e))
 
-    def read_tx_from_file(self, *, fileName = None):
-        fileName = fileName or self.getOpenFileName(_("Select your transaction file"), "*.txn")
-        if not fileName:
-            return
+    def read_tx_from_file(self, filename: str) -> Optional[Transaction]:
         try:
-            with open(fileName, "r", encoding='utf-8') as f:
+            with open(filename, "r", encoding='utf-8') as f:
                 file_content = f.read()
             file_content = file_content.strip()
             tx_file_dict = json.loads(str(file_content))
@@ -3686,7 +3674,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return tx
 
     def do_process_from_text(self):
-        from electroncash.transaction import SerializationError
         text = text_dialog(self.top_level_window(), _('Input raw transaction'), _("Transaction:"), _("Load transaction"))
         if not text:
             return
@@ -3697,20 +3684,46 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except SerializationError as e:
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
-    def do_process_from_file(self, *, fileName = None):
-        from electroncash.transaction import SerializationError
+    def do_process_from_file(self):
+        fileName = self.getOpenFileName(_("Select your transaction file"), "*.txn")
+        if not fileName:
+            return
         try:
-            tx = self.read_tx_from_file(fileName=fileName)
+            tx = self.read_tx_from_file(fileName)
             if tx:
                 self.show_transaction(tx)
         except SerializationError as e:
             self.show_critical(_("Electron Cash was unable to deserialize the transaction:") + "\n" + str(e))
 
+    def do_process_from_multiple_files(self):
+        filenames, _filter = QFileDialog.getOpenFileNames(
+            self,
+            "Select one or more files to open",
+            self.config.get('io_dir', os.path.expanduser('~'))
+        )
+
+        transactions = []
+        for filename in filenames:
+            try:
+                tx = self.read_tx_from_file(filename)
+                if tx is not None:
+                    transactions.append(tx)
+            except SerializationError as e:
+                self.show_critical(
+                    f"Electron Cash was unable to deserialize the"
+                    f" transaction in file {filename}:\n" + str(e)
+                )
+        if not transactions:
+            return
+
+        multi_tx_dialog = MultiTransactionsDialog(self.wallet, self, self)
+        multi_tx_dialog.widget.set_transactions(transactions)
+        multi_tx_dialog.exec_()
+
     def do_process_from_txid(self, *, txid=None, parent=None, tx_desc=None):
         parent = parent or self
         if self.gui_object.warn_if_no_network(parent):
             return
-        from electroncash import transaction
         ok = txid is not None
         if not ok:
             txid, ok = QInputDialog.getText(parent, _('Lookup transaction'), _('Transaction ID') + ':')
@@ -3719,7 +3732,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if not ok:
                 parent.show_message(_("Error retrieving transaction") + ":\n" + r)
                 return
-            tx = transaction.Transaction(r, sign_schnorr=self.wallet.is_schnorr_enabled())  # note that presumably the tx is already signed if it comes from blockchain so this sign_schnorr parameter is superfluous, but here to satisfy my OCD -Calin
+            tx = Transaction(r, sign_schnorr=self.wallet.is_schnorr_enabled())  # note that presumably the tx is already signed if it comes from blockchain so this sign_schnorr parameter is superfluous, but here to satisfy my OCD -Calin
             self.show_transaction(tx, tx_desc=tx_desc)
 
     def export_bip38_dialog(self):

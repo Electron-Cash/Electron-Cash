@@ -35,9 +35,11 @@ from electroncash.address import Address
 from electroncash.plugins import run_hook
 import electroncash.web as web
 from electroncash.util import profiler
+from electroncash.wallet import Multisig_Wallet
 from electroncash import networks
 from enum import IntEnum
 from . import cashacctqt
+from .consolidate_coins_dialog import ConsolidateCoinsWizard
 
 class AddressList(MyTreeWidget):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
@@ -270,7 +272,6 @@ class AddressList(MyTreeWidget):
         if self.picker:
             # picker mode has no menu
             return
-        from electroncash.wallet import Multisig_Wallet
         is_multisig = isinstance(self.wallet, Multisig_Wallet)
         can_delete = self.wallet.can_delete_address()
         selected = self.selectedItems()
@@ -337,24 +338,28 @@ class AddressList(MyTreeWidget):
             addr_URL = web.BE_URL(self.config, 'addr', addr)
             if addr_URL:
                 menu.addAction(_("View on block explorer"), lambda: webopen(addr_URL))
-        else:
+            menu.addAction(
+                "Consolidate coins for address",
+                lambda: self._open_consolidate_coins_dialog(addr),
+            )
+
+        elif col > -1:
             # multi-select
-            if col > -1:
-                texts, alt_copy, alt_copy_text = None, None, None
-                if col == 0: # address column
-                    texts = [a.to_ui_string() for a in addrs]
-                    # Add additional copy option: "Address, Balance (n)"
-                    alt_copy = _("Copy {}").format(_("Address") + ", " + _("Balance")) + f" ({len(addrs)})"
-                    alt_copy_text = "\n".join([a.to_ui_string() + ", " + self.parent.format_amount(sum(self.wallet.get_addr_balance(a)))
-                                              for a in addrs])
-                else:
-                    texts = [i.text(col).strip() for i in selected]
-                    texts = [t for t in texts if t]  # omit empty items
-                if texts:
-                    copy_text = '\n'.join(texts)
-                    menu.addAction(_("Copy {}").format(column_title) + f" ({len(texts)})", lambda: doCopy(copy_text))
-                if alt_copy and alt_copy_text:
-                    menu.addAction(alt_copy, lambda: doCopy(alt_copy_text))
+            texts, alt_copy, alt_copy_text = None, None, None
+            if col == 0:  # address column
+                texts = [a.to_ui_string() for a in addrs]
+                # Add additional copy option: "Address, Balance (n)"
+                alt_copy = _("Copy {}").format(_("Address") + ", " + _("Balance")) + f" ({len(addrs)})"
+                alt_copy_text = "\n".join([a.to_ui_string() + ", " + self.parent.format_amount(sum(self.wallet.get_addr_balance(a)))
+                                          for a in addrs])
+            else:
+                texts = [i.text(col).strip() for i in selected]
+                texts = [t for t in texts if t]  # omit empty items
+            if texts:
+                copy_text = '\n'.join(texts)
+                menu.addAction(_("Copy {}").format(column_title) + f" ({len(texts)})", lambda: doCopy(copy_text))
+            if alt_copy and alt_copy_text:
+                menu.addAction(alt_copy, lambda: doCopy(alt_copy_text))
 
         freeze = self.parent.set_frozen_state
         if any(self.wallet.is_frozen(addr) for addr in addrs):
@@ -484,3 +489,7 @@ class AddressList(MyTreeWidget):
 
     def _ca_on_address_default_change(self, ignored):
         self.update()
+
+    def _open_consolidate_coins_dialog(self, addr):
+        d = ConsolidateCoinsWizard(addr, self.parent.wallet, self.parent, parent=self)
+        d.exec_()
