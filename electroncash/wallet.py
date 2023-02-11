@@ -73,7 +73,6 @@ from . import paymentrequest
 from .paymentrequest import InvoiceStore, PR_PAID, PR_UNCONFIRMED, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .contacts import Contacts
 from . import cashacct
-from . import lns
 from . import slp
 from .rpa import paycode as rpa
 
@@ -205,15 +204,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # start_threads. Note: object instantiation should be lightweight here.
         # self.cashacct.load() is called later in this function to load data.
         self.cashacct = cashacct.CashAcct(self)
-        if lns.available:
-            self.lns = lns.LNS(self)
-        else:
-            self.lns = None
         self.slp = slp.WalletData(self)
         finalization_print_error(self.cashacct)  # debug object lifecycle
         finalization_print_error(self.slp)  # debug object lifecycle
-        if self.lns:
-            finalization_print_error(self.lns)  # debug object lifecycle
 
         # Removes defunct entries from self.pruned_txo asynchronously
         self.pruned_txo_cleaner_thread = None
@@ -297,8 +290,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # data here, before the below calls happen
         self.cashacct.load()
         self.slp.load()  # try to load first so we can pick up the remove_transaction hook from load_transactions if need be
-        if self.lns:
-            self.lns.load()
 
         # Now, finally, after object is constructed -- we can do this
         self.load_keystore_wrapper()

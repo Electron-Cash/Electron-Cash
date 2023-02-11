@@ -31,7 +31,6 @@ from collections import namedtuple
 from typing import List, Dict, Generator
 from . import dnssec
 from . import cashacct
-from . import lns
 from . import util
 from . import networks
 from .storage import WalletStorage
@@ -40,7 +39,7 @@ from .address import Address
 class Contact(namedtuple("Contact", "name address type")):
     ''' Your basic contacts entry. '''
 
-contact_types = {'address', 'cashacct', 'lns', 'openalias'}
+contact_types = {'address', 'cashacct', 'openalias'}
 
 class Contacts(util.PrintError):
     '''Electron Cash Contacts subsystem 2.0. Lightweight class for saving/laoding
@@ -93,9 +92,9 @@ class Contacts(util.PrintError):
             address = __class__._cleanup_address(address, typ)
             if typ in ('address', 'cashacct', 'lns'):
                 if (not Address.is_valid(address)
-                    or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name))
-                    or (typ == 'lns' and (not lns.available
-                                          or not lns.LNS.parse_string(name)))):
+                        or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name))
+                        # We skip lns always because it is no longer supported
+                        or typ == 'lns'):
                     continue  # skip if if does not appear to be valid for these types
             out.append( Contact(name, address, typ) )
         return out
@@ -143,7 +142,7 @@ class Contacts(util.PrintError):
     @staticmethod
     def _cleanup_address(address : str, _type : str) -> str:
         rm_prefix = (networks.net.CASHADDR_PREFIX + ":").lower()
-        if _type in ('address', 'cashacct', 'lns') and address.lower().startswith(rm_prefix):
+        if _type in ('address', 'cashacct') and address.lower().startswith(rm_prefix):
             address = address[len(rm_prefix):]  # chop off bitcoincash: prefix
         return address
 

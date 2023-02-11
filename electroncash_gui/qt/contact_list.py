@@ -42,7 +42,7 @@ from enum import IntEnum
 from collections import defaultdict
 from typing import List, Set, Dict, Tuple
 from . import cashacctqt
-from . import lnsqt
+
 
 class ContactList(PrintError, MyTreeWidget):
     filter_columns = [1, 2, 3]  # Name, Label, Address
@@ -61,14 +61,12 @@ class ContactList(PrintError, MyTreeWidget):
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
         self.wallet = parent.wallet
-        self.have_lns = self.wallet.lns and lnsqt.available
         self.setIndentation(0)
         self._edited_item_cur_sel = (None,) * 3
         self.monospace_font = QFont(MONOSPACE_FONT)
         self.cleaned_up = False
         self.do_update_signal.connect(self.update)
         self.icon_cashacct = QIcon(":icons/cashacct-logo.png" if not ColorScheme.dark_scheme else ":icons/cashacct-button-darkmode.png")
-        self.icon_lns = QIcon(":icons/lns.png")
         self.icon_openalias = QIcon(":icons/openalias-logo.svg")
         self.icon_contacts = QIcon(":icons/tab_contacts.png")
         self.icon_unverif = QIcon(":/icons/unconfirmed.svg")
@@ -238,18 +236,10 @@ class ContactList(PrintError, MyTreeWidget):
                     _contact_d = i2c(item)
                     menu.addAction(_("Details..."), lambda: cashacctqt.cash_account_detail_dialog(self.parent, _contact_d.name))
 
-            if self.have_lns:
-                lns_info = self.wallet.lns.get_verified(i2c(item).name)
-                if lns_info:
-                    _contact_d = i2c(item)
-                    menu.addAction(_("Details..."), lambda: lnsqt.lns_detail_dialog(self.parent, _contact_d.name))
             menu.addSeparator()
 
         menu.addAction(self.icon_cashacct,
                        _("Add Contact") + " - " + _("Cash Account"), self.new_cash_account_contact_dialog)
-        if self.have_lns:
-            menu.addAction(self.icon_lns,
-                           _("Add Contact") + " - " + _("LNS Name"), self.new_lns_contact_dialog)
         menu.addAction(self.icon_contacts, _("Add Contact") + " - " + _("Address"), self.parent.new_contact_dialog)
         menu.addSeparator()
         menu.addAction(self.icon_cashacct,
@@ -265,10 +255,6 @@ class ContactList(PrintError, MyTreeWidget):
         a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
         a.setCheckable(True)
         a.setChecked(self.show_my_cashaccts)
-        if self.have_lns:
-            a = menu.addAction(_("Show My LNS Names"), self.toggle_show_my_lns_names)
-            a.setCheckable(True)
-            a.setChecked(self.show_my_lns_names)
 
         if ca_unverified:
             def kick_off_verify():
@@ -319,44 +305,19 @@ class ContactList(PrintError, MyTreeWidget):
             tip = _("Your own Cash Accounts are now hidden")
         QToolTip.showText(QCursor.pos(), tip, self)
 
-    @property
-    def show_my_lns_names(self) -> bool:
-        ''' Returns the current setting from wallet storage. '''
-        return bool(self.wallet.storage.get('contact_list_show_my_lns_names', True))
-
-    @show_my_lns_names.setter
-    def show_my_lns_names(self, b : bool):
-        ''' Saves the flag to wallet storage. Does not update GUI. '''
-        self.wallet.storage.put('contact_list_show_my_lns_names', bool(b))
-
-    def toggle_show_my_lns_names(self):
-        ''' Toggles the flag in wallet storage, also updates GUI. '''
-        b = not self.show_my_lns_names
-        self.show_my_lns_names = b
-        self.update()
-        if b:
-            tip = _("Your own LNS Names are now shown")
-        else:
-            tip = _("Your own LNS Names are now hidden")
-        QToolTip.showText(QCursor.pos(), tip, self)
-
-    def get_full_contacts(self, include_pseudo_types: List[str] = ['cashacct', 'lns']) -> List[Contact]:
-        ''' Returns all the contacts, with the "My CashAcct" and "My LNS names"
-        pseudo-contacts clobbering dupes of the same type that were manually added.
-        Client code should scan for type == 'cashacct' and type == 'cashacct_W'
-        also for type == 'lns' and type == 'lns_W '''
+    def get_full_contacts(self, include_pseudo_types: List[str] = ['cashacct']) -> List[Contact]:
+        """ Returns all the contacts, with the "My CashAcct" pseudo-contacts clobbering dupes of the same type that
+        were manually added. Client code should scan for type == 'cashacct' and type == 'cashacct_W' """
         if not include_pseudo_types:
             return self.parent.contacts.get_all(nocopy=True)
         else:
             contacts = [contact for contact in self.parent.contacts.get_all(nocopy=True)
-                        if contact.type not in ['cashacct', 'lns']
+                        if contact.type not in ['cashacct']
                             # or if it is, it can have invalid address as it's clearly 'not mine"
                             or not Address.is_valid(contact.address)
                             or not self.wallet.is_mine(Address.from_string(contact.address))]
             if 'cashacct' in include_pseudo_types:
                 contacts = contacts + self._make_wallet_cashacct_pseudo_contacts()
-            if self.have_lns and 'lns' in include_pseudo_types:
-                contacts = contacts + self._make_wallet_lns_pseudo_contacts()
             return contacts
 
     def _make_wallet_cashacct_pseudo_contacts(self, exclude_contacts = []) -> List[Contact]:
@@ -405,46 +366,6 @@ class ContactList(PrintError, MyTreeWidget):
             ))
         return wallet_cashaccts
 
-    def _make_wallet_lns_pseudo_contacts(self, exclude_contacts = []) -> List[Contact]:
-        ''' Returns a list of 'fake' contacts that come from the wallet's
-        own registered LNS Names. These contacts do not exist in the
-        wallet.contacts object but are created on-the-fly from the
-        wallet.lns list of LNS Names.
-
-        The creation of this list is relatively cheap and scales as the lookups
-        are O(logN) in the LNS caches.
-
-        This is a convenience so that the Contacts tab shows "my" LNS Names
-        after registration as well as external LNS Names. Note that the
-        "mine" entries won't be shown if the user explicitly added his own as
-        "external"... '''
-        try:
-            excl_chk = set((c.name, Address.from_string(c.address)) for c in exclude_contacts if c.type == 'lns')
-        except:
-            # Hmm.. invalid address?
-            excl_chk = set()
-        wallet_lns_names = []
-        need_save = False
-        # Add the [Mine] pseudo-contacts
-        for lns_info in self.wallet.lns.get_wallet_lns_names():
-            name = self.wallet.lns.fmt_info(lns_info)
-            if (name, lns_info.address) in excl_chk:
-                continue
-            wallet_lns_names.append(Contact(
-                name = name,
-                address = lns_info.address.to_ui_string(),
-                type = 'lns_W'
-            ))
-            my_lns = Contact(name=name, address=lns_info.address.to_ui_string(), type='lns')
-            if not self.wallet.contacts.has(my_lns):
-                # HACK: Force-add this contract to the "saved" list since it is "mine" but it wasn't in the list before
-                # if we got here.
-                self.wallet.contacts.add(my_lns, unique=True, save=False)
-                need_save = True
-        if need_save:
-            self.wallet.contacts.save()
-        return wallet_lns_names
-
     @rate_limited(0.333, ts_after=True) # We rate limit the contact list refresh no more 3 per second
     def update(self):
         if self.cleaned_up:
@@ -467,8 +388,6 @@ class ContactList(PrintError, MyTreeWidget):
             'cashacct'   : _('Cash Account'),
             'cashacct_W' : _('Cash Account') + ' [' + _('Mine') + ']',
             'cashacct_T' : _('Cash Account') + ' [' + _('Pend') + ']',
-            'lns'        : _('LNS Name'),
-            'lns_W'      : _('LNS Name') + ' [' + _('Mine') + ']',
             'address'    : _('Address'),
         })
         type_icons = {
@@ -476,8 +395,6 @@ class ContactList(PrintError, MyTreeWidget):
             'cashacct'   : self.icon_cashacct,
             'cashacct_W' : self.icon_cashacct,
             'cashacct_T' : self.icon_unverif,
-            'lns'        : self.icon_lns,
-            'lns_W'      : self.icon_lns,
             'address'    : self.icon_contacts,
         }
         selected_items, current_item = [], None
@@ -485,18 +402,10 @@ class ContactList(PrintError, MyTreeWidget):
         pseudo_types = []
         if self.show_my_cashaccts:
             pseudo_types.append('cashacct')
-        if self.have_lns and self.show_my_lns_names:
-            pseudo_types.append('lns')
         acceptable_type_set = {'cashacct', 'cashacct_W', 'cashacct_T', 'address'}
-        disabled_type_set = {'lns', 'lns_W'}
-        if self.have_lns:
-            acceptable_type_set |= disabled_type_set
-            disabled_type_set = set()
         for contact in self.get_full_contacts(include_pseudo_types=pseudo_types):
             _type, name, address = contact.type, contact.name, contact.address
             label_key = address
-            if _type in disabled_type_set:
-                continue
             if _type in acceptable_type_set:
                 try:
                     # try and re-parse and re-display the address based on current UI string settings
@@ -566,21 +475,6 @@ class ContactList(PrintError, MyTreeWidget):
         if items:
             info, min_chash, name = items[0]
             self.parent.set_contact(name, info.address.to_ui_string(), typ='cashacct')
-            run_hook('update_contacts_tab', self)
-
-    def new_lns_contact_dialog(self):
-        ''' Context menu callback. Shows the "New LNS Contact"
-        interface. '''
-
-        items = lnsqt.lookup_lns_dialog(
-            self.parent, self.wallet, title=_("New LNS Contact"),
-            blurb = _("<br>LNS is the Bitcoin Cash Name Service which runs on smartBCH chain"
-                "<br><br>Add anyone's LNS address to your Contacts"),
-            button_type=lnsqt.InfoGroupBox.ButtonType.Radio
-        )
-        if items:
-            info, _name = items[0]
-            self.parent.set_contact(info.name, info.address.to_ui_string(), typ='lns', resolved=info)
             run_hook('update_contacts_tab', self)
 
     def ca_update_potentially_unconfirmed_registrations(self, d : Dict[str, Tuple[str, Address]]):

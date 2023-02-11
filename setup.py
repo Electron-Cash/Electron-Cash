@@ -19,9 +19,6 @@ with open('contrib/requirements/requirements-hw.txt') as f:
 with open('contrib/requirements/requirements-binaries.txt') as f:
     requirements_binaries = f.read().splitlines()
 
-with open('contrib/requirements/requirements-web3.txt') as f:
-    requirements_web3 = f.read().splitlines()
-
 version = imp.load_source('version', 'electroncash/version.py')
 
 if sys.version_info[:3] < (3, 7):
