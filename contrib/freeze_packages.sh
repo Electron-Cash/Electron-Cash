@@ -12,7 +12,7 @@ which virtualenv > /dev/null 2>&1 || fail "Please install virtualenv"
 python3 -m hashin -h > /dev/null 2>&1 || { python3 -m pip install hashin --user; }
 other_python=$(which python3)
 
-for i in '' '-hw' '-binaries' '-build-wine' '-web3' ; do
+for i in '' '-hw' '-binaries' '-build-wine' ; do
     rm -rf "$venv_dir"
     virtualenv -p $(which python3) $venv_dir
 

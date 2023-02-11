@@ -147,9 +147,7 @@ setup(
     extras_require={
         'hardware': requirements_hw,
         'gui': requirements_binaries,
-        # 'all' is a bit of a misnomer since it is lacking web3
         'all': requirements_hw + requirements_binaries,
-        'web3': requirements_hw + requirements_binaries + requirements_web3,
     },
     packages=[
         'electroncash',
