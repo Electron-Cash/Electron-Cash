@@ -71,6 +71,7 @@ class Plugin(FusionPlugin, QObject):
     initted = False
     last_server_status = (True, ("Ok", ''))
     _hide_history_txs = False
+    _is_fuz_tx = {}
 
     def __init__(self, *args, **kwargs):
         QObject.__init__(self)  # parentless top-level QObject. We need this type for the signal.
@@ -618,9 +619,14 @@ class Plugin(FusionPlugin, QObject):
     @hook
     def history_list_filter(self, history_list, h_item, label):
         # NB: 'h_item' might be None due to performance reasons
-        if self._hide_history_txs:
-            return bool(label.startswith("CashFusion "))  # this string is not translated for performance reasons
-        return None
+        if h_item is None or not self._hide_history_txs:
+            return None
+
+        txid = h_item.tx_hash
+        if not txid in self._is_fuz_tx:
+            self._is_fuz_tx[txid] = FusionPlugin.check_is_fuz_tx(history_list.wallet, txid)
+
+        return self._is_fuz_tx[txid]
 
     @hook
     def history_list_context_menu_setup(self, history_list, menu, item, tx_hash):

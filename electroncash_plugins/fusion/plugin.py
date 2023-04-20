@@ -694,6 +694,42 @@ class FusionPlugin(BasePlugin):
         return can_fuse_from(wallet) and can_fuse_to(wallet)
 
     @staticmethod
+    def check_is_fuz_tx(wallet, txid, my_addresses_seen=set(), require_depth=0) -> Optional[bool]:
+        tx = wallet.transactions.get(txid, None)
+        if tx is None:
+            # Not found in wallet.transactions so its fuz status is as yet "unknown". Indicate this.
+            return None
+        inputs = tx.inputs()
+        outputs = tx.outputs()
+        # We expect: OP_RETURN (4) FUZ\x00
+        fuz_prefix = bytes((OpCodes.OP_RETURN, len(Protocol.FUSE_ID))) + Protocol.FUSE_ID
+        # Step 1 - does it have the proper OP_RETURN lokad prefix?
+        for typ, dest, amt in outputs:
+            if amt == 0 and typ == TYPE_SCRIPT and dest.script.startswith(fuz_prefix):
+                break  # lokad found, proceed to Step 2 below
+        else:
+            # Nope, lokad prefix not found
+            return False
+        # Step 2 - are at least 1 of the inputs from me? (DoS prevention measure)
+        for inp in inputs:
+            inp_addr = inp.get('address', None)
+            if inp_addr is not None and (inp_addr in my_addresses_seen or wallet.is_mine(inp_addr)):
+                my_addresses_seen.add(inp_addr)
+                if require_depth == 0:
+                    return True  # This transaction is a CashFusion tx
+                # [Optional] Step 3 - Check if all ancestors up to required_depth are also fusions
+                if not FusionPlugin.is_fuz_coin(wallet, inp, require_depth=require_depth-1):
+                    # require_depth specified and not all required_depth parents were CashFusion
+                    return False
+        if my_addresses_seen:
+            # require_depth > 0: This tx + all wallet ancestors were CashFusion transactions up to require_depth
+            return True
+        # Failure -- this tx has the lokad but no inputs are "from me".
+        wallet.print_error(f"CashFusion: txid \"{txid}\" has a CashFusion-style OP_RETURN but none of the "
+                            f"inputs are from this wallet. This is UNEXPECTED!")
+        return False
+
+    @staticmethod
     def is_fuz_coin(wallet, coin, *, require_depth=0) -> Optional[bool]:
         """ Returns True if the coin in question is definitely a CashFusion coin (uses heuristic matching),
         or False if the coin in question is not from a CashFusion tx. Returns None if the tx for the coin
@@ -719,43 +755,7 @@ class FusionPlugin(BasePlugin):
 
         my_addresses_seen = set()
 
-        def check_is_fuz_tx():
-            tx = wallet.transactions.get(txid, None)
-            if tx is None:
-                # Not found in wallet.transactions so its fuz status is as yet "unknown". Indicate this.
-                return None
-            inputs = tx.inputs()
-            outputs = tx.outputs()
-            # We expect: OP_RETURN (4) FUZ\x00
-            fuz_prefix = bytes((OpCodes.OP_RETURN, len(Protocol.FUSE_ID))) + Protocol.FUSE_ID
-            # Step 1 - does it have the proper OP_RETURN lokad prefix?
-            for typ, dest, amt in outputs:
-                if amt == 0 and typ == TYPE_SCRIPT and dest.script.startswith(fuz_prefix):
-                    break  # lokad found, proceed to Step 2 below
-            else:
-                # Nope, lokad prefix not found
-                return False
-            # Step 2 - are at least 1 of the inputs from me? (DoS prevention measure)
-            for inp in inputs:
-                inp_addr = inp.get('address', None)
-                if inp_addr is not None and (inp_addr in my_addresses_seen or wallet.is_mine(inp_addr)):
-                    my_addresses_seen.add(inp_addr)
-                    if require_depth == 0:
-                        return True  # This transaction is a CashFusion tx
-                    # [Optional] Step 3 - Check if all ancestors up to required_depth are also fusions
-                    if not FusionPlugin.is_fuz_coin(wallet, inp, require_depth=require_depth-1):
-                        # require_depth specified and not all required_depth parents were CashFusion
-                        return False
-            if my_addresses_seen:
-                # require_depth > 0: This tx + all wallet ancestors were CashFusion transactions up to require_depth
-                return True
-            # Failure -- this tx has the lokad but no inputs are "from me".
-            wallet.print_error(f"CashFusion: txid \"{txid}\" has a CashFusion-style OP_RETURN but none of the "
-                               f"inputs are from this wallet. This is UNEXPECTED!")
-            return False
-        # /check_is_fuz_tx
-
-        answer = check_is_fuz_tx()
+        answer = FusionPlugin.check_is_fuz_tx(wallet, txid, my_addresses_seen, require_depth)
         if isinstance(answer, bool):
             # maybe cache the answer if it's a definitive answer True/False
             if require_depth == 0:
