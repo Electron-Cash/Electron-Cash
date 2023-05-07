@@ -183,6 +183,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.addresses_tab = self.create_addresses_tab()
         self.utxo_tab = self.create_utxo_tab()
         self.token_tab = self.create_token_tab()
+        self.token_history_tab = self.create_token_history_tab()
         self.console_tab = self.create_console_tab()
         self.contacts_tab = self.create_contacts_tab()
         self.converter_tab = self.create_converter_tab()
@@ -203,6 +204,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         add_optional_tab(tabs, self.addresses_tab, QIcon(":icons/tab_addresses.png"), _("&Addresses"), "addresses")
         add_optional_tab(tabs, self.utxo_tab, QIcon(":icons/tab_coins.png"), _("Co&ins"), "utxo")
         add_optional_tab(tabs, self.token_tab, QIcon(":icons/tab_token.svg"), _("Cash&Tokens"), "token", False)
+        add_optional_tab(tabs, self.token_history_tab, QIcon(":icons/tab_token.svg"), _("Token History"), "token_history", False)
         add_optional_tab(tabs, self.contacts_tab, QIcon(":icons/tab_contacts.png"), _("Con&tacts"), "contacts")
         add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.svg"), _("Address Converter"), "converter")
         add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.png"), _("Con&sole"), "console", False)
@@ -231,6 +233,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.gui_object.update_available_signal.connect(self.on_update_available)  # shows/hides the update_available_button, emitted by update check mechanism when a new version is available
         self.gui_object.new_window_initialized_signal.connect(self.new_window_initialized)
         self.history_list.setFocus(True)
+        self.token_history_list.setFocus(True)
 
         # update fee slider in case we missed the callback
         self.fee_slider.update()
@@ -477,6 +480,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.address_list.update()
         self.utxo_list.update()
         self.token_list.update()
+        self.token_history_list.update()
         self.need_update.set()
         # update menus
         self.seed_menu.setEnabled(self.wallet.has_seed())
@@ -497,6 +501,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self._warn_if_invalid_testnet_wallet()
         self.watching_only_changed()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
+        #self.toggle_tab(self.token_history_tab)
         run_hook('load_wallet', self.wallet, self)
 
     def init_geometry(self):
@@ -702,6 +707,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         add_toggle_action(view_menu, self.addresses_tab)
         add_toggle_action(view_menu, self.utxo_tab)
         add_toggle_action(view_menu, self.token_tab)
+        add_toggle_action(view_menu, self.token_history_tab)
         add_toggle_action(view_menu, self.contacts_tab)
         add_toggle_action(view_menu, self.converter_tab)
         add_toggle_action(view_menu, self.console_tab)
@@ -1063,6 +1069,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.address_list.update()
         self.utxo_list.update()
         self.token_list.update()
+        self.token_history_list.update()
         self.contact_list.update()
         self.invoice_list.update()
         self.update_completions()
@@ -1093,6 +1100,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.history_list = l = HistoryList(self)
         l.searchable_list = l
         return l
+
+    def create_token_history_tab(self):
+        from .token_history_list import TokenHistoryList
+        self.token_history_list = l = TokenHistoryList(self)
+        return self.create_list_tab(l)
 
     def show_address(self, addr, *, parent=None):
         parent = parent or self.top_level_window()
@@ -3880,6 +3892,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.history_list.update()
         self.utxo_list.update()
         self.token_list.update()
+        self.token_history_list.update()
         self.history_updated_signal.emit()  # inform things like address_dialog that there's a new history
 
     def do_export_labels(self):
@@ -5016,8 +5029,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.wallet.thread.stop()
             self.wallet.thread.wait() # Join the thread to make sure it's really dead.
 
-        for w in [self.address_list, self.history_list, self.utxo_list, self.token_list, self.cash_account_e,
-                  self.contact_list, self.tx_update_mgr]:
+        for w in [self.address_list, self.history_list, self.utxo_list, self.token_list, self.token_history_list,
+                  self.cash_account_e, self.contact_list, self.tx_update_mgr]:
             if w:
                 # tell relevant object to clean itself up, unregister callbacks, disconnect signals, etc
                 w.clean_up()

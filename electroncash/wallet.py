@@ -1021,19 +1021,25 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     WalletDelta = namedtuple("WalletDelta", "is_relevant, is_mine, v, fee")
     WalletDelta2 = namedtuple("WalletDelta2", WalletDelta._fields + ("spends_coins_mine",))
+    WalletDelta3 = namedtuple("WalletDelta3", WalletDelta2._fields + ("tokens_delta",))
 
     def get_wallet_delta(self, tx) -> WalletDelta:
         return self._get_wallet_delta(tx, ver=1)
 
-    def _get_wallet_delta(self, tx, *, ver=1) -> Union[WalletDelta, WalletDelta2]:
+    def get_wallet_tokens_delta(self, tx):
+        return self._get_wallet_delta(tx, ver=3).tokens_delta
+
+    def _get_wallet_delta(self, tx, *, ver=1) -> Union[WalletDelta, WalletDelta2, WalletDelta3]:
         """ Effect of tx on wallet """
-        assert ver in (1, 2)
+        assert ver in (1, 2, 3)
         is_relevant = False
         is_mine = False
         is_pruned = False
         is_partial = False
         v_in = v_out = v_out_mine = 0
         spends_coins_mine = list()
+        tokens_delta = defaultdict(lambda: {"fungibles": 0, "nfts_in": [], "nfts_out": []})  # key: category_id
+
         for item in tx.inputs():
             addr = item['address']
             if self.is_mine(addr):
@@ -1047,6 +1053,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         value = v
                         if ver == 2:
                             spends_coins_mine.append(f'{prevout_hash}:{prevout_n}')
+                        if ver == 3:
+                            inputtx = self.get_input_tx(prevout_hash)
+                            _, token_data = inputtx.outputs(tokens=True)[prevout_n]
+                            if token_data:
+                                assert isinstance(token_data, token.OutputData)
+                                category_id = token_data.id_hex
+                                if token_data.has_amount():
+                                    tokens_delta[category_id]["fungibles"] -= token_data.amount
+                                if token_data.has_nft():
+                                    tokens_delta[category_id]["nfts_out"].append(token_data)
                         break
                 else:
                     value = None
@@ -1058,11 +1074,19 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 is_partial = True
         if not is_mine:
             is_partial = False
-        for _type, addr, value in tx.outputs():
+        for (_type, addr, value), token_data in tx.outputs(tokens=True):
             v_out += value
             if self.is_mine(addr):
                 v_out_mine += value
                 is_relevant = True
+                if ver == 3 and token_data:
+                    assert isinstance(token_data, token.OutputData)
+                    category_id = token_data.id_hex
+                    if token_data.has_amount():
+                        tokens_delta[category_id]["fungibles"] += token_data.amount
+                    if token_data.has_nft():
+                        tokens_delta[category_id]["nfts_in"].append(token_data)
+
         if is_pruned:
             # some inputs are mine:
             fee = None
@@ -1083,7 +1107,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             fee = None
         if ver == 1:
             return self.WalletDelta(is_relevant, is_mine, v, fee)
-        return self.WalletDelta2(is_relevant, is_mine, v, fee, spends_coins_mine)
+        elif ver == 2:
+            return self.WalletDelta2(is_relevant, is_mine, v, fee, spends_coins_mine)
+        return self.WalletDelta3(is_relevant, is_mine, v, fee, spends_coins_mine, tokens_delta)
+
 
     TxInfo = namedtuple("TxInfo", "tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n")
 

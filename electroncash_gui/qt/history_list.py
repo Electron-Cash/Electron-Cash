@@ -103,7 +103,7 @@ class HistoryList(MyTreeWidget):
             self._item_cache[tx_hash] = item
 
     @classmethod
-    def _get_icon_for_status(cls, status):
+    def get_icon_for_status(cls, status):
         ret = cls.statusIcons.get(status)
         if not ret:
             cls.statusIcons[status] = ret = QIcon(":icons/" + TX_ICONS[status])
@@ -138,7 +138,7 @@ class HistoryList(MyTreeWidget):
                 self.has_unknown_balances = True
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
             has_invoice = self.wallet.invoices.paid.get(tx_hash)
-            icon = self._get_icon_for_status(status)
+            icon = self.get_icon_for_status(status)
             v_str = self.parent.format_amount(value, True, whitespaces=True)
             balance_str = self.parent.format_amount(balance, whitespaces=True)
             entry = ['', tx_hash, status_str, label, v_str, balance_str]
@@ -220,7 +220,7 @@ class HistoryList(MyTreeWidget):
                 was_cur = self.currentItem() is item
                 self.invisibleRootItem().takeChild(idx)
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
-            icon = self._get_icon_for_status(status)
+            icon = self.get_icon_for_status(status)
             if icon: item.setIcon(0, icon)
             item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             item.setText(2, status_str)
