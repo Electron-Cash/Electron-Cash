@@ -233,7 +233,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.gui_object.update_available_signal.connect(self.on_update_available)  # shows/hides the update_available_button, emitted by update check mechanism when a new version is available
         self.gui_object.new_window_initialized_signal.connect(self.new_window_initialized)
         self.history_list.setFocus(True)
-        self.token_history_list.setFocus(True)
 
         # update fee slider in case we missed the callback
         self.fee_slider.update()
