@@ -500,7 +500,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self._warn_if_invalid_testnet_wallet()
         self.watching_only_changed()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
-        #self.toggle_tab(self.token_history_tab)
         run_hook('load_wallet', self.wallet, self)
 
     def init_geometry(self):
