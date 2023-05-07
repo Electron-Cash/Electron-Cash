@@ -1055,14 +1055,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             spends_coins_mine.append(f'{prevout_hash}:{prevout_n}')
                         if ver == 3:
                             inputtx = self.get_input_tx(prevout_hash)
-                            _, token_data = inputtx.outputs(tokens=True)[prevout_n]
-                            if token_data:
-                                assert isinstance(token_data, token.OutputData)
-                                category_id = token_data.id_hex
-                                if token_data.has_amount():
-                                    tokens_delta[category_id]["fungibles"] -= token_data.amount
-                                if token_data.has_nft():
-                                    tokens_delta[category_id]["nfts_out"].append(token_data)
+                            if inputtx:
+                                _, token_data = inputtx.outputs(tokens=True)[prevout_n]
+                                if token_data:
+                                    assert isinstance(token_data, token.OutputData)
+                                    category_id = token_data.id_hex
+                                    if token_data.has_amount():
+                                        tokens_delta[category_id]["fungibles"] -= token_data.amount
+                                    if token_data.has_nft():
+                                        tokens_delta[category_id]["nfts_out"].append(token_data)
                         break
                 else:
                     value = None
