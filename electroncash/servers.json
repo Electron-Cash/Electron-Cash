@@ -148,6 +148,6 @@
     "fulcrum.jettscythe.xyz": {
         "pruning": "-",
         "s": "50002"
-        "version": "1.9.1"
+        "version": "1.5.0"
     }
 }
