@@ -192,10 +192,10 @@ class Test_PaymentRequests_BitPay(unittest.TestCase):
     def test_bitpay_verify(self, mock_get):
         pr = get_payment_request('https://bitpay.com/invoice')
         self.assertTrue(pr.error is None)
-        self.assertEquals(pr.get_memo(), 'dummy_memo')
-        self.assertEquals(pr.get_payment_url(), 'https://bitpay.com/i/test123')
+        self.assertEqual(pr.get_memo(), 'dummy_memo')
+        self.assertEqual(pr.get_payment_url(), 'https://bitpay.com/i/test123')
         self.assertTrue(pr.verify(None))
-        self.assertEquals(pr.get_requestor(), 'BitPay, Inc.')
+        self.assertEqual(pr.get_requestor(), 'BitPay, Inc.')
 
     def mocked_bitpay_requests_get_incorrect_digest(*args, **kwargs):
         response = _signed_response()
@@ -208,8 +208,8 @@ class Test_PaymentRequests_BitPay(unittest.TestCase):
     def test_bitpay_verify_incorrect_digest(self, mock_get):
         pr = get_payment_request('https://bitpay.com/invoice')
         self.assertTrue(pr.error is None)
-        self.assertEquals(pr.get_memo(), 'dummy_memo')
-        self.assertEquals(pr.get_payment_url(), 'https://bitpay.com/i/test123')
+        self.assertEqual(pr.get_memo(), 'dummy_memo')
+        self.assertEqual(pr.get_payment_url(), 'https://bitpay.com/i/test123')
         self.assertFalse(pr.verify(None))
 
     def mocked_bitpay_requests_get_incorrect_signature(*args, **kwargs):
@@ -223,8 +223,8 @@ class Test_PaymentRequests_BitPay(unittest.TestCase):
     def test_bitpay_verify_incorrect_signature(self, mock_get):
         pr = get_payment_request('https://bitpay.com/invoice')
         self.assertTrue(pr.error is None)
-        self.assertEquals(pr.get_memo(), 'dummy_memo')
-        self.assertEquals(pr.get_payment_url(), 'https://bitpay.com/i/test123')
+        self.assertEqual(pr.get_memo(), 'dummy_memo')
+        self.assertEqual(pr.get_payment_url(), 'https://bitpay.com/i/test123')
         self.assertFalse(pr.verify(None))
 
     def mocked_bitpay_requests_request(*args, **kwargs):
