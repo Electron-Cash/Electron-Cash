@@ -42,3 +42,11 @@ class TestInterfaceSSLVerify(unittest.TestCase):
         with self.assertRaises(ssl.SSLCertVerificationError) as cm:
             self.has_ca_signed_valid_cert("untrusted-root.badssl.com:443:s")
         self.assertEqual(cm.exception.verify_code, 19)  # X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+
+    def test_verify_good_tls_version(self):
+        self.assertTrue(self.has_ca_signed_valid_cert("tls-v1-2.badssl.com:1012:s"))
+
+    def test_verify_bad_tls_version(self):
+        with self.assertRaises(ssl.SSLError) as cm:
+            self.has_ca_signed_valid_cert("tls-v1-0.badssl.com:1010:s")
+        self.assertEqual(cm.exception.reason, "UNSUPPORTED_PROTOCOL")

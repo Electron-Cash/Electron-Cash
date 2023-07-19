@@ -121,7 +121,7 @@ class TcpConnection(threading.Thread, util.PrintError):
 
         context.options |= ssl.OP_NO_SSLv2
         context.options |= ssl.OP_NO_SSLv3
-        context.options |= ssl.OP_NO_TLSv1
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
 
         return context
 
