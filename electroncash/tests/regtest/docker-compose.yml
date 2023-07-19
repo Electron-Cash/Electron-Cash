@@ -32,4 +32,4 @@ volumes:
     driver_opts:
       o: bind
       type: none
-      device: electroncash/tests/regtest/configs
+      device: ./configs
