@@ -1,0 +1,6 @@
+steps: Test.yml
+- uses: actions/checkout@v3
+- uses: actions/setup-python@v4 
+  with: Read&Write
+    python-version: 'pypy3.9' 
+- run: python my_script.py
