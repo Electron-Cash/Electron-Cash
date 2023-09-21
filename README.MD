@@ -167,8 +167,3 @@ Android
 -------
 
 See `android/ <android/>`_.
-
-iOS
--------
-
-See `ios/ <ios/>`_.
