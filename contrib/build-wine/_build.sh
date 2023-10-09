@@ -58,8 +58,8 @@ prepare_wine() {
         LIBUSB_REPO='https://github.com/libusb/libusb.git'
         LIBUSB_COMMIT=c6a35c56016ea2ab2f19115d2ea1e85e0edae155 # Version 1.0.24
 
-        PYINSTALLER_REPO='https://github.com/EchterAgo/pyinstaller.git'
-        PYINSTALLER_COMMIT=d6f3d02365ba68ffc84169c56c292701f346110e # Version 4.2 + a patch to drop an unused .rc file
+        PYINSTALLER_REPO='https://github.com/pyinstaller/pyinstaller.git'
+        PYINSTALLER_COMMIT=7001defa6f8cbbd23d880e609693ae62452d1b34 # Version 6.0.0
 
         ## These settings probably don't need change
         PYHOME=c:/python$PYTHON_VERSION  # NB: PYTON_VERSION comes from ../base.sh
@@ -142,7 +142,7 @@ EOF
             # So we need to do this to make sure the EXE is actually there.
             # If we switch to 64-bit, edit this path below.
             popd
-            [ -e PyInstaller/bootloader/Windows-32bit/runw.exe ] || fail "Could not find runw.exe in target dir!"
+            [ -e PyInstaller/bootloader/Windows-32bit-intel/runw.exe ] || fail "Could not find runw.exe in target dir!"
             rm -fv pyinstaller.py  # workaround for https://github.com/pyinstaller/pyinstaller/pull/6701
         ) || fail "PyInstaller bootloader build failed"
         info "Installing PyInstaller ..."
@@ -246,7 +246,7 @@ build_the_app() {
 
         # build standalone and portable versions
         info "Running Pyinstaller to build standalone and portable .exe versions ..."
-        ELECTRONCASH_CMDLINE_NAME="$NAME_ROOT" wine "C:/python$PYTHON_VERSION/scripts/pyinstaller.exe" --noconfirm --ascii -w deterministic.spec || fail "Pyinstaller failed"
+        ELECTRONCASH_CMDLINE_NAME="$NAME_ROOT" wine "C:/python$PYTHON_VERSION/scripts/pyinstaller.exe" --noconfirm deterministic.spec || fail "Pyinstaller failed"
 
         # rename the output files
         pushd dist
