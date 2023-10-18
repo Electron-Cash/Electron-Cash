@@ -1,3 +1,0 @@
-# Temporary fix for hidapi incompatibility with Cython 3
-# See https://github.com/trezor/cython-hidapi/issues/155
-Cython<3
