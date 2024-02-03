@@ -52,8 +52,8 @@ RUN echo deb ${UBUNTU_MIRROR} focal main restricted universe multiverse > /etc/a
         libssl-dev=1.1.1f-1ubuntu2.20 \
         gcc-9=9.4.0-1ubuntu1~20.04.2 \
         g++=4:9.3.0-1ubuntu2 \
-        rustc=1.70.0+dfsg0ubuntu1~bpo2-0ubuntu0.20.04.1 \
-        cargo=1.70.0+dfsg0ubuntu1~bpo2-0ubuntu0.20.04.1 \ 
+        rustc=1.71.1+dfsg0ubuntu3~bpo0-0ubuntu0.20.04 \
+        cargo=1.71.1+dfsg0ubuntu3~bpo0-0ubuntu0.20.04 \ 
         && \
     ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/gcc && \ 
     ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/cc && \ 
