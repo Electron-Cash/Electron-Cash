@@ -269,7 +269,7 @@ def deserialize(raw):
     d['inputs'] = [parse_input(vds) for i in range(n_vin)]
     n_vout = vds.read_compact_size()
     d['outputs'] = [parse_output(vds, i) for i in range(n_vout)]
-    d['lockTime'] = vds.read_uint32()
+    d['locktime'] = vds.read_uint32()
     if vds.can_read_more():
         raise SerializationError('extra junk at the end')
     return d
@@ -453,7 +453,7 @@ class Transaction:
                    for output in self._outputs)
         assert all(isinstance(td, (token.OutputData, type(None)))
                    for td in self._token_datas)
-        self.locktime = d['lockTime']
+        self.locktime = d['locktime']
         self.version = d['version']
         return d
 
