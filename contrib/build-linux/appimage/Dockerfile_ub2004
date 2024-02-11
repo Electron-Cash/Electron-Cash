@@ -49,11 +49,11 @@ RUN echo deb ${UBUNTU_MIRROR} focal main restricted universe multiverse > /etc/a
         zlib1g-dev=1:1.2.11.dfsg-2ubuntu1.5 \
         libfreetype6=2.10.1-2ubuntu0.3 \
         libfontconfig1=2.13.1-2ubuntu3 \
-        libssl-dev=1.1.1f-1ubuntu2.20 \
+        libssl-dev \
         gcc-9=9.4.0-1ubuntu1~20.04.2 \
         g++=4:9.3.0-1ubuntu2 \
-        rustc=1.71.1+dfsg0ubuntu3~bpo0-0ubuntu0.20.04 \
-        cargo=1.71.1+dfsg0ubuntu3~bpo0-0ubuntu0.20.04 \ 
+        rustc \
+        cargo \ 
         && \
     ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/gcc && \ 
     ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/cc && \ 
