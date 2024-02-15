@@ -39,6 +39,13 @@ verify_hash "$CACHEDIR/appimagetool" "d918b4df547b388ef253f3c9e7f6529ca81a885395
 download_if_not_exist "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz"
 verify_hash "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" $PYTHON_SRC_TARBALL_HASH
 
+# Download zxing-cpp source and patch to remove __FILE__ macro.
+download_if_not_exist "$CACHEDIR/zxing-cpp" "https://files.pythonhosted.org/packages/a7/8f/77828ef6e7bcad2ed17da58a4af833fce52e2afb6e72214e0403fa0ef197/zxing-cpp-2.2.0.tar.gz"
+verify_hash "$CACHEDIR/zxing-cpp" "11884ef9d1a61e47ad89836339da9e1040cb28b083fb37462bc58e8d46f135bc"
+tar xf "$CACHEDIR/zxing-cpp/zxing-cpp-2.2.0.tar.gz" -C "$CACHEDIR/zxing-cpp"
+rm  "$CACHEDIR/zxing-cpp/zxing-cpp-2.2.0.tar.gz"
+sed -in  's/__FILE__/" "/' "$CACHEDIR/zxing-cpp/zxing-cpp-2.2.0/core/src/Error.h"
+
 (
     cd "$PROJECT_ROOT"
     for pkg in secp zbar openssl libevent zlib tor ; do
