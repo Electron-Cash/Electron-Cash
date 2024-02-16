@@ -151,7 +151,7 @@ EOF
         wine "C:/python$PYTHON_VERSION/scripts/pyinstaller.exe" -v || fail "Pyinstaller installed but cannot be run."
 
         info "Installing Packages from requirements-binaries ..."
-        $PYTHON -m pip install --no-deps --no-warn-script-location -r $here/../deterministic-build/requirements-binaries-wine.txt || fail "Failed to install requirements-binaries-wine"
+        $PYTHON -m pip install --no-deps --no-warn-script-location -r $here/../deterministic-build/requirements-binaries.txt || fail "Failed to install requirements-binaries"
      
         info "Installing NSIS ..."
         # Install NSIS installer
