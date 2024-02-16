@@ -152,6 +152,7 @@ EOF
 
         info "Installing Packages from requirements-binaries ..."
         $PYTHON -m pip install --no-deps --no-warn-script-location -r $here/../deterministic-build/requirements-binaries.txt || fail "Failed to install requirements-binaries"
+        $PYTHON -m pip install --no-deps --no-warn-script-location -r $here/../deterministic-build/requirements-binaries-wine.txt || fail "Failed to install requirements-binaries-wine"
 
         info "Installing NSIS ..."
         # Install NSIS installer
