@@ -124,7 +124,7 @@ mkdir -p "$CACHEDIR/pip_cache"
 # encoded in the debug symbols).
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-pip.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
-CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --only-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --only-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries-appimage.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --only-binary :all: --cache-dir "$CACHEDIR/pip_cache" "$CACHEDIR/zxing-cpp-2.2.0"
 # Temporary fix for hidapi incompatibility with Cython 3
 # See https://github.com/trezor/cython-hidapi/issues/155
