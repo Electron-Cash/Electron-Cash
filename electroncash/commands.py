@@ -375,6 +375,7 @@ class Commands:
         inputs = jsontx.get('inputs')
         outputs = jsontx.get('outputs')
         locktime = jsontx.get('locktime', 0)
+        locktime = jsontx.get('lockTime', locktime)
         version = jsontx.get('version', 1)
         for txin in inputs:
             if txin.get('output'):
