@@ -48,7 +48,7 @@ fi
 
 
 info "Creating docker image ..."
-$SUDO docker build -t electroncash-srcdist-builder-img \
+$SUDO docker build --progress plain -t electroncash-srcdist-builder-img \
     contrib/build-linux/srcdist_docker \
     || fail "Failed to create docker image"
 

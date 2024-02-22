@@ -8,7 +8,7 @@ DISTDIR="$PROJECT_ROOT/dist"
 BUILDDIR="$CONTRIB/build-linux/appimage/build/appimage"
 APPDIR="$BUILDDIR/Electron-Cash.AppDir"
 CACHEDIR="$CONTRIB/build-linux/appimage/.cache/appimage"
-PYDIR="$APPDIR"/usr/lib/python3.8
+PYDIR="$APPDIR"/usr/lib/python3.11
 
 export GCC_STRIP_BINARIES="1"
 export GIT_SUBMODULE_FLAGS="--recommend-shallow --depth 1"
@@ -52,8 +52,8 @@ tar xf "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" -C "$BUILDDIR"
     cd "$BUILDDIR/Python-$PYTHON_VERSION"
     LC_ALL=C export BUILD_DATE=$(date -u -d "@$SOURCE_DATE_EPOCH" "+%b %d %Y")
     LC_ALL=C export BUILD_TIME=$(date -u -d "@$SOURCE_DATE_EPOCH" "+%H:%M:%S")
-    # Patch taken from Ubuntu http://archive.ubuntu.com/ubuntu/pool/main/p/python3.8/python3.8_3.8.6-1.debian.tar.xz
-    patch -p1 < "$CONTRIB/build-linux/appimage/patches/python-3.8.6-reproducible-buildinfo.diff" || fail "Could not patch Python build system for reproducibility"
+    # Patch taken from Ubuntu http://archive.ubuntu.com/ubuntu/pool/main/p/python3.11/python3.11_3.11.6-3.debian.tar.xz
+    patch -p1 < "$CONTRIB/build-linux/appimage/patches/python-3.11.6-reproducible-buildinfo.diff" || fail "Could not patch Python build system for reproducibility"
     ./configure \
       --cache-file="$CACHEDIR/python.config.cache" \
       --prefix="$APPDIR/usr" \
@@ -85,7 +85,7 @@ appdir_python() {
   env \
     PYTHONNOUSERSITE=1 \
     LD_LIBRARY_PATH="$APPDIR/usr/lib:$APPDIR/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH+:$LD_LIBRARY_PATH}" \
-    "$APPDIR/usr/bin/python3.8" "$@"
+    "$APPDIR/usr/bin/python3.11" "$@"
 }
 
 python='appdir_python'
@@ -112,13 +112,22 @@ info "Preparing electrum-locale"
 )
 
 
+function filter_deps {
+  awk "$1"' {exclude=1; next} exclude && /^[[:space:]]/ {next} {exclude=0} !exclude {print}'
+}
+
+export CMAKE_PREFIX_PATH=$APPDIR/usr
+
 info "Installing Electron Cash and its dependencies"
 mkdir -p "$CACHEDIR/pip_cache"
 # Note: We must specify -g0 for CFLAGS to ensure no debug symbols (which can be non-deterministic due to tmp paths
 # encoded in the debug symbols).
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-pip.txt"
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-build-appimage.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
-CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary pyqt5,cmake --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary PyQt5,PyQt5-Qt5 --cache-dir "$CACHEDIR/pip_cache" -r <(filter_deps /zxing-cpp/ < "$CONTRIB/deterministic-build/requirements-binaries.txt")
+# zxing-cpp 2.2.1 with patch for reproducible build, see https://github.com/zxing-cpp/zxing-cpp/pull/730
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary cmake --cache-dir "$CACHEDIR/pip_cache" git+https://github.com/EchterAgo/zxing-cpp.git@3ac618250672db83e7a37b4e43fe6f72b88756d4#subdirectory=wrappers/python
 # Temporary fix for hidapi incompatibility with Cython 3
 # See https://github.com/trezor/cython-hidapi/issues/155
 # We use PIP_CONSTRAINT as an environment variable instead of command line flag because it gets passed to subprocesses
@@ -150,7 +159,7 @@ info "Finalizing AppDir"
     move_lib
 
     # apply global appimage blacklist to exclude stuff
-    # move usr/include out of the way to preserve usr/include/python3.8m.
+    # move usr/include out of the way to preserve usr/include/python3.11m.
     mv usr/include usr/include.tmp
     delete_blacklisted
     mv usr/include.tmp usr/include
@@ -181,7 +190,7 @@ strip_binaries()
 {
   chmod u+w -R "$APPDIR"
   {
-    printf '%s\0' "$APPDIR/usr/bin/python3.8"
+    printf '%s\0' "$APPDIR/usr/bin/python3.11"
     find "$APPDIR" -type f -regex '.*\.so\(\.[0-9.]+\)?$' -print0
   } | xargs -0 --no-run-if-empty --verbose strip -R .note.gnu.build-id -R .comment
 }

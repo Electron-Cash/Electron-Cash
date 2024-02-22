@@ -58,8 +58,8 @@ prepare_wine() {
         LIBUSB_REPO='https://github.com/libusb/libusb.git'
         LIBUSB_COMMIT=c6a35c56016ea2ab2f19115d2ea1e85e0edae155 # Version 1.0.24
 
-        PYINSTALLER_REPO='https://github.com/EchterAgo/pyinstaller.git'
-        PYINSTALLER_COMMIT=d6f3d02365ba68ffc84169c56c292701f346110e # Version 4.2 + a patch to drop an unused .rc file
+        PYINSTALLER_REPO='https://github.com/pyinstaller/pyinstaller.git'
+        PYINSTALLER_COMMIT=90256f93ed943daf6de53c7dd39710a415f705cb # Version 6.4.0
 
         ## These settings probably don't need change
         PYHOME=c:/python$PYTHON_VERSION  # NB: PYTON_VERSION comes from ../base.sh
@@ -93,12 +93,12 @@ prepare_wine() {
         done
 
         $SHA256_PROG -c - << EOF
-934eda542020cb5ba6de16f5c150e7571a25dd3cb9f3832eb8b2cb54c7331aa6 core.msi
-58e517f0bb55fbf9ba1d9ec6a17a5420959469001ec1945c6c56dbbe566d3056 dev.msi
-34594d5522b0939b50edfdb01a980589f559fc659ce1f20288d297dda0905630 exe.msi
-fcd8bd0ead0a67906f39e99e557d66e71bc6810bd4916d03c2c5341ff95992bf lib.msi
-8d8159fdb9f42b81e9206bf7be0c2b034b3df717d58cfb484c0b3fb8ec3cab6a pip.msi
-ca8ef45591b07e7dbcc9b4b7b1c4d6528d3f0349fdf6779c71312bd9c3187801 tools.msi
+f49a951a6ad7e733e64877b36c8fe43477c2b1c26d316f30a2379bb35a8538a8 core.msi
+45c3faeccbd7fa5041f00fea2d05dfcd1a4ef0211aa519508e168b4bcea92bac dev.msi
+6b18e724b5ae84df94c3d6cbe55c9143a46802e49c6c7310db7c6e9c1996dc24 exe.msi
+6c97ba70fd48747489650b48db5be9ea165dd56f1c6e0ddd5e05c488cf2dd2e2 lib.msi
+2a1a5e6adb9d8120c448ab8df8501a16ad419daa93b230c635036f67e4719f5d pip.msi
+ee1a5d8ee16eaef3c84c6c4cea4621554d9d1de640fb84ba4f4d982a743fef81 tools.msi
 EOF
         test $? -eq 0 || fail "Failed to verify Python checksums"
 
@@ -114,10 +114,6 @@ EOF
         $PYTHON -m pip install --no-deps --no-warn-script-location -r $here/../deterministic-build/requirements-pip.txt || fail "Failed to install pip"
         info "Installing build requirements from requirements-build-wine.txt ..."
         $PYTHON -m pip install --no-deps --no-warn-script-location -r $here/../deterministic-build/requirements-build-wine.txt || fail "Failed to install build requirements"
-
-        info "Patching pip vendored distlib to produce deterministic zip archives ..."
-        sed -i -e 's/\('\''__main__\.py'\''\)/ZipInfo(\1)/g' -e 's/\(from .compat import .*\)/from zipfile import ZipInfo\n\1/g' \
-            "$WINEPREFIX"/drive_c/python$PYTHON_VERSION/Lib/site-packages/pip/_vendor/distlib/scripts.py
 
         info "Compiling PyInstaller bootloader with AntiVirus False-Positive Protection™ ..."
         mkdir pyinstaller
@@ -142,7 +138,7 @@ EOF
             # So we need to do this to make sure the EXE is actually there.
             # If we switch to 64-bit, edit this path below.
             popd
-            [ -e PyInstaller/bootloader/Windows-32bit/runw.exe ] || fail "Could not find runw.exe in target dir!"
+            [ -e PyInstaller/bootloader/Windows-32bit-intel/runw.exe ] || fail "Could not find runw.exe in target dir!"
             rm -fv pyinstaller.py  # workaround for https://github.com/pyinstaller/pyinstaller/pull/6701
         ) || fail "PyInstaller bootloader build failed"
         info "Installing PyInstaller ..."
@@ -229,7 +225,11 @@ build_the_app() {
         # Install frozen dependencies
         info "Installing frozen dependencies ..."
         $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements.txt || fail "Failed to install requirements"
-        $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements-hw.txt || fail "Failed to install requirements-hw"
+        # Temporary fix for hidapi incompatibility with Cython 3
+        # See https://github.com/trezor/cython-hidapi/issues/155
+        # We use PIP_CONSTRAINT as an environment variable instead of command line flag because it gets passed to subprocesses
+        # like the isolated build environment pip uses for dependencies.
+        PIP_CONSTRAINT="$here/../requirements/build-constraint.txt" $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements-hw.txt || fail "Failed to install requirements-hw"
 
         pushd "$WINEPREFIX"/drive_c/electroncash
         $PYTHON setup.py install || fail "Failed setup.py install"
@@ -246,7 +246,7 @@ build_the_app() {
 
         # build standalone and portable versions
         info "Running Pyinstaller to build standalone and portable .exe versions ..."
-        wine "C:/python$PYTHON_VERSION/scripts/pyinstaller.exe" --noconfirm --ascii --name $NAME_ROOT -w deterministic.spec || fail "Pyinstaller failed"
+        ELECTRONCASH_CMDLINE_NAME="$NAME_ROOT" wine "C:/python$PYTHON_VERSION/scripts/pyinstaller.exe" --noconfirm deterministic.spec || fail "Pyinstaller failed"
 
         # rename the output files
         pushd dist

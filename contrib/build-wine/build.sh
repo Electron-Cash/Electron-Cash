@@ -55,7 +55,7 @@ GROUP_ID=$(id -g $USER)
 IMGNAME="ec-wine-builder-img_${USER_ID}_${GROUP_ID}"
 
 info "Creating docker image ..."
-$SUDO docker build -t $IMGNAME \
+$SUDO docker build --progress plain -t $IMGNAME \
             --build-arg USER_ID=$USER_ID \
             --build-arg GROUP_ID=$GROUP_ID \
             --build-arg UBUNTU_MIRROR=$UBUNTU_MIRROR \

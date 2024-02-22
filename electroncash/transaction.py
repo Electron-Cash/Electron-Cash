@@ -458,12 +458,13 @@ class Transaction:
         return d
 
     @classmethod
-    def from_io(cls, inputs, outputs, locktime=0, sign_schnorr=False, *, token_datas=None) -> object:
+    def from_io(cls, inputs, outputs, locktime=0, sign_schnorr=False, *, token_datas=None, version=1) -> object:
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
                    for output in outputs)
         self = cls(None)
         self._inputs = inputs
         self._outputs = outputs.copy()
+        self.version = version
         if token_datas is not None:
             assert all(isinstance(td, (token.OutputData, type(None)))
                        for td in token_datas)

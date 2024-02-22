@@ -1,15 +1,17 @@
 FROM ubuntu:20.04@sha256:f2034e7195f61334e6caff6ecf2e965f92d11e888309065da85ff50c617732b8
 
 ARG UBUNTU_MIRROR=http://archive.ubuntu.com/ubuntu/
+ENV UBUNTU_DIST=focal
 
+# This prevents questions during package installations
 ENV DEBIAN_FRONTEND noninteractive
 ENV LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=America/New_York
 
 # If a package version does not exist anymore you can use "apt-cache policy <pkg>" to display the available versions
-RUN echo deb ${UBUNTU_MIRROR} focal main restricted universe multiverse > /etc/apt/sources.list && \
-    echo deb ${UBUNTU_MIRROR} focal-updates main restricted universe multiverse >> /etc/apt/sources.list && \
-    echo deb ${UBUNTU_MIRROR} focal-backports main restricted universe multiverse >> /etc/apt/sources.list && \
-    echo deb ${UBUNTU_MIRROR} focal-security main restricted universe multiverse >> /etc/apt/sources.list && \
+RUN echo deb ${UBUNTU_MIRROR} ${UBUNTU_DIST} main restricted universe multiverse > /etc/apt/sources.list && \
+    echo deb ${UBUNTU_MIRROR} ${UBUNTU_DIST}-updates main restricted universe multiverse >> /etc/apt/sources.list && \
+    echo deb ${UBUNTU_MIRROR} ${UBUNTU_DIST}-backports main restricted universe multiverse >> /etc/apt/sources.list && \
+    echo deb ${UBUNTU_MIRROR} ${UBUNTU_DIST}-security main restricted universe multiverse >> /etc/apt/sources.list && \
     apt-get update -q && \
     apt-get install -qy \
         git=1:2.25.1-1ubuntu3.11 \
@@ -29,7 +31,7 @@ RUN echo deb ${UBUNTU_MIRROR} focal main restricted universe multiverse > /etc/a
         libdbus-1-3=1.12.16-2ubuntu2.3 \
         libpcsclite-dev=1.8.26-3 \
         swig=4.0.1-5build1 \
-        libxkbcommon-x11-0 \
+        libxkbcommon-x11-0=0.10.0-1 \
         libxcb1=1.14-2 \
         libxcb-icccm4=0.4.1-1.1 \
         libxcb-image0=0.4.0-1build1 \
@@ -49,14 +51,14 @@ RUN echo deb ${UBUNTU_MIRROR} focal main restricted universe multiverse > /etc/a
         zlib1g-dev=1:1.2.11.dfsg-2ubuntu1.5 \
         libfreetype6=2.10.1-2ubuntu0.3 \
         libfontconfig1=2.13.1-2ubuntu3 \
-        libssl-dev=1.1.1f-1ubuntu2.20 \
+        libssl-dev=1.1.1f-1ubuntu2.21 \
         gcc-9=9.4.0-1ubuntu1~20.04.2 \
         g++=4:9.3.0-1ubuntu2 \
-        rustc=1.71.1+dfsg0ubuntu3~bpo0-0ubuntu0.20.04 \
-        cargo=1.71.1+dfsg0ubuntu3~bpo0-0ubuntu0.20.04 \ 
+        rustc=1.72.1+dfsg0ubuntu1~bpo0-0ubuntu0.20.04 \
+        cargo=1.72.1+dfsg0ubuntu1~bpo0-0ubuntu0.20.04 \
         && \
-    ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/gcc && \ 
-    ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/cc && \ 
+    ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/gcc && \
+    ln -sf /usr/bin/x86_64-linux-gnu-gcc-9 /usr/bin/cc && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get autoremove -y && \
     apt-get clean

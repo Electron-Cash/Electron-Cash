@@ -375,6 +375,7 @@ class Commands:
         inputs = jsontx.get('inputs')
         outputs = jsontx.get('outputs')
         locktime = jsontx.get('locktime', 0)
+        version = jsontx.get('version', 1)
         for txin in inputs:
             if txin.get('output'):
                 prevout_hash, prevout_n = txin['output'].split(':')
@@ -391,7 +392,7 @@ class Commands:
                 txin['num_sig'] = 1
 
         outputs = [(TYPE_ADDRESS, Address.from_string(x['address']), int(x['value'])) for x in outputs]
-        tx = Transaction.from_io(inputs, outputs, locktime=locktime, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
+        tx = Transaction.from_io(inputs, outputs, locktime=locktime, version=version, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
         tx.sign(keypairs)
         return tx.as_dict()
 
