@@ -19,10 +19,13 @@
         android:id="@+id/navAddresses"
         android:icon="@drawable/ic_list_bulleted_24dp"
         android:title="@string/addresses"/>
-
+ 
+ 
     <item
-        android:id="@+id/navContacts"
-        android:icon="@drawable/ic_person_24dp"
+        android:id="@+id/navTokens"
+        android:icon="@drawable/ic_swap_horiz_24dp"
         android:title="@string/contacts"/>
+        
+        
 
 </menu>

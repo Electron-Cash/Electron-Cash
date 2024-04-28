@@ -56,7 +56,8 @@ val FRAGMENTS = HashMap<Int, KClass<out Fragment>>().apply {
     put(R.id.navTransactions, TransactionsFragment::class)
     put(R.id.navRequests, RequestsFragment::class)
     put(R.id.navAddresses, AddressesFragment::class)
-    put(R.id.navContacts, ContactsFragment::class)
+    //put(R.id.navContacts, ContactsFragment::class)
+    put (R.id.navTokens, TokensFragment::class)
 }
 
 interface MainFragment
