@@ -4543,7 +4543,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # QR code reader selection
 
         qr_reader_combo = QComboBox()
-        qr_reader_label = HelpLabel(_('QR Reader'), '')
+        qr_reader_label = HelpLabel(
+            _('QR Reader:'),
+            _('Some QR readers work better than others, if you have difficulty scanning, try switching to another one.')
+            )
 
         qr_reader_combo.clear()
         qr_reader_combo.addItem(_("Default"), "default")
