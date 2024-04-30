@@ -344,7 +344,10 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         }
         ft.attach(newFrag)
         ft.commitNow()
-
+        val txFrag = getFragment(R.id.navTransactions) as TransactionsFragment?
+        if (txFrag?.isAdded() == true) {
+            txFrag.refreshTxFragment()
+        }
         binding.navBottom.visibility = if (newFrag is WalletNotOpenFragment) View.GONE else View.VISIBLE
     }
 

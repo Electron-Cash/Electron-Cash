@@ -1,5 +1,6 @@
 package org.electroncash.electroncash3
 
+import android.content.Context
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuInflater
@@ -37,8 +38,12 @@ class TransactionsFragment : Fragment(R.layout.transactions) {
         val menu = inflateMenu(R.menu.transaction_type)
         liveData.observe(viewLifecycleOwner, Observer {
             btn.setText("${menu.findItem(liveData.value!!).title}")
-            switchTxFragment(liveData.value!!)
+            refreshTxFragment()
         })
+    }
+
+    fun refreshTxFragment() {
+        switchTxFragment(model.filter.value!!)
     }
 
     private fun switchTxFragment(txId: Int) {
