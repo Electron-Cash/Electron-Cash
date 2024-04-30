@@ -1436,3 +1436,15 @@ and there is no warning message.
 - Update transaction.py to accept both capitalizations of locktime #2782 (The00Dustin)
 - Bump gh-action-pip-audit #2795 (Jonas Lundqvist)
 - Bump python dependencies #2796 (Jonas Lundqvist)
+
+# RELEASE NOTES 4.4.1
+
+- Use native architecture when building on macos #2804 (The00Dustin)
+- build: Update PyOpenSSL to version 24.1.0 #2815 (Axel Gembe)
+- build: Fix AppImage reproducibility by using rusts trim-paths #2816 (Axel Gembe)
+- build: remove deprecated apt-key for winehq key #2820 (Axel Gembe)
+- Don't allow a server sending us a dict as "params" to crash network thread (cculianu)
+- portable: bugfix where it was deleting the user directory + more #2833 (Axel Gembe)
+- Add optional support for more advanced "Console" tab, enabled with -C when running from source (cculianu)
+- Add colon and help text to QR reader setting label #2838 (Axel Gembe)
+- Fix for macOS ARM segfault crash in darkdetect when running from source (cculianu, The00Dustin)
