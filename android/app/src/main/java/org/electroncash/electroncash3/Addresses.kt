@@ -21,7 +21,7 @@ import androidx.lifecycle.ViewModel
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
 import org.electroncash.electroncash3.databinding.AddressDetailBinding
-import org.electroncash.electroncash3.databinding.TransactionsBinding
+import org.electroncash.electroncash3.databinding.BchTransactionsBinding
 
 
 val guiAddresses by lazy { guiMod("addresses") }
@@ -170,7 +170,7 @@ class AddressDialog : DetailDialog() {
 
 
 class AddressTransactionsDialog() : AlertDialogFragment() {
-    private var _binding: TransactionsBinding? = null
+    private var _binding: BchTransactionsBinding? = null
     private val binding get() = _binding!!
 
     override fun onCreateView(
@@ -179,7 +179,7 @@ class AddressTransactionsDialog() : AlertDialogFragment() {
         savedInstanceState: Bundle?
     ): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        _binding = TransactionsBinding.inflate(inflater, container, false)
+        _binding = BchTransactionsBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -194,7 +194,7 @@ class AddressTransactionsDialog() : AlertDialogFragment() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         with (builder) {
             setTitle(R.string.transactions)
-            setView(R.layout.transactions)
+            setView(R.layout.bch_transactions)
         }
     }
 

@@ -2,7 +2,7 @@
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context=".TransactionsFragment">
+    tools:context=".BchTransactionsFragment">
     <data>
         <import type="android.view.View"/>
         <import type="org.electroncash.electroncash3.UtilKt"/>

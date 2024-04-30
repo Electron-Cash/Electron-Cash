@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context=".TokenTransactionsFragment">
+    <data>
+        <import type="android.view.View"/>
+        <import type="org.electroncash.electroncash3.UtilKt"/>
+        <variable
+            name="model"
+            type="org.electroncash.electroncash3.TokenTransactionModel"/>
+    </data>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:paddingBottom="24dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        style="@style/Clickable">
+
+        <TextView
+            android:id="@+id/tvTimestamp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@{UtilKt.ltr(model.timestamp)}"
+            android:textAppearance="@style/Medium"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            tools:text="@string/test_timestamp"/>
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@{model.status}"
+            app:layout_constraintBaseline_toBaselineOf="@+id/tvTimestamp"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="@string/confirmations"/>
+
+        <TextView
+            android:id="@+id/tvCategoryIdLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/category_id"
+            app:layout_constraintTop_toBottomOf="@+id/tvTimestamp"
+            app:layout_constraintStart_toStartOf="parent"/>
+
+        <TextView
+            android:id="@+id/tvCategoryId"
+            style="@style/Value"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="@{model.tokenname}"
+            android:textAppearance="@style/Medium"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/tvCategoryIdLabel"
+            app:layout_constraintBaseline_toBaselineOf="@+id/tvCategoryIdLabel"
+            app:layout_constraintVertical_bias="0.0"
+            tools:text="@string/test_value"/>
+
+        <TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            android:id="@+id/tokenValuesTable"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:layout_constraintTop_toBottomOf="@+id/tvCategoryIdLabel">
+
+            <TableRow
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvFtAmountLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/ft_amount"/>
+
+                <TextView
+                    android:id="@+id/tvFtAmount"
+                    style="@style/Value"
+                    android:gravity="end"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@{model.ftamount}"
+                    android:textAppearance="@style/Heavy"
+                    tools:text="@string/test_value"/>
+
+                <TextView
+                    android:id="@+id/tvNftAmountLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/NFT_amount"/>
+
+                <TextView
+                    android:id="@+id/tvNftAmount"
+                    style="@style/Value"
+                    android:gravity="end"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@{model.nftamount}"
+                    android:textAppearance="@style/Heavy"
+                    tools:text="@string/test_value"/>
+            </TableRow>
+            <TableRow
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvFtBalanceLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/ft_balance"/>
+
+                <TextView
+                    android:id="@+id/tvFtBalance"
+                    style="@style/Value"
+                    android:gravity="end"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@{model.ftbalance}"
+                    android:textAppearance="@style/Medium"
+                    tools:text="@string/test_value"/>
+
+                <TextView
+                    android:id="@+id/tvNftBalanceLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/NFT_balance"/>
+
+                <TextView
+                    android:id="@+id/tvNftBalance"
+                    style="@style/Value"
+                    android:gravity="end"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@{model.nftbalance}"
+                    android:textAppearance="@style/Medium"
+                    tools:text="@string/test_value"/>
+            </TableRow>
+        </TableLayout>
+
+        <TextView
+            android:id="@+id/tvDescription"
+            style="@style/Description"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@{model.label}"
+            android:textAppearance="@style/Medium"
+            android:visibility="@{model.label.isEmpty() ? View.GONE: View.VISIBLE}"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@+id/tvCategoryIdLabel"
+            app:layout_constraintTop_toBottomOf="@+id/tokenValuesTable"
+            tools:text="@string/lorem"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</layout>

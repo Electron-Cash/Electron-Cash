@@ -7,44 +7,28 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Use match_parent, otherwise the list goes to zero height when used in
-         AddressTransactionsDialog. -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvTransactions"
-        style="@style/List.WithFAB"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        tools:itemCount="3"
-        tools:listitem="@layout/transaction_list"/>
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btnSend"
-        style="@style/FAB.Main"
-        android:layout_width="wrap_content"
+    <Button
+        android:id="@+id/btnTxType"
+        style="@style/FilterButton"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        app:srcCompat="@drawable/ic_send_24dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="Transaction Type"/>
+
+    <androidx.fragment.app.FragmentContainerView
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/fragment_container_view"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:contentDescription="@string/send" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btnRequest"
-        style="@style/FAB.Main.Inner"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:srcCompat="@drawable/ic_request_24dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btnSend"
-        android:contentDescription="@string/request" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btnFusion"
-        style="@style/FAB.Main.Inner"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btnRequest"
-        android:contentDescription="@string/fusion"
-        app:srcCompat="@drawable/ic_hive_24dp" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btnTxType" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

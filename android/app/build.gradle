@@ -186,11 +186,11 @@ dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
-    implementation 'androidx.fragment:fragment-ktx:1.1.0'
+    implementation 'androidx.fragment:fragment-ktx:1.2.0'
     implementation 'androidx.preference:preference:1.0.0'
     implementation 'androidx.lifecycle:lifecycle-extensions:2.1.0'
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.1.0'
-    implementation 'com.google.android.material:material:1.0.0' 
+    implementation 'com.google.android.material:material:1.0.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.3.1'
 
     // As recommended in zxing-android-embedded documentation, reduce zxing:core version
@@ -207,8 +207,8 @@ dependencies {
     //testImplementation 'junit:junit:4.12'
     //androidTestImplementation 'androidx.test:runner:1.1.0'
     //androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.0'
-    
-    
+
+
     // NEW TEST CODE Add these lines for testing dependencies
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
@@ -216,6 +216,6 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.4.0'
     androidTestImplementation 'androidx.test:rules:1.4.0'
     androidTestImplementation 'androidx.test:core:1.4.0'
- 
-    
+
+
 }

@@ -338,7 +338,7 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         val ft = supportFragmentManager.beginTransaction()
         val newFrag = getOrCreateFragment(id)
         for (frag in supportFragmentManager.fragments) {
-            if (frag is MainFragment && frag !== newFrag) {
+            if (frag !== newFrag) {
                 ft.detach(frag)
             }
         }

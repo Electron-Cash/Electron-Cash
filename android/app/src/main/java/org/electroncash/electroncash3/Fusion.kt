@@ -1,7 +1,6 @@
 package org.electroncash.electroncash3
 
 import android.os.Bundle
-import android.util.*
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -68,8 +67,7 @@ class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
         if (is_autofusing) {
             fusion.callAttr("disable_autofusing", this.wallet)
             binding.btnActivateFusion.setImageResource(R.drawable.ic_not_started_24dp)
-        }
-        else {
+        } else {
             showDialog(this, FusionPasswordDialog())
             if (!fusion.callAttr("is_autofusing", this.wallet).toBoolean()){
                 binding.btnActivateFusion.setImageResource(R.drawable.ic_pause_circle_24dp)
@@ -85,10 +83,10 @@ class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
     fun warnIfTorUnvailable() {
         val torAvailable = fusion.callAttr("scan_torport")
         if (torAvailable == null) {
+            binding.tvFusion.visibility = View.VISIBLE
             binding.tvFusion.text = getString(R.string.tor_not)
-        }
-        else {
-            binding.tvFusion.text = getString(R.string.list_of)
+        } else {
+            binding.tvFusion.visibility = View.GONE
         }
     }
 }

@@ -1,156 +1,77 @@
 package org.electroncash.electroncash3
 
-import android.graphics.drawable.Drawable
 import android.os.Bundle
-import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
+import android.widget.Button
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.content.res.AppCompatResources
-import com.chaquo.python.PyObject
-import org.electroncash.electroncash3.databinding.RequestListBinding
-import org.electroncash.electroncash3.databinding.TransactionDetailBinding
-import org.electroncash.electroncash3.databinding.TransactionsBinding
-import kotlin.math.roundToInt
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.replace
+import androidx.fragment.app.commit
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModel
 
-
-class TransactionsFragment : ListFragment(R.layout.transactions, R.id.rvTransactions) {
-    private var _binding: TransactionsBinding? = null
-    private val binding get() = _binding!!
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        super.onCreateView(inflater, container, savedInstanceState)
-        _binding = TransactionsBinding.inflate(LayoutInflater.from(context))
-        return binding.root
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
-    }
-
-    override fun onListModelCreated(listModel: ListModel) {
-        with (listModel) {
-            trigger.addSource(daemonUpdate)
-            trigger.addSource(settings.getString("base_unit"))
-            data.function = { wallet.callAttr("get_history")!! }
+class TransactionsFragment : Fragment(R.layout.transactions) {
+    class Model : ViewModel() {
+        val filter = MutableLiveData<Int>().apply {
+            value = R.id.bchTransactions
         }
     }
+    val model: Model by viewModels()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.btnSend.setOnClickListener {
-            try {
-                showDialog(this, SendDialog())
-            } catch (e: ToastException) { e.show() }
+        val btn = view!!.findViewById<Button>(R.id.btnTxType)
+        btn.setOnClickListener {
+            showDialog(this, TxTypeDialog().apply { arguments = Bundle().apply {
+                putInt("labelId", R.string.transaction_type)
+                putInt("menuId", R.menu.transaction_type)
+            }})
         }
-        binding.btnRequest.setOnClickListener { showDialog(this, NewRequestDialog()) }
-        binding.btnFusion.setOnClickListener {
-            showFusionFragment()
-        }
+
+        val liveData = model.filter
+        val menu = inflateMenu(R.menu.transaction_type)
+        liveData.observe(viewLifecycleOwner, Observer {
+            btn.setText("${menu.findItem(liveData.value!!).title}")
+            switchTxFragment(liveData.value!!)
+        })
     }
 
-    private fun showFusionFragment() {
-        activity!!.supportFragmentManager.beginTransaction()
-            .replace(this.id, FusionFragment::class.java.getDeclaredConstructor().newInstance())
-            .commitNow()
-    }
-
-    override fun onCreateAdapter() = TransactionsAdapter(this)
-}
-
-
-// Also used in AddressesTransactionsDialog.
-fun TransactionsAdapter(listFragment: ListFragment) =
-    ListAdapter(listFragment, R.layout.transaction_list, ::TransactionModel,
-                ::TransactionDialog)
-        .apply { reversed = true }
-
-
-class TransactionModel(wallet: PyObject, val txHistory: PyObject) : ListItemModel(wallet) {
-    private fun get(key: String) = txHistory.get(key)
-
-    val txid by lazy { get("tx_hash")!!.toString() }
-    val amount by lazy { get("amount")?.toLong() ?: 0 }
-    val balance by lazy { get("balance")?.toLong() ?: 0 }
-    val timestamp by lazy { formatTime(get("timestamp")?.toLong()) }
-    val label by lazy { getDescription(wallet, txid) }
-
-    val icon: Drawable by lazy {
-        // Support inflation of vector images before API level 21.
-        AppCompatResources.getDrawable(
-            app,
-            if (amount >= 0) R.drawable.ic_add_24dp
-            else R.drawable.ic_remove_24dp)!!
-    }
-
-    val status: String  by lazy {
-        val confirmations = get("conf")!!.toInt()
-        when {
-            confirmations <= 0 -> app.getString(R.string.Unconfirmed)
-            else -> app.resources.getQuantityString(R.plurals.conf_confirmation,
-                                                    confirmations, confirmations)
+    private fun switchTxFragment(txId: Int) {
+        when (txId) {
+            R.id.bchTransactions -> replaceTxFragment<BchTransactionsFragment>()
+            R.id.tokenTransactions -> replaceTxFragment<TokenTransactionsFragment>()
+            R.id.fusionTransactions -> replaceTxFragment<FusionFragment>()
         }
     }
 
-    override val dialogArguments by lazy {
-        Bundle().apply { putString("txid", txid) }
+    private inline fun <reified T: Fragment> replaceTxFragment() {
+        requireActivity().supportFragmentManager.commit {
+            setReorderingAllowed(true)
+            replace<T>(R.id.fragment_container_view)
+        }
     }
 }
 
+class TxTypeDialog : MenuDialog() {
 
-class TransactionDialog : DetailDialog() {
-    private var _binding: TransactionDetailBinding? = null
-    private val binding get() = _binding!!
-
-    val txid by lazy { arguments!!.getString("txid")!! }
-    val tx by lazy {
-        // Transaction lookup sometimes fails during sync.
-        wallet.get("transactions")!!.callAttr("get", txid)
-            ?: throw ToastException(R.string.Transaction_not)
-    }
-    val txInfo by lazy { wallet.callAttr("get_tx_info", tx)!! }
-
-    override fun onBuildDialog(builder: AlertDialog.Builder) {
-        _binding = TransactionDetailBinding.inflate(LayoutInflater.from(context))
-        builder.setView(binding.root)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(android.R.string.ok, {_, _ ->
-                setDescription(wallet, txid, binding.etDescription.text.toString())
-            })
+    val menuId by lazy { arguments!!.getInt("menuId") }
+    val liveData by lazy {
+        (targetFragment as TransactionsFragment).model.filter
     }
 
-    override fun onShowDialog() {
-        binding.btnExplore.setOnClickListener { exploreTransaction(activity!!, txid) }
-        binding.btnCopy.setOnClickListener { copyToClipboard(txid, R.string.transaction_id) }
-
-        binding.tvTxid.text = txid
-
-        // For outgoing transactions, the list view includes the fee in the amount, but the
-        // detail view does not.
-        binding.tvAmount.text = ltr(formatSatoshisAndUnit(txInfo.get("amount")?.toLong(), signed=true))
-        binding.tvTimestamp.text = ltr(formatTime(txInfo.get("timestamp")?.toLong()))
-        binding.tvStatus.text = txInfo.get("status")!!.toString()
-
-        val size = tx.callAttr("estimated_size").toInt()
-        binding.tvSize.text = getString(R.string.bytes, size)
-
-        val fee = txInfo.get("fee")?.toLong()
-        if (fee == null) {
-            binding.tvFee.text = getString(R.string.Unknown)
-        } else {
-            val feeSpb = (fee.toDouble() / size.toDouble()).roundToInt()
-            binding.tvFee.text = String.format("%s (%s)",
-                                       getString(R.string.sats_per, feeSpb),
-                                       ltr(formatSatoshisAndUnit(fee)))
-        }
+    override fun onBuildDialog(builder: AlertDialog.Builder, menu: Menu) {
+        builder.setTitle(arguments!!.getInt("labelId"))
+        MenuInflater(app).inflate(menuId, menu)
+        menu.findItem(liveData.value!!).isChecked = true
     }
 
-    override fun onFirstShowDialog() {
-        binding.etDescription.setText(txInfo.get("label")!!.toString())
+    override fun onMenuItemSelected(item: MenuItem) {
+        liveData.value = item.itemId
+        dismiss()
     }
 }
