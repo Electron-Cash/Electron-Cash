@@ -16,7 +16,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
 
-class TransactionsFragment : Fragment(R.layout.transactions) {
+class TransactionsFragment : Fragment(R.layout.transactions), MainFragment {
     class Model : ViewModel() {
         val filter = MutableLiveData<Int>().apply {
             value = R.id.bchTransactions
