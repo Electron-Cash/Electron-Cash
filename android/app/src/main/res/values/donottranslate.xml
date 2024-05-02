@@ -30,4 +30,28 @@
         <item>@string/paid</item>
     </string-array>
 
+    <string-array name="asset_type">
+        <item>@string/addresses</item>
+        <item>@string/cashtokens</item>
+    </string-array>
+
+    <string-array name="address_type">
+        <item>@string/type_all</item>
+        <item>@string/type_receiving</item>
+        <item>@string/type_change</item>
+    </string-array>
+
+    <string-array name="address_status">
+        <item>@string/status_all</item>
+        <item>@string/status_used</item>
+        <item>@string/status_funded</item>
+        <item>@string/status_unused</item>
+    </string-array>
+
+    <string-array name="transaction_type">
+        <item>@string/bch_transactions</item>
+        <item>@string/token_transactions</item>
+        <item>@string/fusions</item>
+    </string-array>
+
 </resources>
