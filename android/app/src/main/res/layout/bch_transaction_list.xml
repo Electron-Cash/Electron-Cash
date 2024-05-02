@@ -12,17 +12,17 @@
     </data>
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        style="@style/Clickable"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        style="@style/Clickable">
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="16dp">
 
         <ImageView
             android:id="@+id/ivIcon"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
-            android:layout_marginLeft="16dp"
-            android:layout_marginStart="16dp"
             android:layout_marginTop="8dp"
             android:src="@{model.icon}"
             app:layout_constraintBottom_toBottomOf="@+id/textView"
@@ -54,8 +54,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
-            android:layout_marginLeft="6dp"
-            android:layout_marginRight="8dp"
             android:layout_marginStart="6dp"
             android:layout_marginTop="8dp"
             android:text="@{UtilKt.formatSatoshis(Math.abs(model.amount))}"
@@ -72,7 +70,6 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginRight="8dp"
             android:layout_marginTop="4dp"
             android:text="@{UtilKt.formatSatoshis(model.balance)}"
             android:textAppearance="@style/Medium"
@@ -87,8 +84,6 @@
             android:id="@+id/tvTimestamp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:layout_marginRight="16dp"
             android:text="@{UtilKt.ltr(model.timestamp)}"
             android:textAppearance="@style/Medium"
             app:layout_constraintBaseline_toBaselineOf="@+id/tvValue"

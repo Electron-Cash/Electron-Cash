@@ -12,7 +12,8 @@
         android:layout_height="wrap_content"
         android:text="@string/list_of"
         android:textAlignment="center"
-        android:visibility="gone" />
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvFusion"

@@ -55,9 +55,8 @@ val FRAGMENTS = HashMap<Int, KClass<out Fragment>>().apply {
     put(R.id.navNoWallet, WalletNotOpenFragment::class)
     put(R.id.navTransactions, TransactionsFragment::class)
     put(R.id.navRequests, RequestsFragment::class)
-    put(R.id.navAddresses, AddressesFragment::class)
-    //put(R.id.navContacts, ContactsFragment::class)
-    put (R.id.navTokens, TokensFragment::class)
+    put(R.id.navAssets, AssetsFragment::class)
+    put(R.id.navContacts, ContactsFragment::class)
 }
 
 interface MainFragment
@@ -146,21 +145,9 @@ class MainActivity : AppCompatActivity(R.layout.main) {
     }
 
     override fun onBackPressed() {
-        var fusionFragmentIsVisibile : Boolean = false
-        val fragments: List<Fragment> = supportFragmentManager.getFragments()
-        for (fragment in fragments) {
-            if (fragment.isVisible() && fragment is FusionFragment) {
-                fusionFragmentIsVisibile = true
-            }
-        }
-
         if (binding.drawer.isDrawerOpen(binding.navDrawer)) {
             closeDrawer()
-        }
-        else if (fusionFragmentIsVisibile) { // Back to the transactions fragment
-            showFragment(binding.navBottom.selectedItemId)
-        }
-        else if (daemonModel.wallet != null) {
+        } else if (daemonModel.wallet != null) {
             // We allow the wallet to be closed using the Back button because the Close command
             // in the top right menu isn't very obvious. However, we require confirmation so
             // the user doesn't close it accidentally by pressing Back too many times.
@@ -338,16 +325,12 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         val ft = supportFragmentManager.beginTransaction()
         val newFrag = getOrCreateFragment(id)
         for (frag in supportFragmentManager.fragments) {
-            if (frag is MainFragment && frag !== newFrag) {
+            if (frag is MainFragment) {
                 ft.detach(frag)
             }
         }
         ft.attach(newFrag)
         ft.commitNow()
-        val txFrag = getFragment(R.id.navTransactions) as TransactionsFragment?
-        if (txFrag?.isAdded() == true) {
-            txFrag.refreshTxFragment()
-        }
         binding.navBottom.visibility = if (newFrag is WalletNotOpenFragment) View.GONE else View.VISIBLE
     }
 

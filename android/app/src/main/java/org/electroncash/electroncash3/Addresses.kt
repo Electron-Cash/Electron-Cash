@@ -12,7 +12,10 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.Spinner
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.MutableLiveData
@@ -32,10 +35,10 @@ val clsAddress by lazy { libAddress["Address"]!! }
 class AddressesFragment : ListFragment(R.layout.addresses, R.id.rvAddresses) {
 
     class Model : ViewModel() {
-        // This corresponds to the order of the arguments to get_addresses.
-        val filters = listOf(R.menu.filter_type, R.menu.filter_status).map {
-            it to MutableLiveData<Int>().apply { value = R.id.filterAll }
+        val filters = listOf(R.id.spnAddressType, R.id.spnAddressStatus).map {
+            it to MutableLiveData<Int>().apply { value = 0 }
         }.toMap()
+
     }
     val model: Model by viewModels()
 
@@ -57,27 +60,30 @@ class AddressesFragment : ListFragment(R.layout.addresses, R.id.rvAddresses) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        initFilter(R.id.btnType, R.string.type, R.menu.filter_type)
-        initFilter(R.id.btnStatus, R.string.status, R.menu.filter_status)
+        initFilter(R.id.spnAddressType, R.array.address_type)
+        initFilter(R.id.spnAddressStatus, R.array.address_status)
     }
 
     override fun onCreateAdapter() =
         ListAdapter(this, R.layout.address_list, ::AddressModel, ::AddressDialog)
 
-    private fun initFilter(btnId: Int, labelId: Int, menuId: Int) {
-        val btn = view!!.findViewById<Button>(btnId)
-        btn.setOnClickListener {
-            showDialog(this, FilterDialog().apply { arguments = Bundle().apply {
-                putInt("labelId", labelId)
-                putInt("menuId", menuId)
-            }})
+    private fun initFilter(spnId: Int, options: Int) {
+        val spinner: Spinner = view!!.findViewById(spnId)
+        ArrayAdapter.createFromResource(activity!!, options, android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
         }
 
-        val liveData = model.filters.getValue(menuId)
-        val menu = inflateMenu(menuId)
-        liveData.observe(viewLifecycleOwner, Observer {
-            btn.setText("${getString(labelId)}: ${menu.findItem(liveData.value!!).title}")
-        })
+        spinner.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                model.filters.getValue(spnId).value = position
+
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) { }
+        }
     }
 }
 
@@ -216,25 +222,5 @@ class AddressTransactionsDialog() : AlertDialogFragment() {
             adapter.submitPyList(wallet, wallet.callAttr("get_history",
                                                          Kwarg("domain", arrayOf(addr))))
         })
-    }
-}
-
-
-class FilterDialog : MenuDialog() {
-
-    val menuId by lazy { arguments!!.getInt("menuId") }
-    val liveData by lazy {
-        (targetFragment as AddressesFragment).model.filters.getValue(menuId)
-    }
-
-    override fun onBuildDialog(builder: AlertDialog.Builder, menu: Menu) {
-        builder.setTitle(arguments!!.getInt("labelId"))
-        MenuInflater(app).inflate(menuId, menu)
-        menu.findItem(liveData.value!!).isChecked = true
-    }
-
-    override fun onMenuItemSelected(item: MenuItem) {
-        liveData.value = item.itemId
-        dismiss()
     }
 }
