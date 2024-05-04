@@ -1,15 +1,12 @@
 package org.electroncash.electroncash3
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
-import com.google.zxing.integration.android.IntentIntegrator
 import org.electroncash.electroncash3.databinding.TokensBinding
 
 
@@ -21,12 +18,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.fragment.app.DialogFragment
 
-import android.util.Log
-
 
 
 val guiTokens by lazy { guiMod("tokens") }
-val libTokens by lazy { libMod("tokens") }
 
 // Not fully implemented yet.
 class TokenMint : DialogFragment() {

@@ -8,6 +8,8 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -19,7 +21,6 @@ import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
 import com.chaquo.python.PyObject.fromJava
 import com.google.zxing.integration.android.IntentIntegrator
-import org.electroncash.electroncash3.databinding.AmountBoxBinding
 import org.electroncash.electroncash3.databinding.SendBinding
 
 
@@ -41,6 +42,12 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             notifyIncomplete = false  // Only notify transactions which match the UI state.
             function = { it.invoke() }
         }
+        // Maps the category spinner ID to the category ID
+        val categorySpnIds = ArrayList<String>()
+        // Maps the NFT spinner ID to the NFT's outpoint
+        val nftSpnIds = ArrayList<String>()
+        var selectedCategoryId = ""
+        var selectedNftUtxoId = ""
     }
     val model: Model by viewModels()
 
@@ -70,6 +77,15 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
     }
 
+    // Whether or not this is a bch send or token send dialog
+    val tokenSend by lazy {
+        if (arguments != null && arguments!!.containsKey("token_send")) {
+            arguments!!.getBoolean("token_send")
+        } else {
+            false
+        }
+    }
+
     val readOnly by lazy {
         arguments != null &&
             (arguments!!.containsKey("txHex") || arguments!!.containsKey("sweepKeypairs"))
@@ -96,8 +112,18 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SendBinding.inflate(LayoutInflater.from(context))
         if (!unbroadcasted) {
-            builder.setTitle(R.string.send)
-                .setPositiveButton(R.string.send, null)
+            if (tokenSend) {
+                builder.setTitle(R.string.send_tokens)
+                (binding.bchRow as View).visibility = View.GONE
+                buildCategorySpinner()
+                buildNftSpinner()
+            } else {
+                builder.setTitle(R.string.send)
+                for (row in listOf(binding.categoryRow, binding.fungiblesRow, binding.nftRow)) {
+                    (row as View).visibility = View.GONE
+                }
+            }
+            builder.setPositiveButton(R.string.send, null)
         } else {
             builder.setTitle(R.string.sign_transaction)
                 .setPositiveButton(R.string.sign, null)
@@ -105,6 +131,125 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         builder.setView(binding.root)
             .setNegativeButton(android.R.string.cancel, null)
             .setNeutralButton(R.string.scan_qr, null)
+    }
+
+    private fun buildCategorySpinner() {
+        val categoryLabels = getCategoryOptions()
+        val spnAdapter = ArrayAdapter(context!!, android.R.layout.simple_spinner_dropdown_item,
+                                      categoryLabels)
+        binding.spnCategory.setAdapter(spnAdapter)
+        binding.spnCategory.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                val categoryId = model.categorySpnIds[position]
+                model.selectedCategoryId = categoryId
+
+                // Update the corresponding NFT options for this category
+                val categories = getCategoriesDetails()
+                val category = categories[categoryId]
+                val nftLabels = getNftOptions(category)
+                val newAdapter = ArrayAdapter(
+                    context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
+                binding.spnNft.setAdapter(newAdapter)
+                binding.nftRow.visibility = if (nftLabels.size > 1) View.VISIBLE else View.GONE
+
+                // Get the total FTs in this category
+                var fungibles = 0
+                category?.let {
+                    fungibles = it.fungibles
+                }
+                binding.fungiblesRow.visibility = if (fungibles > 0) View.VISIBLE else View.GONE
+                binding.etFtAmount.setText(fungibles.toString()) //TODO temp
+
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    class NFT(val utxoId: String, val capability: String, val commitment: String) {
+        fun getCapabilityStr(): String {
+            return when (capability) {
+                "mutable" -> app.getString(R.string.mutable)
+                "minting" -> app.getString(R.string.minting)
+                else -> app.getString(R.string.immutable)
+            }
+        }
+
+        val label: String
+            get() {
+                val nftType = getCapabilityStr() + " " + app.getString(R.string.nft)
+                return nftType + if (commitment.isEmpty()) "" else ": $commitment"
+            }
+    }
+
+    class Category(val id: String, val name: String, val fungibles: Int,
+                   val nfts: ArrayList<NFT>)
+
+    private fun getCategoryOptions(): ArrayList<String> {
+        val labels = ArrayList<String>()
+        labels.add(getString(R.string.please_select))
+        model.categorySpnIds.add("")
+        val tokens = guiTokens.callAttr("get_tokens", wallet)!!
+        for (token in tokens.asList()) {
+            val tokenMap: Map<String, PyObject> = token.asMap().mapKeys { it.key.toString() }
+            val tokenName = tokenMap["tokenName"].toString()
+            val tokenId = tokenMap["tokenId"].toString()
+            labels.add(tokenName)
+            model.categorySpnIds.add(tokenId)
+        }
+        return labels
+    }
+
+    private fun getNftOptions(category: Category?): ArrayList<String> {
+        val labels = ArrayList<String>()
+        var i = 0
+        labels.add(getString(R.string.none))
+        model.nftSpnIds.add("")
+        category?.let {
+            for (nft in it.nfts) {
+                ++i
+                labels.add(nft.label)
+                model.nftSpnIds.add(nft.utxoId)
+            }
+        }
+        return labels
+    }
+
+    private fun getCategoriesDetails(): HashMap<String, Category> {
+        val categories = HashMap<String, Category>()
+        val tokens = guiTokens.callAttr("get_tokens", wallet)!!
+        for (token in tokens.asList()) {
+            val tokenMap: Map<String, PyObject> = token.asMap().mapKeys { it.key.toString() }
+            val categoryId = tokenMap["tokenId"].toString();
+            val nftList = tokenMap["nftDetails"]!!.asList().map { it.asList().map{ it.toString() } }
+            val nfts = ArrayList<NFT>()
+            for (nft in nftList) {
+                nfts.add(NFT(nft[0], nft[1], nft[2]))
+            }
+            val category = Category(
+                categoryId,
+                tokenMap["name"].toString(),
+                tokenMap["amount"]!!.toInt(),
+                nfts)
+            categories[categoryId] = category
+        }
+        return categories
+    }
+
+    private fun buildNftSpinner() {
+        val nftArray = ArrayList<String>()
+        val spnAdapter = ArrayAdapter(context!!, android.R.layout.simple_spinner_dropdown_item,
+                                      nftArray)
+        binding.spnNft.setAdapter(spnAdapter)
+        binding.spnNft.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                model.selectedNftUtxoId = model.nftSpnIds[position]
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
     }
 
     override fun onShowDialog() {
@@ -233,6 +378,10 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         } finally {
             settingAmount = false
         }
+    }
+
+    fun setAddress(address: String) {
+        binding.etAddress.setText(address)
     }
 
     fun setFeeLabel(tx: PyObject? = null): Int {
@@ -498,7 +647,7 @@ class SendContactsDialog : MenuDialog() {
     override fun onMenuItemSelected(item: MenuItem) {
         val address = makeAddress(contacts.get(item.itemId).get("address").toString())
         with (sendDialog) {
-            binding.etAddress.setText(address.callAttr("to_ui_string").toString())
+            setAddress(address.callAttr("to_ui_string").toString())
             amountBox.requestFocus()
         }
     }
