@@ -41,6 +41,9 @@ class TokenTransactionsFragment : ListFragment(R.layout.token_transactions, R.id
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.btnRequest.setOnClickListener { showDialog(this, NewRequestDialog()) }
+        binding.btnSend.setOnClickListener { showDialog(this, SendDialog().apply {
+            arguments = Bundle().apply { putBoolean("token_send", true) }
+        }) }
     }
 
     override fun onCreateAdapter() = TokenTransactionsAdapter(this)
