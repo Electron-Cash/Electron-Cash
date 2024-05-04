@@ -136,5 +136,10 @@
         "pruning": "-",
         "s": "50002",
         "version": "1.5.0"
+    },
+      "node.minisatoshi.cash": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.5.3"
     }
 }
