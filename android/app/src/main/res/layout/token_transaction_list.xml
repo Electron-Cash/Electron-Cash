@@ -54,7 +54,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:text="@{model.tokenname}"
+            android:text="@{model.tokenName}"
             android:textAppearance="@style/Medium"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@+id/tvCategoryIdLabel"
@@ -89,7 +89,7 @@
                     android:gravity="end"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@{model.ftamount}"
+                    android:text="@{model.ftAmount}"
                     android:textAppearance="@style/Heavy"
                     tools:text="@string/test_value"/>
 
@@ -107,7 +107,7 @@
                     android:gravity="end"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@{model.nftamount}"
+                    android:text="@{model.nftAmount}"
                     android:textAppearance="@style/Heavy"
                     tools:text="@string/test_value"/>
             </TableRow>
@@ -131,7 +131,7 @@
                     android:gravity="end"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@{model.ftbalance}"
+                    android:text="@{model.ftBalance}"
                     android:textAppearance="@style/Medium"
                     tools:text="@string/test_value"/>
 
@@ -149,7 +149,7 @@
                     android:gravity="end"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@{model.nftbalance}"
+                    android:text="@{model.nftBalance}"
                     android:textAppearance="@style/Medium"
                     tools:text="@string/test_value"/>
             </TableRow>

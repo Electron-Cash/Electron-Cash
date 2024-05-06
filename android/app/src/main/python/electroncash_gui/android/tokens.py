@@ -1,7 +1,8 @@
 from electroncash.token_meta import TokenMeta
 from electroncash.simple_config import SimpleConfig
 from electroncash.token import OutputData
-from typing import Any, Dict, Optional
+from electroncash.wallet import TokenSendSpec
+from typing import Any, Dict, Optional, Set
 
 
 # Since the TokenMeta class from electroncash.token_meta.py is abstract, extend it here.
@@ -39,11 +40,8 @@ def get_token_name(token_id: str) -> str:
 
     return token_display_name
 
-def get_outpoint_longname(utxo) -> str:
-    return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
-
 # This function is for fetching all the token categories and aggregating their fungible amounts and NFT amounts.
-def get_tokens(wallet):
+def get_tokens(wallet, category_id_filter=""):
 
     tok_utxos = wallet.get_utxos(tokens_only=True)
     config = SimpleConfig()  # Ok to have a locally scoped new instead of config for purposes of instatiating the token meta.
@@ -51,11 +49,14 @@ def get_tokens(wallet):
 
     token_aggregate = {}
     nft_details = {}
+    utxos = {}
     for utxo in tok_utxos:
         token_data = utxo.get('token_data')
         utxo_id = f"{utxo.get('prevout_hash')}:{utxo.get('prevout_n')}"
         if token_data:
             token_id = token_data.id[::-1].hex()  # Reverse byte order and convert to hex
+            if category_id_filter and token_id != category_id_filter:
+                continue
             token_amount = token_data.amount
             token_bitfield = token_data.bitfield
             token_commitment = token_data.commitment.hex()
@@ -89,13 +90,52 @@ def get_tokens(wallet):
             else:
                 token_aggregate[token_id] = [token_amount, token_display_name, 0]
                 nft_details[token_id] = []
+                utxos[token_id] = []
             if is_nft:
                 token_aggregate[token_id][2] += 1  # Increment NFT count if this utxo represents an NFT
                 nft_details[token_id].append([utxo_id, token_capability, token_commitment])
-
+            utxos[token_id].append(utxo)
 
     # Convert the aggregated token data into the expected list of dictionaries format
     tokens = [{"tokenName": data[1], "amount": data[0], "nft": data[2], "tokenId": token_id,
-               "nftDetails": nft_details[token_id]} for token_id, data in token_aggregate.items()]
+               "nftDetails": nft_details[token_id], "tokenUtxos": utxos[token_id]}
+              for token_id, data in token_aggregate.items()]
 
     return tokens
+
+
+def get_outpoint_longname(utxo) -> str:
+    return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
+
+
+def make_tx(wallet, config, to_address, fee_rate, category_id, fungibles_str, nft) -> TokenSendSpec:
+    token_meta = ConcreteTokenMeta(SimpleConfig())
+    spec = TokenSendSpec()
+    spec.payto_addr = to_address
+    spec.change_addr = (wallet.get_unused_address(for_change=True, frozen_ok=False)
+                        or wallet.dummy_address())
+    spec.feerate = fee_rate  # sats/KB
+    spec.send_satoshis = 0
+    utxos = get_tokens(wallet, category_id)[0]["tokenUtxos"]
+    spec.token_utxos = {get_outpoint_longname(utxo): utxo for utxo in utxos}
+
+    spec.non_token_utxos = {get_outpoint_longname(x): x
+                            for x in wallet.get_spendable_coins(None, config)}
+    fungible_amount = token_meta.parse_amount(category_id, fungibles_str)
+    print(f"Fungible amount: {fungible_amount}")
+    print(f"Fungible amount string: {fungibles_str}")
+    spec.send_fungible_amounts = {category_id: fungible_amount}
+    spec.send_nfts = set()
+    if nft:
+        spec.send_nfts.add(nft)
+    return wallet.make_token_send_tx(config, spec)
+
+
+def format_fungible_amount(category_id, amount) -> str:
+    token_meta = ConcreteTokenMeta(SimpleConfig())
+    return token_meta.format_amount(category_id, amount)
+
+
+def parse_fungible_amount(category_id, amount_str) -> int:
+    token_meta = ConcreteTokenMeta(SimpleConfig())
+    return token_meta.parse_amount(category_id, amount_str)

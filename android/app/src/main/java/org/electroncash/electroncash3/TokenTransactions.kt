@@ -64,11 +64,11 @@ class TokenTransactionModel(wallet: PyObject, val txHistory: PyObject) : ListIte
     val balance by lazy { get("balance")?.toLong() ?: 0 }
     val timestamp by lazy { formatTime(get("timestamp")?.toLong()) }
     val label by lazy { getDescription(wallet, txid) }
-    val tokenname by lazy { get("token_name")!!.toString() }
-    val ftamount by lazy { get("ft_amount_str")!!.toString() }
-    val nftamount by lazy { get("nft_amount_str")!!.toString() }
-    val ftbalance by lazy { get("ft_balance")!!.toString() }
-    val nftbalance by lazy { get("nft_balance")!!.toString() }
+    val tokenName by lazy { get("token_name")!!.toString() }
+    val ftAmount by lazy { get("ft_amount_str")!!.toString() }
+    val nftAmount by lazy { get("nft_amount_str")!!.toString() }
+    val ftBalance by lazy { get("ft_balance")!!.toString() }
+    val nftBalance by lazy { get("nft_balance")!!.toString() }
 
     val icon: Drawable by lazy {
         // Support inflation of vector images before API level 21.

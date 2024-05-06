@@ -42,14 +42,14 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             notifyIncomplete = false  // Only notify transactions which match the UI state.
             function = { it.invoke() }
         }
-        // Maps the category spinner ID to the category ID
-        val categorySpnIds = ArrayList<String>()
-        // Maps the NFT spinner ID to the NFT's outpoint
-        val nftSpnIds = ArrayList<String>()
-        var selectedCategoryId = ""
-        var selectedNftUtxoId = ""
     }
     val model: Model by viewModels()
+
+    class LabelWithId(val label: String, val id: String) {
+        override fun toString(): String {
+            return label
+        }
+    }
 
     // This is currently used by the sweep private keys command. In the future it could also be
     // used for coin selection.
@@ -113,7 +113,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         _binding = SendBinding.inflate(LayoutInflater.from(context))
         if (!unbroadcasted) {
             if (tokenSend) {
-                builder.setTitle(R.string.send_tokens)
+                builder.setTitle(R.string.Send_tokens)
+                binding.tvAddressLabel.setText(R.string.Send_to)
                 (binding.bchRow as View).visibility = View.GONE
                 buildCategorySpinner()
                 buildNftSpinner()
@@ -142,25 +143,19 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?,
                                         position: Int, id: Long) {
-                val categoryId = model.categorySpnIds[position]
-                model.selectedCategoryId = categoryId
-
-                // Update the corresponding NFT options for this category
-                val categories = getCategoriesDetails()
-                val category = categories[categoryId]
+                val category = getSelectedCategory()
                 val nftLabels = getNftOptions(category)
                 val newAdapter = ArrayAdapter(
                     context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
                 binding.spnNft.setAdapter(newAdapter)
                 binding.nftRow.visibility = if (nftLabels.size > 1) View.VISIBLE else View.GONE
-
-                // Get the total FTs in this category
-                var fungibles = 0
+                var fungibles: Long = 0
                 category?.let {
                     fungibles = it.fungibles
                 }
                 binding.fungiblesRow.visibility = if (fungibles > 0) View.VISIBLE else View.GONE
-                binding.etFtAmount.setText(fungibles.toString()) //TODO temp
+                binding.etFtAmount.setText("")
+                refreshTx()
 
             }
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -183,42 +178,43 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             }
     }
 
-    class Category(val id: String, val name: String, val fungibles: Int,
+    class Category(val id: String, val name: String, val fungibles: Long,
                    val nfts: ArrayList<NFT>)
 
-    private fun getCategoryOptions(): ArrayList<String> {
-        val labels = ArrayList<String>()
-        labels.add(getString(R.string.please_select))
-        model.categorySpnIds.add("")
+    private fun getCategoryOptions(): ArrayList<LabelWithId> {
+        val options = ArrayList<LabelWithId>()
+        options.add(LabelWithId(getString(R.string.please_select), ""))
         val tokens = guiTokens.callAttr("get_tokens", wallet)!!
         for (token in tokens.asList()) {
             val tokenMap: Map<String, PyObject> = token.asMap().mapKeys { it.key.toString() }
             val tokenName = tokenMap["tokenName"].toString()
             val tokenId = tokenMap["tokenId"].toString()
-            labels.add(tokenName)
-            model.categorySpnIds.add(tokenId)
+            options.add(LabelWithId(tokenName, tokenId))
         }
-        return labels
+        return options
     }
 
-    private fun getNftOptions(category: Category?): ArrayList<String> {
-        val labels = ArrayList<String>()
-        var i = 0
-        labels.add(getString(R.string.none))
-        model.nftSpnIds.add("")
+    private fun getSelectedCategory(): Category? {
+        val selectedOption = binding.spnCategory.selectedItem as LabelWithId
+        val categoryId = selectedOption.id
+        return getCategoriesDetails(categoryId)[categoryId]
+    }
+
+    private fun getNftOptions(category: Category?): ArrayList<LabelWithId> {
+        val options = ArrayList<LabelWithId>()
+        options.add(LabelWithId(getString(R.string.none), ""))
         category?.let {
             for (nft in it.nfts) {
-                ++i
-                labels.add(nft.label)
-                model.nftSpnIds.add(nft.utxoId)
+                options.add(LabelWithId(nft.label, nft.utxoId))
             }
         }
-        return labels
+        return options
     }
 
-    private fun getCategoriesDetails(): HashMap<String, Category> {
+    private fun getCategoriesDetails(categoryIdFilter: String = ""): HashMap<String, Category> {
         val categories = HashMap<String, Category>()
-        val tokens = guiTokens.callAttr("get_tokens", wallet)!!
+        val tokens = guiTokens.callAttr("get_tokens", wallet,
+                                        Kwarg("category_id_filter", categoryIdFilter))!!
         for (token in tokens.asList()) {
             val tokenMap: Map<String, PyObject> = token.asMap().mapKeys { it.key.toString() }
             val categoryId = tokenMap["tokenId"].toString();
@@ -230,7 +226,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val category = Category(
                 categoryId,
                 tokenMap["name"].toString(),
-                tokenMap["amount"]!!.toInt(),
+                tokenMap["amount"]!!.toLong(),
                 nfts)
             categories[categoryId] = category
         }
@@ -246,9 +242,29 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?,
                                         position: Int, id: Long) {
-                model.selectedNftUtxoId = model.nftSpnIds[position]
+                refreshTx()
             }
             override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun setMaxFungibleAmount() {
+        val category = getSelectedCategory()
+        var categoryId = ""
+        var amount: Long = 0
+        category?.let {
+            categoryId = it.id
+            amount = it.fungibles
+        }
+        val amountStr = guiTokens.callAttr(
+            "format_fungible_amount", categoryId, amount
+        ).toString()
+        try {
+            settingAmount = true
+            binding.etFtAmount.setText(amountStr)
+            binding.etFtAmount.setSelection(binding.etFtAmount.text.length)
+        } finally {
+            settingAmount = false
         }
     }
 
@@ -274,6 +290,19 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         binding.btnMax.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 setAmount(null)
+            }
+            refreshTx()
+        }
+
+        binding.etFtAmount.addAfterTextChangedListener {
+            if (!settingAmount) {
+                binding.btnFtMax.isChecked = false
+            }
+            refreshTx()
+        }
+        binding.btnFtMax.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                setMaxFungibleAmount()
             }
             refreshTx()
         }
@@ -354,8 +383,16 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     fun refreshTx() {
         if (arguments?.containsKey("txHex") != true) {
+            val selectedCategory = binding.spnCategory.selectedItem as LabelWithId?
+            val categoryId = selectedCategory?.id ?: ""
+            val selectedNft = binding.spnNft.selectedItem as LabelWithId?
+            val nftId = selectedNft?.id ?: ""
+            val hasNfts = binding.nftRow.visibility == View.VISIBLE
+            val hasFts = binding.fungiblesRow.visibility == View.VISIBLE
+            val ftAmountStr = binding.etFtAmount.text.toString()
             model.tx.refresh(TxArgs(wallet, model.paymentRequest, binding.etAddress.text.toString(),
-                amountBox.amount, binding.btnMax.isChecked, inputs))
+                amountBox.amount, binding.btnMax.isChecked, inputs,
+                categoryId, ftAmountStr, nftId, tokenSend, hasNfts, hasFts))
         }
     }
 
@@ -397,37 +434,77 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     }
 
     class TxArgs(val wallet: PyObject, val pr: PyObject?, val addrStr: String,
-                 val amount: Long?, val max: Boolean, val inputs: PyObject?) {
-        fun invoke(): TxResult {
-            var isDummy = false
-            val outputs: PyObject
-            if (pr != null) {
-                outputs =  pr.callAttr("get_outputs")
-            } else {
-                val addr = try {
-                    makeAddress(addrStr)
-                } catch (e: ToastException) {
-                    isDummy = true
-                    wallet.callAttr("dummy_address")
-                }
-                if (amount == null && !max) {
-                    return TxResult(ToastException(R.string.Invalid_amount))
-                }
-                val output = py.builtins.callAttr(
-                    "tuple", arrayOf(libBitcoin.get("TYPE_ADDRESS"), addr,
-                                     if (max) "!" else amount))
-                outputs = py.builtins.callAttr("list", arrayOf(output))
-            }
+                 val amount: Long?, val max: Boolean, val inputs: PyObject?,
+                 val categoryId: String, val fungibleAmountStr: String, val nft: String,
+                 val isTokenSend: Boolean, val hasNfts: Boolean, val hasFts: Boolean) {
 
-            var inputs = this.inputs ?:
-                         wallet.callAttr("get_spendable_coins", null,daemonModel.config,
-                                         Kwarg("isInvoice", pr != null))
-            val fusion = daemonModel.daemon.get("plugins")!!.callAttr("find_plugin", "fusion")
-            fusion.callAttr("spendable_coin_filter", daemonModel.wallet, inputs)
+
+        private fun getAddress(): Pair<PyObject, Boolean> {
             return try {
-                TxResult(wallet.callAttr("make_unsigned_transaction", inputs, outputs,
-                                         daemonModel.config, Kwarg("sign_schnorr", signSchnorr())),
-                         isDummy)
+                Pair(makeAddress(addrStr), false)
+            } catch (e: ToastException) {
+                Pair(wallet.callAttr("dummy_address"), true)
+            }
+        }
+
+        fun invoke(): TxResult {
+            return try {
+                val isDummy: Boolean
+                val transaction: PyObject?
+                if (isTokenSend) {
+                    val hasFungible = fungibleAmountStr.toDoubleOrNull() !in setOf(null, 0.0)
+                    if (categoryId.isEmpty()) {
+                        return TxResult(ToastException(R.string.please_select_a))
+                    } else if (nft.isEmpty() && !hasFungible) {
+                        return TxResult(ToastException(
+                            if (hasNfts && hasFts) {
+                                R.string.please_choose_an
+                            } else if (hasNfts) {
+                                R.string.please_select_an
+                            } else {
+                                R.string.please_choose_a_fungible
+                            }
+                        ))
+                    } else {
+                        val feePerKb = 1 // TODO
+                        val (toAddress, dummy) = getAddress()
+                        isDummy = dummy
+                        transaction = guiTokens.callAttr(
+                            "make_tx", wallet, daemonModel.config, toAddress,
+                            feePerKb, categoryId, fungibleAmountStr, nft
+                        )
+                    }
+                } else {
+                    val inputs = this.inputs ?: wallet.callAttr(
+                        "get_spendable_coins", null, daemonModel.config,
+                        Kwarg("isInvoice", pr != null)
+                    )
+                    val fusion = daemonModel.daemon.get("plugins")!!.callAttr("find_plugin", "fusion")
+                    fusion.callAttr("spendable_coin_filter", daemonModel.wallet, inputs)
+                    val outputs: PyObject
+                    if (pr != null) {
+                        outputs = pr.callAttr("get_outputs")
+                        isDummy = false
+                    } else {
+                        if (amount == null && !max) {
+                            return TxResult(ToastException(R.string.Invalid_amount))
+                        }
+                        val (toAddress, dummy) = getAddress()
+                        isDummy = dummy
+                        val output = py.builtins.callAttr(
+                            "tuple", arrayOf(
+                                libBitcoin.get("TYPE_ADDRESS"), toAddress,
+                                if (max) "!" else amount
+                            )
+                        )
+                        outputs = py.builtins.callAttr("list", arrayOf(output))
+                    }
+                    transaction = wallet.callAttr(
+                        "make_unsigned_transaction", inputs, outputs,
+                        daemonModel.config, Kwarg("sign_schnorr", signSchnorr())
+                    )
+                }
+                TxResult(transaction, isDummy)
             } catch (e: PyException) {
                 TxResult(if (e.message!!.startsWith("NotEnoughFunds"))
                          ToastException(R.string.insufficient_funds) else e)
@@ -565,7 +642,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     override fun onPostExecute(result: Unit) {
         if (arguments != null && arguments!!.containsKey("sweepKeypairs")) {
-            toast(R.string.payment_sent)
+            toast(if (tokenSend) R.string.tokens_sent else R.string.payment_sent)
             closeDialogs(this)
         } else {
             try {
