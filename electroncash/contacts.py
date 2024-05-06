@@ -39,7 +39,7 @@ from .address import Address
 class Contact(namedtuple("Contact", "name address type")):
     ''' Your basic contacts entry. '''
 
-contact_types = {'address', 'cashacct', 'openalias'}
+contact_types = {'address', 'cashacct', 'openalias', 'tokenaddr'}
 
 class Contacts(util.PrintError):
     '''Electron Cash Contacts subsystem 2.0. Lightweight class for saving/laoding
@@ -90,7 +90,7 @@ class Contacts(util.PrintError):
             if not all(isinstance(a, str) for a in (name, address, typ)):
                 continue # skip invalid-looking data
             address = __class__._cleanup_address(address, typ)
-            if typ in ('address', 'cashacct', 'lns'):
+            if typ in ('address', 'cashacct', 'lns', 'tokenaddr'):
                 if (not Address.is_valid(address)
                         or (typ == 'cashacct' and not cashacct.CashAcct.parse_string(name))
                         # We skip lns always because it is no longer supported
@@ -142,7 +142,7 @@ class Contacts(util.PrintError):
     @staticmethod
     def _cleanup_address(address : str, _type : str) -> str:
         rm_prefix = (networks.net.CASHADDR_PREFIX + ":").lower()
-        if _type in ('address', 'cashacct') and address.lower().startswith(rm_prefix):
+        if _type in ('address', 'cashacct', 'tokenaddr') and address.lower().startswith(rm_prefix):
             address = address[len(rm_prefix):]  # chop off bitcoincash: prefix
         return address
 

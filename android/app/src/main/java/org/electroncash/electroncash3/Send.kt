@@ -433,23 +433,33 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         return spb
     }
 
+    enum class AddressType {
+        CASH, TOKEN, DUMMY
+    }
+
     class TxArgs(val wallet: PyObject, val pr: PyObject?, val addrStr: String,
                  val amount: Long?, val max: Boolean, val inputs: PyObject?,
                  val categoryId: String, val fungibleAmountStr: String, val nft: String,
                  val isTokenSend: Boolean, val hasNfts: Boolean, val hasFts: Boolean) {
 
 
-        private fun getAddress(): Pair<PyObject, Boolean> {
+        private fun getAddress(): Pair<PyObject, AddressType> {
             return try {
-                Pair(makeAddress(addrStr), false)
+                val address = makeAddress(addrStr)
+                val type = if (isTokenAddress(addrStr)) {
+                    AddressType.TOKEN
+                } else {
+                    AddressType.CASH
+                }
+                Pair(address, type)
             } catch (e: ToastException) {
-                Pair(wallet.callAttr("dummy_address"), true)
+                Pair(wallet.callAttr("dummy_address"), AddressType.DUMMY)
             }
         }
 
         fun invoke(): TxResult {
             return try {
-                val isDummy: Boolean
+                val addressType: AddressType
                 val transaction: PyObject?
                 if (isTokenSend) {
                     val hasFungible = fungibleAmountStr.toDoubleOrNull() !in setOf(null, 0.0)
@@ -467,8 +477,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                         ))
                     } else {
                         val feePerKb = 1 // TODO
-                        val (toAddress, dummy) = getAddress()
-                        isDummy = dummy
+                        val (toAddress, type) = getAddress()
+                        addressType = type
                         transaction = guiTokens.callAttr(
                             "make_tx", wallet, daemonModel.config, toAddress,
                             feePerKb, categoryId, fungibleAmountStr, nft
@@ -484,13 +494,13 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                     val outputs: PyObject
                     if (pr != null) {
                         outputs = pr.callAttr("get_outputs")
-                        isDummy = false
+                        addressType = AddressType.DUMMY
                     } else {
                         if (amount == null && !max) {
                             return TxResult(ToastException(R.string.Invalid_amount))
                         }
-                        val (toAddress, dummy) = getAddress()
-                        isDummy = dummy
+                        val (toAddress, type) = getAddress()
+                        addressType = type
                         val output = py.builtins.callAttr(
                             "tuple", arrayOf(
                                 libBitcoin.get("TYPE_ADDRESS"), toAddress,
@@ -504,7 +514,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                         daemonModel.config, Kwarg("sign_schnorr", signSchnorr())
                     )
                 }
-                TxResult(transaction, isDummy)
+                TxResult(transaction, addressType)
             } catch (e: PyException) {
                 TxResult(if (e.message!!.startsWith("NotEnoughFunds"))
                          ToastException(R.string.insufficient_funds) else e)
@@ -512,9 +522,9 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
     }
 
-    class TxResult(val tx: PyObject?, val isDummy: Boolean = false,
+    class TxResult(val tx: PyObject?, val addressType: AddressType = AddressType.CASH,
                    val error: Throwable? = null) {
-        constructor(error: Throwable) : this(null, false, error)
+        constructor(error: Throwable) : this(null, AddressType.DUMMY, error)
         fun get() = tx ?: throw error!!
     }
 
@@ -648,9 +658,12 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             try {
                 // Verify the transaction is valid before asking for a password.
                 val txResult = model.tx.value!!
-                if (txResult.isDummy) throw ToastException(R.string.Invalid_address)
+                when (txResult.addressType) {
+                    AddressType.CASH -> throw ToastException(R.string.not_a_cashtoken)
+                    AddressType.DUMMY -> throw ToastException(R.string.Invalid_address)
+                    AddressType.TOKEN -> {}
+                }
                 txResult.get()   // May throw ToastException.
-
                 showDialog(this, SendPasswordDialog().apply { arguments = Bundle().apply {
                     putString("description", this@SendDialog.binding.etDescription.text.toString())
                 }})
@@ -722,9 +735,15 @@ class SendContactsDialog : MenuDialog() {
     }
 
     override fun onMenuItemSelected(item: MenuItem) {
-        val address = makeAddress(contacts.get(item.itemId).get("address").toString())
+        val contact = contacts[item.itemId]
+        val addressFormat = if (contact["type"].toString() == "tokenaddr") {
+            "to_token_string"
+        } else {
+            "to_ui_string"
+        }
+        val address = makeAddress(contact["address"].toString())
         with (sendDialog) {
-            setAddress(address.callAttr("to_ui_string").toString())
+            setAddress(address.callAttr(addressFormat).toString())
             amountBox.requestFocus()
         }
     }
