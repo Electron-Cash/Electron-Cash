@@ -104,6 +104,10 @@ fun makeAddress(addrStr: String): PyObject {
     }
 }
 
+fun isTokenAddress(addressStr: String): Boolean {
+    return clsAddress.callAttr("is_token", addressStr).toBoolean()
+}
+
 
 fun getDescription(wallet: PyObject, key: String) =
     wallet.callAttr("get_label", key).toString()

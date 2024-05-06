@@ -39,7 +39,7 @@
             android:layout_marginBottom="8dp"
             android:layout_marginTop="4dp"
             android:singleLine="true"
-            android:text="@{model.addrUiString}"
+            android:text="@{model.addrString}"
             android:textAppearance="@style/Medium"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@+id/tvName"
