@@ -90,11 +90,6 @@ def get_tokens(wallet, category_id_filter=""):
             elif token_display_name.strip() == "":  # Remove whitespace.
                 token_display_name = token_id
 
-            # Fetch token decimals using token_meta, fall back to 0 if not found
-            token_decimals = token_meta.get_token_decimals(token_id)
-            if token_decimals is None:
-                token_decimals = 0
-
             if len(token_display_name) > 18:  # Shorten the display name to 18 chars.
                 token_display_name = token_display_name[:12] + "..."
 
@@ -102,18 +97,17 @@ def get_tokens(wallet, category_id_filter=""):
             if token_id in token_aggregate:
                 token_aggregate[token_id][0] += token_amount
             else:
-                token_aggregate[token_id] = [token_amount, token_display_name, token_decimals, 0]
+                token_aggregate[token_id] = [token_amount, token_display_name, 0]
                 nft_details[token_id] = []
                 utxos[token_id] = []
             if is_nft:
-                token_aggregate[token_id][3] += 1  # Increment NFT count if this utxo is an NFT
+                token_aggregate[token_id][2] += 1  # Increment NFT count if this utxo is an NFT
                 nft_details[token_id].append([utxo_id, token_capability, token_commitment])
             utxos[token_id].append(utxo)
 
     # Convert the aggregated token data into the expected list of dictionaries format
-    tokens = [{"tokenName": data[1], "decimals": data[2],
-               "amount": token_meta.format_amount(token_id, data[0]), "nft": data[3],
-               "tokenId": token_id, "nftDetails": nft_details[token_id],
+    tokens = [{"tokenName": data[1], "amount": token_meta.format_amount(token_id, data[0]),
+               "nft": data[2], "tokenId": token_id, "nftDetails": nft_details[token_id],
                "tokenUtxos": utxos[token_id]}
               for token_id, data in token_aggregate.items()]
 

@@ -81,7 +81,6 @@ class TokenModel(wallet: PyObject, tokenPy: PyObject) : ListItemModel(wallet) {
     private val tokenMap: Map<String, String> = tokenPy.asMap().mapKeys { it.key.toString() }.mapValues { it.value.toString() }
 
     val tokenName: String by tokenMap
-    val decimals: String by tokenMap
     val amount: String by tokenMap
     val nft: String by tokenMap
     val tokenId: String by tokenMap
@@ -89,7 +88,6 @@ class TokenModel(wallet: PyObject, tokenPy: PyObject) : ListItemModel(wallet) {
     override val dialogArguments: Bundle by lazy {
         Bundle().apply {
             putString("tokenName", tokenName)
-            putString("decimals", decimals)
             putString("amount", amount)
             putString("nft", nft)
             putString("tokenId", tokenId)
@@ -152,20 +150,30 @@ class CategoryPropertiesDialog : DialogFragment() {
             // Set the existing details in the EditText
             editTextCategoryName.setText(existingTokenName)
             // Leave the field blank if decimals is zero
-            val decimals = if (existingTokenDecimals == "0") "" else existingTokenDecimals
-            editTextCategoryDecimals.setText(decimals)
+            val tokenDecimals = if (existingTokenDecimals == "0") "" else existingTokenDecimals
+            editTextCategoryDecimals.setText(tokenDecimals)
 
             builder.setView(view)
             builder.setTitle("Category Properties")
             .setPositiveButton("Save") { dialog, id ->
                 val inputName = editTextCategoryName.text.toString()
-                var inputDecimals = editTextCategoryDecimals.text.toString().toShort()
-                if (inputDecimals > 18) {
+                val inputDecimals = editTextCategoryDecimals.text.toString()
+                var decimals = if (inputDecimals == "") {
+                    0
+                } else {
+                    try {
+                        inputDecimals.toShort()
+                    } catch (e: NumberFormatException) {
+                        toast(R.string.Invalid_amount)
+                        0
+                    }
+                }
+                if (decimals > 18) {
                     toast(R.string.token_decimals_cannot)
-                    inputDecimals = 18
+                    decimals = 18
                 }
                 // Save the data
-                saveTokenData(tokenId, inputName, inputDecimals)
+                saveTokenData(tokenId, inputName, decimals)
             }
             .setNegativeButton(android.R.string.cancel, null)
             builder.create()

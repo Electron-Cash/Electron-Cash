@@ -24,8 +24,7 @@ def get_token_transactions(wallet):
             cat_nfts_out = category_delta.get("nfts_out", [])
             ft_balance_ = tokens_balances.get(category_id, {}).get("fungibles", 0)
             ft_balance = token_meta.format_amount(category_id, ft_balance_)
-            nft_balance_ = tokens_balances.get(category_id, {}).get("nfts", 0)
-            nft_balance = token_meta.format_amount(category_id, nft_balance_)
+            nft_balance = tokens_balances.get(category_id, {}).get("nfts", 0)
             nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
             nft_amount_str = "{0:+d}".format(nft_amount) if nft_amount else "0"
             token_name = get_token_name(category_id)
