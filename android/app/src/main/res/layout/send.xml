@@ -111,6 +111,8 @@
                 app:layout_constraintEnd_toStartOf="@id/barrierFtMax"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@+id/tvFtAmountLabel"
+                android:singleLine="true"
+                android:hint="0"
                 tools:text="@string/test_value" />
 
             <androidx.constraintlayout.widget.Barrier

@@ -149,11 +149,11 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                     context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
                 binding.spnNft.setAdapter(newAdapter)
                 binding.nftRow.visibility = if (nftLabels.size > 1) View.VISIBLE else View.GONE
-                var fungibles: Long = 0
+                var fungibles: String = "0"
                 category?.let {
                     fungibles = it.fungibles
                 }
-                binding.fungiblesRow.visibility = if (fungibles > 0) View.VISIBLE else View.GONE
+                binding.fungiblesRow.visibility = if (fungibles != "0") View.VISIBLE else View.GONE
                 binding.etFtAmount.setText("")
                 refreshTx()
 
@@ -178,7 +178,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             }
     }
 
-    class Category(val id: String, val name: String, val decimals: Short, val fungibles: Long,
+    class Category(val id: String, val name: String, val fungibles: String,
                    val nfts: ArrayList<NFT>)
 
     private fun getCategoryOptions(): ArrayList<LabelWithId> {
@@ -226,8 +226,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val category = Category(
                 categoryId,
                 tokenMap["name"].toString(),
-                tokenMap["decimals"]!!.toShort(),
-                tokenMap["amount"]!!.toLong(),
+                tokenMap["amount"]!!.toString(),
                 nfts)
             categories[categoryId] = category
         }
@@ -252,7 +251,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     private fun setMaxFungibleAmount() {
         val category = getSelectedCategory()
         var categoryId = ""
-        var amount: Long = 0
+        var amount: String = "0"
         category?.let {
             categoryId = it.id
             amount = it.fungibles
@@ -525,7 +524,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     class TxResult(val tx: PyObject?, val addressType: AddressType = AddressType.CASH,
                    val error: Throwable? = null) {
-        constructor(error: Throwable) : this(null, AddressType.DUMMY, error)
+        constructor(error: Throwable) : this(null, AddressType.TOKEN, error)
         fun get() = tx ?: throw error!!
     }
 
