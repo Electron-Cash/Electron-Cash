@@ -157,5 +157,6 @@ class RequestList(MyTreeWidget):
         menu.addAction(_("Copy URI"), lambda: self.parent.view_and_paste('URI', '', self.parent.get_request_URI(addr)))
         menu.addAction(_("Save as BIP70 file"), lambda: self.parent.export_payment_request(addr))
         menu.addAction(_("Delete"), lambda: self.parent.delete_payment_request(addr))
-        run_hook('receive_send_via_email_list_menu', menu, addr, self.parent.get_request_URI(addr), self.parent.receive_qr, status) 
+        run_hook('receive_list_menu', menu, addr) #previously used by email plugin, kept for excessive caution
+        run_hook('receive_list_menu_for_email_plugin', menu, addr, self.parent.get_request_URI(addr), self.parent.receive_qr, status) 
         menu.exec_(self.viewport().mapToGlobal(position))
