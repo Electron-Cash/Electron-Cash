@@ -392,8 +392,7 @@ class Plugin(BasePlugin):
         #window.update_invoices_list()
 
     @hook
-    def receive_list_menu_for_email_plugin(self, menu, addr, uri, qrcode, status):
-        window = menu.parentWidget().parent  # Grr. Electrum programmers overwrote parent() method.
+    def receive_list_menu_for_email_plugin(self, window, menu, addr, uri, qrcode, status):
         menu.addAction(_("Send via e-mail"), lambda: self.open_email_dialog(window, addr, uri, qrcode, status))      
 
     def open_email_dialog(self, window, addr, uri ,qrcode, status):
