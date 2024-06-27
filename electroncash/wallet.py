@@ -3417,7 +3417,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return status, conf, tx_hashes
 
     def make_payment_request(self, addr, amount, message, expiration=None, *,
-                             op_return=None, op_return_raw=None, payment_url=None, index_url=None):
+                             op_return=None, op_return_raw=None, payment_url=None, index_url=None, token_request=False):
         assert isinstance(addr, Address)
         if op_return and op_return_raw:
             raise ValueError("both op_return and op_return_raw cannot be specified as arguments to make_payment_request")
@@ -3429,7 +3429,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             'exp': expiration,
             'address': addr,
             'memo': message,
-            'id': _id
+            'id': _id,
+            'tokenreq': token_request
         }
         if payment_url:
             d['payment_url'] = payment_url + "/" + _id
@@ -3522,8 +3523,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.save_payment_requests()
         return True
 
-    def get_sorted_requests(self, config):
+    def get_sorted_requests(self, config, *, filter_asset: str = None):
+        # `filter_asset` may be either None to indicate no filter, 'token' to return only
+        # token requests, and any other value to return only BCH requests
         m = map(lambda x: self.get_payment_request(x, config), self.receive_requests.keys())
+        if filter_asset != None:
+            def is_request_for_asset(req, asset):
+                return (asset == 'token') == req.get('tokenreq', False)
+            m = filter(lambda x: is_request_for_asset(x, filter_asset), m)
         try:
             def f(x):
                 try:

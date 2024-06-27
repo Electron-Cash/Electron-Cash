@@ -617,11 +617,11 @@ class Address(namedtuple("AddressTuple", "hash kind")):
         if net is None: net = networks.net
         return self.to_full_string(self.FMT_UI, net=net)
 
-    def to_URI_components(self, *, net=None):
+    def to_URI_components(self, *, net=None, token=False):
         """Returns a (scheme, path) pair for building a URI."""
         if net is None: net = networks.net
         scheme = net.CASHADDR_PREFIX
-        path = self.to_ui_string(net=net)
+        path = self.to_token_string(net=net) if token else self.to_ui_string(net=net)
         return scheme, path
 
     def to_storage_string(self, *, net=None):

@@ -8,33 +8,28 @@
     android:orientation="vertical">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <TextView
             android:id="@+id/tvTitle"
             style="@style/DialogTitle"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
-            android:layout_marginLeft="24dp"
-            android:text="@string/request"
-            app:layout_constraintEnd_toStartOf="@+id/btnCopy"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            android:text="@string/request"/>
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btnCopy"
-            style="@style/FAB.Dialog.Title"
+        <Spinner
+            android:id="@+id/spnCoinType"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="24dp"
-            android:layout_marginRight="24dp"
-            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/ic_copy_24dp"
-            android:contentDescription="@string/copy_to" />
+            app:layout_constraintBaseline_toBaselineOf="@+id/tvTitle"
+            android:layout_gravity="right" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -53,6 +48,7 @@
                 android:id="@+id/imgQR"
                 android:layout_width="0dp"
                 android:layout_height="@dimen/qr_small"
+                android:layout_marginTop="12dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
@@ -79,15 +75,23 @@
                 app:layout_constraintStart_toEndOf="@+id/textView14"
                 tools:text="@string/test_address"/>
 
-            <include
-                android:id="@+id/incAmount"
-                layout="@layout/amount_box"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:id="@+id/bchRow"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                app:layout_constraintEnd_toEndOf="@+id/tvAddress"
-                app:layout_constraintStart_toStartOf="@+id/textView14"
-                app:layout_constraintTop_toBottomOf="@+id/tvAddress"/>
+                android:paddingBottom="12dp"
+                app:layout_constraintTop_toBottomOf="@+id/tvAddress">
+
+                <include
+                    android:id="@+id/incAmount"
+                    layout="@layout/amount_box"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    app:layout_constraintEnd_toEndOf="@+id/tvAddress"
+                    app:layout_constraintStart_toStartOf="@+id/textView14"/>
+
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/textView13"
@@ -95,15 +99,15 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="@string/description"
-                app:layout_constraintStart_toStartOf="@+id/incAmount"
-                app:layout_constraintTop_toBottomOf="@+id/incAmount"/>
+                app:layout_constraintStart_toStartOf="@+id/bchRow"
+                app:layout_constraintTop_toBottomOf="@+id/bchRow"/>
 
             <EditText
                 android:id="@+id/etDescription"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:singleLine="true"
-                app:layout_constraintEnd_toEndOf="@+id/incAmount"
+                app:layout_constraintEnd_toEndOf="@+id/bchRow"
                 app:layout_constraintHorizontal_bias="1.0"
                 app:layout_constraintStart_toStartOf="@+id/textView13"
                 app:layout_constraintTop_toBottomOf="@+id/textView13"

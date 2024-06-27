@@ -47,7 +47,9 @@ class BchTransactionsFragment : ListFragment(R.layout.bch_transactions, R.id.rvT
                 showDialog(this, SendDialog())
             } catch (e: ToastException) { e.show() }
         }
-        binding.btnRequest.setOnClickListener { showDialog(this, NewRequestDialog()) }
+        binding.btnRequest.setOnClickListener { showDialog(this, NewRequestDialog().apply {
+            arguments = Bundle().apply { putBoolean("token_request", false) }
+        }) }
     }
 
     override fun onCreateAdapter() = TransactionsAdapter(this)

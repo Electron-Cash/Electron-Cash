@@ -54,4 +54,20 @@
         <item>@string/fusions</item>
     </string-array>
 
+    <string-array name="request_type">
+        <item>@string/bch_requests</item>
+        <item>@string/token_requests</item>
+    </string-array>
+
+    <string-array name="coin_type">
+        <item>@string/bitcoin_cash</item>
+        <item>@string/cashtokens</item>
+    </string-array>
+
+    <string-array name="contact_type">
+        <item>@string/all_contacts</item>
+        <item>@string/bch_only</item>
+        <item>@string/token_aware_contacts</item>
+    </string-array>
+
 </resources>

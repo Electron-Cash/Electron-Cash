@@ -170,7 +170,7 @@ def _strip_cashacct_str(s: str) -> str:
     of the form name#number[.123]'''
     return cashacct.CashAcct.strip_emoji(s).replace(';', '').strip()
 
-def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, net=None):
+def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, net=None, token=False):
     is_cashacct = bool(isinstance(addr, str) and cashacct.CashAcct.parse_string(addr))
     if not isinstance(addr, Address) and not is_cashacct:
         return ""
@@ -179,7 +179,7 @@ def create_URI(addr, amount, message, *, op_return=None, op_return_raw=None, net
     if is_cashacct:
         scheme, path = cashacct.URI_SCHEME, _strip_cashacct_str(addr)
     else:
-        scheme, path = addr.to_URI_components(net=net)
+        scheme, path = addr.to_URI_components(net=net, token=token)
     query = []
     if amount:
         query.append('amount=%s'%format_satoshis_plain(amount))
