@@ -458,12 +458,13 @@ class Transaction:
         return d
 
     @classmethod
-    def from_io(cls, inputs, outputs, locktime=0, sign_schnorr=False, *, token_datas=None) -> object:
+    def from_io(cls, inputs, outputs, locktime=0, sign_schnorr=False, *, token_datas=None, version=1) -> object:
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
                    for output in outputs)
         self = cls(None)
         self._inputs = inputs
         self._outputs = outputs.copy()
+        self.version = version
         if token_datas is not None:
             assert all(isinstance(td, (token.OutputData, type(None)))
                        for td in token_datas)
@@ -638,27 +639,29 @@ class Transaction:
                 b += int_to_bytes(txin['value'], 8)
         return bytes(b)
 
-    def BIP69_sort(self):
+    def BIP69_sort(self, *, sort_outputs=True, sort_inputs=True):
         """See https://en.bitcoin.it/wiki/BIP_0069 plus https://github.com/bitjson/cashtokens"""
-        self._inputs.sort(key=lambda txin: (txin['prevout_hash'], txin['prevout_n']))
-        zipped_outputs = self.outputs(tokens=True)
+        if sort_inputs:
+            self._inputs.sort(key=lambda txin: (txin['prevout_hash'], txin['prevout_n']))
+        if sort_outputs:
+            zipped_outputs = self.outputs(tokens=True)
 
-        # sort by (nValue, scriptPubKey, token_data)
-        def output_as_tup(tup):
-            output, token_data = tup
-            typ, addr_like, value = output
-            if token_data is None:
-                # Ensure "None" sorts before any possible token tuple
-                tok_tup = (-1, -1, -1, b'', b'')
-            else:
-                tok_tup = (token_data.amount, int(token_data.has_nft()), token_data.get_capability(),
-                           token_data.commitment, token_data.id)
-            return value, self.pay_script(addr_like), tok_tup
+            # sort by (nValue, scriptPubKey, token_data)
+            def output_as_tup(tup):
+                output, token_data = tup
+                typ, addr_like, value = output
+                if token_data is None:
+                    # Ensure "None" sorts before any possible token tuple
+                    tok_tup = (-1, -1, -1, b'', b'')
+                else:
+                    tok_tup = (token_data.amount, int(token_data.has_nft()), token_data.get_capability(),
+                               token_data.commitment, token_data.id)
+                return value, self.pay_script(addr_like), tok_tup
 
-        zipped_outputs.sort(key=lambda tup: output_as_tup(tup))
-        # Unzip sorted outputs
-        self._outputs = [output for output, _ in zipped_outputs]
-        self._token_datas = [token_data for _, token_data in zipped_outputs]
+            zipped_outputs.sort(key=lambda tup: output_as_tup(tup))
+            # Unzip sorted outputs
+            self._outputs = [output for output, _ in zipped_outputs]
+            self._token_datas = [token_data for _, token_data in zipped_outputs]
         self.invalidate_common_sighash_cache()
         assert len(self._outputs) == len(self._token_datas)
 
@@ -775,31 +778,6 @@ class Transaction:
 
     def serialize_preimage(self, i, nHashType=0x00000041, use_cache=False) -> str:
         return self.serialize_preimage_bytes(i, nHashType, use_cache).hex()
-
-    def rpa_paycode_swap_dummy_for_destination(self, rpa_dummy_address, rpa_destination_address):
-        # This method was created for RPA - reusable payment address.
-        # It swaps out a dummy destination address for the rpa-generated address.
-        # WARNING: This is not recommended for use outside of RPA since it could
-        # be dangerous to change the destination address of a transaction.
-
-        # This method expects cashaddr strings for parameters rpa_dummy_address and rpa_destination_address
-
-        for i in range(len(self._outputs)):
-            # Grab the address of each output...
-            loop_iteration_output = self._outputs[i]
-            loop_iteration_address = loop_iteration_output[1]
-
-            # Compare the address to see if its the one we need to swap.  Note: 0 for the to_string = CASHADDR format
-            if loop_iteration_address.to_string(Address.FMT_CASHADDR) == rpa_dummy_address:
-                # Do the swap
-                rpa_replacement_address = Address.from_string(rpa_destination_address)
-                rpa_replacement_output = list(loop_iteration_output)
-                rpa_replacement_output[1] = rpa_replacement_address
-                self._outputs[i] = tuple(rpa_replacement_output)
-
-        # It is necessary to re-initialize "raw" so the output swap becomes part of transaction when it is later serialized
-        self.raw = None
-        return 0
 
     def serialize_bytes(self, estimate_size=False) -> bytes:
         nVersion = int_to_bytes(self.version, 4)

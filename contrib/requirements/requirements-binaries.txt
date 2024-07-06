@@ -1,4 +1,5 @@
-PyQt5>=5.12.3,<=5.15.2
+PyQt5>=5.12.3,<=5.15.9
+PyQt5-sip<=12.12.2
 pycryptodomex
 psutil
 

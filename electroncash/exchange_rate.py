@@ -260,7 +260,7 @@ class CoinGecko(ExchangeBase):
         return ['AED', 'ARS', 'AUD', 'BTD', 'BHD', 'BMD', 'BRL', 'BTC',
                 'CAD', 'CHF', 'CLP', 'CNY', 'CZK', 'DKK', 'ETH', 'EUR',
                 'GBP', 'HKD', 'HUF', 'IDR', 'ILS', 'INR', 'JPY', 'KRW',
-                'KWD', 'LKR', 'LTC', 'MMK', 'MXH', 'MYR', 'NOK', 'NZD',
+                'KWD', 'LKR', 'LTC', 'MMK', 'MXH', 'MXN', 'MYR', 'NOK', 'NZD',
                 'PHP', 'PKR', 'PLN', 'RUB', 'SAR', 'SEK', 'SGD', 'THB',
                 'TRY', 'TWD', 'USD', 'VEF', 'VND', 'XAG', 'XAU', 'XDR',
                 'ZAR']

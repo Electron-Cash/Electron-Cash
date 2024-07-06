@@ -14,7 +14,7 @@ expired.svg
     from https://commons.wikimedia.org/wiki/File:Oxygen480-emblems-emblem-important.svg
 
 openalias-logo.svg
-    Author: Axel Gembe <derago@gmail.com>
+    Author: Axel Gembe <axel@gembe.net>
     License: MIT (https://opensource.org/licenses/MIT)
     from https://github.com/openalias/openalias-website/blob/f0a919cfc236e923d566454c372e24566ce6c863/images/logo.png
 
@@ -52,7 +52,7 @@ unpaid.svg
     from https://commons.wikimedia.org/wiki/File:Out_of_date_clock_icon_2.svg
 
 seal.svg
-    Author: Axel Gembe <derago@gmail.com>
+    Author: Axel Gembe <axel@gembe.net>
     License: CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
 
 split.svg

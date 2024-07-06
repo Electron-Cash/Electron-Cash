@@ -303,8 +303,8 @@ def aes_decrypt_with_iv(key, iv, data):
         data = aes.feed(data) + aes.feed()  # empty aes.feed() flushes buffer
     try:
         return strip_PKCS7_padding(data)
-    except InvalidPadding:
-        raise InvalidPassword()
+    except InvalidPadding as e:
+        raise InvalidPassword() from e
 
 
 def EncodeAES_bytes(secret, msg):
@@ -346,8 +346,8 @@ def pw_decode(s, password):
         secret = Hash(password)
         try:
             d = to_string(DecodeAES_base64(secret, s), "utf8")
-        except Exception:
-            raise InvalidPassword()
+        except Exception as e:
+            raise InvalidPassword() from e
         return d
     else:
         return s

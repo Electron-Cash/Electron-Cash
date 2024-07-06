@@ -39,6 +39,7 @@ if ! [ -r config.status ] ; then
         --disable-libscrypt \
         --disable-module-dirauth \
         --disable-module-relay \
+        --enable-gpl \
         $EXTRA_FLAGS || fail "Could not configure $pkgname"
 fi
 make -j$WORKER_COUNT || fail "Could not build $pkgname"

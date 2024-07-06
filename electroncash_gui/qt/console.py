@@ -196,6 +196,7 @@ class Console(QtWidgets.QWidget):
 
         self.prompt = prompt
         self.history = []
+        self.history_index = 0
         self.namespace = {}
         self.construct = []
 
@@ -471,6 +472,14 @@ class Console(QtWidgets.QWidget):
                 self.setCommand(beginning + p)
             else:
                 self.show_completions(completions)
+
+    def history_tail(self, n: int):
+        """Provided for compat. with the new advanced_console"""
+        return self.history[-n:]
+
+    def set_history(self, hist):
+        self.history = hist
+        self.history_index = len(hist)
 
 
 welcome_message = '''

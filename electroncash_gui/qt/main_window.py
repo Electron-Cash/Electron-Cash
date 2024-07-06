@@ -33,6 +33,7 @@ import sys
 import threading
 import time
 import traceback
+import weakref
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 from collections import OrderedDict
@@ -743,11 +744,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         paytomany_menu = tools_menu.addAction(_("&Pay to Many"), self.paytomany, QKeySequence("Ctrl+M"))
 
-        if self.wallet.wallet_type == 'rpa':
-            tools_menu.addAction(
-                _("&Refresh RPA Transactions"),
-                self.wallet.fetch_rpa_mempool_txs_from_server)
-
         raw_transaction_menu = tools_menu.addMenu(_("&Load Transaction"))
         raw_transaction_menu.addAction(_("From &File") + "...", self.do_process_from_file)
         raw_transaction_menu.addAction(_("From &Text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
@@ -998,10 +994,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             server_height = self.network.get_server_height()
             server_lag = self.network.get_local_height() - server_height
             num_chains = len(self.network.get_blockchains())
+            if self.wallet.rpa_manager is not None:
+                rpa_is_busy = not self.wallet.rpa_manager.up_to_date
+            else:
+                rpa_is_busy = False
             # Server height can be 0 after switching to a new server
             # until we get a headers subscription request response.
             # Display the synchronizing message in that case.
-            if not self.wallet.up_to_date or server_height == 0:
+            if not self.wallet.up_to_date or server_height == 0 or rpa_is_busy:
                 text = _("Synchronizing...")
                 icon = icon_dict["status_waiting"]
                 status_tip = status_tip_dict["status_waiting"]
@@ -1075,8 +1075,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.update_tabs()
 
     def check_necessary_server_features(self):
-        if self.wallet.wallet_type == 'rpa' and 'rpa' not in self.network.features:
-            self.show_warning("The connected server does not support reusable addresses. Please connect to an RPA server.")
+        if not self.network or self.network.features is None:
+            return  # Suppress check if not really valid yet or no network
+        if self.wallet.wallet_type == 'rpa' and 'rpa' not in (self.network.features or {}):
+            self.show_warning(_("The connected server does not support reusable addresses."
+                                " Please connect to an RPA server."))
 
     @rate_limited(1.0, classlevel=True, ts_after=True) # Limit tab updates to no more than 1 per second, app-wide. Multiple calls across instances will be collated into 1 deferred series of calls (1 call per extant instance)
     def update_tabs(self):
@@ -2111,35 +2114,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def read_send_tab(self,get_raw=False):
 
-        # This is a wrapper function around the call the generate the rpa transaction.  We can pass this function to the waiting dialog.
-        def rpa_grind():
-            exit_event = threading.Event()
-
-            def update_prog_grinding(x):
-                if dlg:
-                    dlg.update_progress(int(x))
-                    if dlg.isHidden():
-                        exit_event.set()
-            self.raw_tx = rpa.paycode.generate_transaction_from_paycode(
-                self.wallet, self.config, full_unit_amount, paycode_string,
-                password=rpa_pwd, progress_callback=update_prog_grinding,
-                exit_event=exit_event
-            )
-            return
-
         isInvoice= False
 
         if self.payment_request and self.payment_request.has_expired():
             self.show_error(_('Payment request has expired'))
             return
         label = self.message_e.text()
+        raw_tx = None
         if not self.wallet.is_multisig() and self.payto_e.is_paycode:
             paycode_string = self.payto_e.text()[1:-1]
             if self.amount_e.get_amount() is None:
                 self.show_error(_('Invalid Amount'))
                 return
             full_unit_amount = self.amount_e.get_amount() / 100000000
-
 
             rpa_pwd = None
             if self.wallet.wallet_type == 'rpa':
@@ -2154,18 +2141,49 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         return
                     rpa_pwd = password
 
-            self.raw_tx = None
-            dlg = WaitingDialog(self, _('Please allow a few moments while Electron Cash creates your RPA transaction.  It needs to grind through many transaction signatures.'), rpa_grind, None, self.on_error, progress_bar=True, progress_min=0, progress_max=100)
-            val=dlg.exec_()
-            # If the user closes the waiting dialog, we should just exit.
-            if self.raw_tx == None:
-                return
+            paycode_raw_tx = dlg = None
+            exit_event = threading.Event()
+            rpa_coins = self.get_coins(isInvoice)  # Must do this in main thread
 
-            raw_tx = self.raw_tx
-            if raw_tx == 0:
+            def rpa_grind():
+                """ This is a wrapper function around the call the generate the rpa transaction.
+                We can pass this function to the waiting dialog. This runs in a sub-thread"""
+                nonlocal paycode_raw_tx
+
+                def update_prog_grinding(x):
+                    if dlg:
+                        dlg.update_progress(int(x))
+
+                paycode_raw_tx = rpa.paycode.generate_transaction_from_paycode(
+                    self.wallet, self.config, full_unit_amount, paycode_string,
+                    password=rpa_pwd, progress_callback=update_prog_grinding,
+                    exit_event=exit_event, coins=rpa_coins)
+
+            def got_exc(exc_info):
+                """ On exception encounters in above, this runs in the main thread """
+                exc = exc_info[1]
+                if isinstance(exc, InvalidPassword):
+                    self.show_error(str(exc_info[1]))  # Suppresses traceback to print_error
+                else:
+                    self.on_error(exc_info)  # Unexpected exception -- shows traceback plus an error window
+
+            dlg = WaitingDialog(self, _('Please allow a few moments while Electron Cash creates your RPA transaction.'
+                                        '  It needs to grind through many transaction signatures.'),
+                                rpa_grind, None, got_exc, progress_bar=True, progress_min=0, progress_max=100)
+            val = dlg.exec_()
+            if val != QDialog.DialogCode.Accepted:
+                # User cancel
+                self.print_error("User cancelled the paycode grind operation")
+                exit_event.set()  # tell rpa_paycode.generate_transaction_from_paycode to return early
+                return
+            # If the user closes the waiting dialog, we should just exit.
+            if paycode_raw_tx is None:
+                return
+            elif paycode_raw_tx == 0:
                 self.show_error("Problem creating paycode tx.")
                 return
-            unpacked_tx = Transaction.deserialize(Transaction(raw_tx))
+            raw_tx = paycode_raw_tx
+            unpacked_tx = Transaction.deserialize(Transaction(paycode_raw_tx))
             output_zero_address = unpacked_tx["outputs"][0]['address']
             # Set the pay-to field address as a tuple with index 0 and the rpa
             # output address
@@ -3083,14 +3101,39 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payment_request_error()
 
     def create_console_tab(self):
+        err_msg = ''
+        if self.config.cmdline_options.get("console2"):
+            try:
+                from .console2 import ConsoleWidget
+                self.console = console = ConsoleWidget()
+                if ColorScheme.dark_scheme:
+                    self.console.set_default_style("linux")
+                return console
+            except Exception as e:
+                stars = '*' * 10
+                err_msg = (f"{stars} WARNING! {stars}\n"
+                           f"Failed to start the advanced console, got exception: {e!r}\n\n"
+                           f"Be sure that the required modules are installed, by doing something like this from the"
+                           f" shell:\n$ python3 -m pip install ipython qtconsole --user\n\n"
+                           f"Or, alternatively, start Electron Cash without the --console2 and/or -C options.\n")
+
+        # Fallback to the old Electrum-style barebones console if above fails to import or is otherwise disabled
         from .console import Console
         self.console = console = Console(wallet=self.wallet)
+        if err_msg:
+            # Print the error message after a delay, to hopefully have it appear after server banner
+            weak_self = weakref.ref(self)
+
+            def show_msg():
+                slf = weak_self()
+                if slf:
+                    slf.console.showMessage(err_msg)
+            QTimer.singleShot(500, show_msg)
         return console
 
     def update_console(self):
         console = self.console
-        console.history = self.config.get("console-history",[])
-        console.history_index = len(console.history)
+        console.set_history(self.config.get("console-history",[]))
 
         console.updateNamespace({'wallet' : self.wallet,
                                  'network' : self.network,
@@ -3110,7 +3153,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             methods[m] = mkfunc(c._run, m)
 
         console.updateNamespace(methods)
-
 
     def create_status_bar(self):
 
@@ -4501,7 +4543,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # QR code reader selection
 
         qr_reader_combo = QComboBox()
-        qr_reader_label = HelpLabel(_('QR Reader'), '')
+        qr_reader_label = HelpLabel(
+            _('QR Reader:'),
+            _('Some QR readers work better than others, if you have difficulty scanning, try switching to another one.')
+            )
 
         qr_reader_combo.clear()
         qr_reader_combo.addItem(_("Default"), "default")
@@ -5106,7 +5151,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # cleanly from.  So we attempt to exit as cleanly as possible.
         try:
             self.config.set_key("is_maximized", self.isMaximized())
-            self.config.set_key("console-history", self.console.history[-50:], True)
+            self.config.set_key("console-history", self.console.history_tail(50), True)
         except (OSError, PermissionError) as e:
             self.print_error("unable to write to config (directory removed?)", e)
 

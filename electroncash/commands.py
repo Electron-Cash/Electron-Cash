@@ -375,6 +375,8 @@ class Commands:
         inputs = jsontx.get('inputs')
         outputs = jsontx.get('outputs')
         locktime = jsontx.get('locktime', 0)
+        locktime = jsontx.get('lockTime', locktime)
+        version = jsontx.get('version', 1)
         for txin in inputs:
             if txin.get('output'):
                 prevout_hash, prevout_n = txin['output'].split(':')
@@ -391,7 +393,7 @@ class Commands:
                 txin['num_sig'] = 1
 
         outputs = [(TYPE_ADDRESS, Address.from_string(x['address']), int(x['value'])) for x in outputs]
-        tx = Transaction.from_io(inputs, outputs, locktime=locktime, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
+        tx = Transaction.from_io(inputs, outputs, locktime=locktime, version=version, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
         tx.sign(keypairs)
         return tx.as_dict()
 
@@ -770,6 +772,8 @@ class Commands:
         """Retrieve a transaction. """
         if self.wallet and txid in self.wallet.transactions:
             tx = self.wallet.transactions[txid]
+        elif not self.daemon:
+            raise BaseException("Transaction not in wallet")
         else:
             raw = self.network.synchronous_get(('blockchain.transaction.get', [txid]))
             if raw:
@@ -1104,6 +1108,8 @@ def add_global_options(parser):
     group.add_argument("--scalenet", action="store_true", dest="scalenet", default=False, help="Use Scalenet")
     group.add_argument("--chipnet", action="store_true", dest="chipnet", default=False, help="Use Chipnet")
     group.add_argument("--regtest", action="store_true", dest="regtest", default=False, help="Use Regtest")
+    group.add_argument("-C", "--console2", action="store_true", dest="console2", default=False,
+                       help=_("Use the advanced dev console for the console tab (Qt only)"))
 
 def get_parser():
     # create main parser

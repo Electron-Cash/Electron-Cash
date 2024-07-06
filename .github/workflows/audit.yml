@@ -12,12 +12,28 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v3
+      - name: Merge requirements
+        # btchip-python is borked (and abandoned?)
+        run: >
+          cat contrib/deterministic-build/requirements-binaries.txt
+          contrib/deterministic-build/requirements-build-wine.txt
+          contrib/deterministic-build/requirements-hw.txt
+          contrib/deterministic-build/requirements-pip.txt
+          contrib/deterministic-build/requirements.txt
+          | grep -v btchip-python > requirements.txt
       - name: Run Audit
-        uses: pypa/gh-action-pip-audit@v1.0.5
+        uses: pypa/gh-action-pip-audit@v1.0.8
         with:
-          inputs: |
-            contrib/deterministic-build/requirements-binaries.txt
-            contrib/deterministic-build/requirements-build-wine.txt
-            contrib/deterministic-build/requirements-hw.txt
-            contrib/deterministic-build/requirements-pip.txt
-            contrib/deterministic-build/requirements.txt
+          inputs: requirements.txt
+          # PYSEC-2022-43012, PYSEC-2022-43017 and PYSEC-2023-228 are only at build time
+          # Will go away once setuptools, wheel and pip is bumped
+          # GHSA-wj6h-64fc-37mp is only for P-256 curve which isn't used in bitcoin
+          # GHSA-jjg7-2v4v-x38h is a minor issue that will be fixed on idna bump (>=3.7)
+          # GHSA-9wx4-h78v-vm56 is not applicable, fixed in requests >= 2.32.0
+          ignore-vulns: |
+            PYSEC-2022-43012
+            PYSEC-2022-43017
+            PYSEC-2023-228
+            GHSA-wj6h-64fc-37mp
+            GHSA-jjg7-2v4v-x38h
+            GHSA-9wx4-h78v-vm56

@@ -1698,7 +1698,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     if ddd is None:
                         dd[prevout_hash] = ddd = {}
                     ddd[prevout_n] = token_data
-                    self.print_error(f"Adding CashTokens txi: {tx_hash} -> {addr} -> {prevout_hash} -> {n} -> {token_data!r}")
+                    self.print_error(f"Adding CashTokens txi: {tx_hash} -> {addr} -> {prevout_hash} -> {prevout_n} -> {token_data!r}")
 
             def find_in_self_txo(prevout_hash: str, prevout_n: int) -> tuple:
                 """Returns a tuple of the (Address, value, tokenData) for a given
@@ -3019,6 +3019,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if self.wallet_type == 'rpa':
                 self.rpa_manager = RpaManager(self, network)
                 my_jobs.append(self.rpa_manager)
+            else:
+                self.rpa_manager = None
             network.add_jobs(my_jobs)
             self.cashacct.start(self.network)  # start cashacct network-dependent subsystem, nework.add_jobs, etc
         else:
@@ -4013,9 +4015,27 @@ class RpaWallet(ImportedWalletBase):
 
     def __init__(self, storage):
         Abstract_Wallet.__init__(self, storage)
+        self.seed_ts = storage.get('seed_ts')  # The timestamp the seed was created, if known (for default rpa_height)
         self.keystore_rpa_aux = None
-        self.rpa_height = 0
         self.rpa_payload = None
+
+    @property
+    def rpa_height(self) -> int:
+        height = self.storage.get('rpa_height')
+        if height is not None:
+            # we had a stored height to resume from
+            return height
+        else:
+            # we lack a stored height, use the seed_ts, if known, as a heuristic to start off from
+            if self.seed_ts is not None:
+                args = self.seed_ts,
+            else:
+                args = ()  # just use default which ends up being some height circa Dec 2023
+            return rpa.determine_best_rpa_start_height(*args)
+
+    @rpa_height.setter
+    def rpa_height(self, value: int):
+        self.storage.put('rpa_height', value)
 
     @classmethod
     def from_text(cls, storage, text, password=None):
@@ -4154,16 +4174,11 @@ class RpaWallet(ImportedWalletBase):
     def get_receiving_paycode(self):
         return rpa.generate_paycode(self, prefix_size="10")
 
-    def extract_private_keys_from_transaction(self,rawtx,password):
+    def extract_private_keys_from_transaction(self, rawtx, password):
         return rpa.extract_private_keys_from_transaction(self, rawtx, password)
 
-    def fetch_rpa_mempool_txs_from_server(self):
-        """This function is intended to be called when the clients wants
-        to check for new incoming RPA transactions from the mempool. """
-        self.rpa_manager.rpa_phase_1_mempool()
-
     def rebuild_history(self):
-        self.storage.put('rpa_height', 743000)  # ask from the user in later iterations
+        self.storage.put('rpa_height', rpa.determine_best_rpa_start_height())
         super(RpaWallet, self).rebuild_history()
 
 

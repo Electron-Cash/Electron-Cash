@@ -49,7 +49,7 @@ fi
 DOCKER_SUFFIX=ub2004
 
 info "Creating docker image ..."
-$SUDO docker build -t electroncash-appimage-builder-img-$DOCKER_SUFFIX \
+$SUDO docker build --progress plain -t electroncash-appimage-builder-img-$DOCKER_SUFFIX \
     -f contrib/build-linux/appimage/Dockerfile_$DOCKER_SUFFIX \
     --build-arg UBUNTU_MIRROR=$UBUNTU_MIRROR \
     contrib/build-linux/appimage \

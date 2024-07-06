@@ -869,7 +869,11 @@ class Network(util.DaemonThread):
     @staticmethod
     def get_index(method, params):
         """ hashable index for subscriptions and cache"""
-        return str(method) + (':' + str(params[0]) if params else '')
+        if params and isinstance(params, (list, tuple)):
+            params_part = str(params[0])
+        else:
+            params_part = ''
+        return str(method) + ':' + params_part
 
     def process_responses(self, interface):
         responses = interface.get_responses()
@@ -895,7 +899,7 @@ class Network(util.DaemonThread):
                 response['params'] = params
                 # Only once we've received a response to an addr subscription
                 # add it to the list; avoids double-sends on reconnection
-                if method == 'blockchain.scripthash.subscribe':
+                if method == 'blockchain.scripthash.subscribe' and params and isinstance(params, (list, tuple)):
                     self.subscribed_addresses.add(params[0])
             else:
                 if not response:  # Closed remotely / misbehaving
@@ -905,12 +909,13 @@ class Network(util.DaemonThread):
                 method = response.get('method')
                 params = response.get('params')
                 k = self.get_index(method, params)
-                if method == 'blockchain.headers.subscribe':
-                    response['result'] = params[0]
-                    response['params'] = []
-                elif method == 'blockchain.scripthash.subscribe':
-                    response['params'] = [params[0]]  # addr
-                    response['result'] = params[1]
+                if params and isinstance(params, (list, tuple)):  # Guard against 'dict' or empty params
+                    if method == 'blockchain.headers.subscribe':
+                        response['result'] = params[0]
+                        response['params'] = []
+                    elif method == 'blockchain.scripthash.subscribe':
+                        response['params'] = [params[0]]  # addr
+                        response['result'] = params[1]
                 callbacks = self.subscriptions.get(k, [])
 
             # update cache if it's a subscription

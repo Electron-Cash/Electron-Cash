@@ -131,6 +131,7 @@ class RequestList(MyTreeWidget):
             item = QTreeWidgetItem([date, address.to_ui_string(), '', message,
                                     amount_str, _(pr_tooltips.get(status,''))])
             item.setData(0, Qt.UserRole, address)
+            item.setData(1, Qt.UserRole, status)
             if signature is not None:
                 item.setIcon(2, QIcon(":icons/seal.svg"))
                 item.setToolTip(2, 'signed by '+ requestor)
@@ -146,6 +147,7 @@ class RequestList(MyTreeWidget):
             return
         self.setCurrentItem(item)  # sometimes it's not the current item.
         addr = item.data(0, Qt.UserRole)
+        status = item.data(1, Qt.UserRole)
         req = self.wallet.receive_requests[addr]
         column = self.currentColumn()
         column_title = self.headerItem().text(column)
@@ -155,5 +157,9 @@ class RequestList(MyTreeWidget):
         menu.addAction(_("Copy URI"), lambda: self.parent.view_and_paste('URI', '', self.parent.get_request_URI(addr)))
         menu.addAction(_("Save as BIP70 file"), lambda: self.parent.export_payment_request(addr))
         menu.addAction(_("Delete"), lambda: self.parent.delete_payment_request(addr))
+        # Original old list menu API, here for legacy reasons
         run_hook('receive_list_menu', menu, addr)
+        # New menu API specific to the email plugin
+        run_hook('receive_list_menu_for_email_plugin', self.parent, menu, addr,
+                 self.parent.get_request_URI(addr), self.parent.receive_qr, status)
         menu.exec_(self.viewport().mapToGlobal(position))

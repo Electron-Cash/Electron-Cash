@@ -153,6 +153,7 @@ setup(
     extras_require={
         'hardware': requirements_hw,
         'gui': requirements_binaries,
+        'console2': ['ipython', 'qtconsole'],  # For optional --console2 support in Qt GUI
         'all': requirements_hw + requirements_binaries,
     },
     packages=[

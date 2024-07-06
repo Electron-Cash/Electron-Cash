@@ -46,6 +46,7 @@ class AbstractNet:
     LEGACY_POW_RETARGET_BLOCKS = LEGACY_POW_TARGET_TIMESPAN // LEGACY_POW_TARGET_INTERVAL  # 2016 blocks
     BASE_UNITS = {'BCH': 8, 'mBCH': 5, 'bits': 2}
     DEFAULT_UNIT = "BCH"
+    RPA_START_HEIGHT = 0
 
 
 class MainNet(AbstractNet):
@@ -55,6 +56,7 @@ class MainNet(AbstractNet):
     ADDRTYPE_P2SH = 5
     CASHADDR_PREFIX = "bitcoincash"
     RPA_PREFIX = "paycode"
+    RPA_START_HEIGHT = 825000
     HEADERS_URL = "http://bitcoincash.com/files/blockchain_headers"  # Unused
     GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
     DEFAULT_PORTS = {'t': '50001', 's': '50002'}

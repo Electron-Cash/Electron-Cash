@@ -456,9 +456,9 @@ class Interface(util.PrintError):
             except Exception as e:
                 traceback.print_exc(file=sys.stderr)
 
-            if type(response) is not dict:
+            if not isinstance(response, dict):
                 # time to close this connection.
-                if type(response) is not None:
+                if response is not None:
                     self.print_error("received non-object type {}".format(type(response)))
                 # signal that this connection is done.
                 responses.append((None, None))
