@@ -23,12 +23,12 @@ try:
     from .clientbase import (TrezorClientBase, parse_path)
 
     from trezorlib.messages import (
-        RecoveryDeviceType, HDNodeType, HDNodePathType,
+        RecoveryDeviceInputMethod, HDNodeType, HDNodePathType,
         InputScriptType, OutputScriptType, MultisigRedeemScriptType,
         TxInputType, TxOutputType, TxOutputBinType, TransactionType, SignTx)
 
-    RECOVERY_TYPE_SCRAMBLED_WORDS = RecoveryDeviceType.ScrambledWords
-    RECOVERY_TYPE_MATRIX = RecoveryDeviceType.Matrix
+    RECOVERY_TYPE_SCRAMBLED_WORDS = RecoveryDeviceInputMethod.ScrambledWords
+    RECOVERY_TYPE_MATRIX = RecoveryDeviceInputMethod.Matrix
 
     from trezorlib.client import PASSPHRASE_ON_DEVICE
 
@@ -111,7 +111,7 @@ class TrezorPlugin(HW_PluginBase):
     libraries_URL = 'https://pypi.org/project/trezor/'
     minimum_firmware = (1, 5, 2)
     keystore_class = TrezorKeyStore
-    minimum_library = (0, 13, 8)
+    minimum_library = (0, 13, 9)
     maximum_library = (0, 14)
 
     DEVICE_IDS = (TREZOR_PRODUCT_KEY,)

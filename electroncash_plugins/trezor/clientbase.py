@@ -8,7 +8,7 @@ from electroncash.bitcoin import serialize_xpub
 
 from trezorlib.client import TrezorClient, PASSPHRASE_ON_DEVICE
 from trezorlib.exceptions import TrezorFailure, Cancelled, OutdatedFirmwareError, TrezorException
-from trezorlib.messages import WordRequestType, FailureType, RecoveryDeviceType, ButtonRequestType
+from trezorlib.messages import WordRequestType, FailureType, RecoveryDeviceInputMethod, ButtonRequestType
 import trezorlib.btc
 import trezorlib.device
 
@@ -326,7 +326,7 @@ class TrezorClientBase(PrintError):
         if recovery_type is None:
             return None
 
-        if recovery_type == RecoveryDeviceType.Matrix:
+        if recovery_type == RecoveryDeviceInputMethod.Matrix:
             return self._matrix_char
 
         step = 0

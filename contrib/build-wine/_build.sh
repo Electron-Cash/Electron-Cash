@@ -83,7 +83,8 @@ prepare_wine() {
 
         # Install Python
         info "Installing Python ..."
-        msifiles="core dev exe lib pip tools"
+        # dev needs to be after exe, otherwise there is a stack overflow in wine
+        msifiles="core exe dev lib pip tools"
 
         for msifile in $msifiles ; do
             info "Downloading $msifile..."
