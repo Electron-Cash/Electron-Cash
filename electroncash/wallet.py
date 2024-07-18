@@ -213,7 +213,7 @@ class TokenSendSpec:
     # All utxos here must *not* have 'token_data'.
     non_token_utxos: Dict[str, Dict[str, Any]]  # Dict of: utxo-name ("prevout_hash:prevout_n") -> utxo dict
 
-    # We spend send_fundible_amount and send_nfts from this set of utxos. All utxos here must have 'token_data'.
+    # We spend send_fungible_amount and send_nfts from this set of utxos. All utxos here must have 'token_data'.
     # Note that a utxo won't get picked up for sending necessarily if it appears in this dict. It's just the "pool"
     # of token-bearing utxos to use for the send_fungible_amount, send_nfts, edit_nfts, and mint_nfts fields below.
     token_utxos: Dict[str, Dict[str, Any]]  # utxo-name ("prevout_hash:n") -> utxo
