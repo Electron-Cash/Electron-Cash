@@ -3,7 +3,10 @@
     <string name="app_name">Electron Cash</string>
 
     <string name="test_address">qpzry9x8gf2tvdw0s3jn54khce6mua7lcw20ayyn</string>  <!-- Invalid address from cashaddr spec -->
+    <string name="test_category_id">126cac383a721b061cb604dca9a851b406fc5ff481575c25b7ddf3ef2064f15a</string>
     <string name="test_contact">Alice Robertson</string>
+    <string name="test_fee">1 sat/byte (0.00000483 BCH)</string>
+    <string name="test_nft_label">Minting NFT: 13371337</string>
     <string name="test_server_address">electron.example.com:50002</string>
     <string name="test_seed">legal winner thank year wave sausage worth useful legal winner
         thank yellow</string>  <!-- From BIP39 test vectors -->
@@ -28,6 +31,46 @@
         <item>@string/expired</item>
         <item>@string/Unknown</item>
         <item>@string/paid</item>
+    </string-array>
+
+    <string-array name="asset_type">
+        <item>@string/cashtokens</item>
+        <item>@string/addresses</item>
+    </string-array>
+
+    <string-array name="address_type">
+        <item>@string/type_all</item>
+        <item>@string/type_receiving</item>
+        <item>@string/type_change</item>
+    </string-array>
+
+    <string-array name="address_status">
+        <item>@string/status_all</item>
+        <item>@string/status_used</item>
+        <item>@string/status_funded</item>
+        <item>@string/status_unused</item>
+    </string-array>
+
+    <string-array name="transaction_type">
+        <item>@string/bch_transactions</item>
+        <item>@string/token_transactions</item>
+        <item>@string/fusions</item>
+    </string-array>
+
+    <string-array name="request_type">
+        <item>@string/bch_requests</item>
+        <item>@string/token_requests</item>
+    </string-array>
+
+    <string-array name="coin_type">
+        <item>@string/bitcoin_cash</item>
+        <item>@string/cashtokens</item>
+    </string-array>
+
+    <string-array name="contact_type">
+        <item>@string/all_contacts</item>
+        <item>@string/bch_only</item>
+        <item>@string/token_aware_contacts</item>
     </string-array>
 
 </resources>

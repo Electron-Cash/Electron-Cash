@@ -2,6 +2,7 @@ package org.electroncash.electroncash3
 
 import android.os.Bundle
 import android.view.View
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
@@ -58,13 +59,13 @@ abstract class ListFragment(fragLayout: Int, val rvId: Int) :
 }
 
 
-class ListAdapter<ModelType: ListItemModel, DialogType: DetailDialog> (
-    val listFragment: ListFragment, itemLayout: Int,
-    val newModel: (PyObject, PyObject) -> ModelType,
-    val newDialog: () -> DialogType
+open class ListAdapter<ModelType: ListItemModel, DialogType: DetailDialog> (
+    open val listFragment: ListFragment, itemLayout: Int,
+    open val newModel: (PyObject, PyObject) -> ModelType,
+    open val newDialog: () -> DialogType
 ) : BoundAdapter<ModelType>(itemLayout) {
 
-    var reversed = false
+    open var reversed = false
 
     fun submitPyList(wallet: PyObject, pyList: PyObject?) {
         if (pyList == null) {

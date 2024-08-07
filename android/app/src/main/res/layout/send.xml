@@ -1,148 +1,291 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <TextView
-            android:id="@+id/textView4"
-            android:layout_width="0dp"
+            android:id="@+id/tvTitle"
+            style="@style/DialogTitle"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
-            android:layout_marginLeft="24dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="24dp"
-            android:layout_marginRight="24dp"
-            android:text="@string/Pay_to"
-            app:layout_constraintEnd_toEndOf="parent"
+            android:text="@string/send"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <EditText
-            android:id="@+id/etAddress"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="4dp"
-            android:layout_marginRight="4dp"
-            android:inputType="textNoSuggestions"
-            android:singleLine="true"
-            app:layout_constraintEnd_toStartOf="@+id/btnContacts"
-            app:layout_constraintStart_toStartOf="@+id/textView4"
-            app:layout_constraintTop_toBottomOf="@+id/textView4"
-            tools:text="@string/test_address">
-            <requestFocus />
-        </EditText>
-
-        <!-- Bottom constraint keeps button aligned with text box before API 21 (see dimens.xml). -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btnContacts"
-            style="@style/FAB.Dialog"
+        <Spinner
+            android:id="@+id/spnCoinType"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:layout_constraintBottom_toBottomOf="@+id/etAddress"
-            app:layout_constraintEnd_toEndOf="@+id/textView4"
-            app:layout_constraintTop_toTopOf="@+id/etAddress"
-            app:srcCompat="@drawable/ic_person_24dp" />
-
-        <include
-            android:id="@+id/incAmount"
-            layout="@layout/amount_box"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginRight="8dp"
-            app:layout_constraintEnd_toStartOf="@id/barrierMax"
-            app:layout_constraintStart_toStartOf="@+id/etAddress"
-            app:layout_constraintTop_toBottomOf="@id/etAddress" />
-
-        <androidx.constraintlayout.widget.Barrier
-            android:id="@+id/barrierMax"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:barrierDirection="start"
-            app:constraint_referenced_ids="btnMax,tvMax"
-            tools:layout_editor_absoluteX="320dp" />
-
-        <TextView
-            android:id="@+id/tvMax"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/max"
-            app:layout_constraintEnd_toEndOf="@+id/btnContacts"
-            app:layout_constraintStart_toEndOf="@id/barrierMax"
-            app:layout_constraintTop_toTopOf="@+id/incAmount" />
-
-        <CheckBox
-            android:id="@+id/btnMax"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:layout_constraintBottom_toBottomOf="@+id/incAmount"
-            app:layout_constraintEnd_toEndOf="@+id/btnContacts"
-            app:layout_constraintStart_toEndOf="@id/barrierMax"
-            app:layout_constraintTop_toBottomOf="@+id/tvMax"
-            tools:checked="true" />
-
-        <TextView
-            android:id="@+id/textView7"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/mining_fee"
-            app:layout_constraintStart_toStartOf="@+id/incAmount"
-            app:layout_constraintTop_toBottomOf="@+id/incAmount" />
-
-        <SeekBar
-            android:id="@+id/sbFee"
-            style="@style/Widget.AppCompat.SeekBar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:layout_constraintEnd_toEndOf="@+id/tvFeeLabel"
-            app:layout_constraintStart_toStartOf="@+id/textView7"
-            app:layout_constraintTop_toBottomOf="@+id/tvFeeLabel"
-            tools:max="10"
-            tools:progress="1" />
-
-        <TextView
-            android:id="@+id/tvFeeLabel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginLeft="8dp"
-            android:gravity="end"
-            android:textAppearance="@style/Medium"
-            app:layout_constraintEnd_toEndOf="@+id/btnContacts"
-            app:layout_constraintStart_toEndOf="@+id/textView7"
-            app:layout_constraintTop_toTopOf="@+id/textView7"
-            tools:text="@string/sat_byte" />
-
-        <TextView
-            android:id="@+id/tvDescriptionLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/description"
-            app:layout_constraintStart_toStartOf="@+id/sbFee"
-            app:layout_constraintTop_toBottomOf="@+id/sbFee" />
-
-        <EditText
-            android:id="@+id/etDescription"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:singleLine="true"
-            app:layout_constraintEnd_toEndOf="@+id/sbFee"
-            app:layout_constraintHorizontal_bias="1.0"
-            app:layout_constraintStart_toStartOf="@+id/tvDescriptionLabel"
-            app:layout_constraintTop_toBottomOf="@+id/tvDescriptionLabel"
-            tools:text="@string/lorem" />
+            android:layout_marginEnd="24dp"
+            app:layout_constraintBaseline_toBaselineOf="@+id/tvTitle"
+            app:layout_constraintEnd_toEndOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-</ScrollView>
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/sendRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvSendLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/send" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvAddressLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/Pay_to" />
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="12dp">
+
+                <EditText
+                    android:id="@+id/etAddress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_toStartOf="@+id/btnContacts"
+                    android:inputType="textNoSuggestions"
+                    android:singleLine="true"
+                    tools:text="@string/test_address">
+
+                    <requestFocus />
+                </EditText>
+
+                <!-- Bottom constraint keeps button aligned with text box before API 21 (see dimens.xml). -->
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/btnContacts"
+                    style="@style/FAB.Dialog"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:contentDescription="@string/contacts"
+                    app:srcCompat="@drawable/ic_person_24dp" />
+
+            </RelativeLayout>
+
+            <LinearLayout
+                android:id="@+id/categoryRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingBottom="12dp">
+
+                <TextView
+                    android:id="@+id/tvCategoryLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/category" />
+
+                <Spinner
+                    android:id="@+id/spnCategory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/nftRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingBottom="12dp">
+
+                <TextView
+                    android:id="@+id/tvNftLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/nft" />
+
+                <Spinner
+                    android:id="@+id/spnNft"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+            </LinearLayout>
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/fungiblesRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="12dp">
+
+                <TextView
+                    android:id="@+id/tvFtAmountLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/Fungible_amount"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <EditText
+                    android:id="@+id/etFtAmount"
+                    style="@style/AmountBox"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:hint="0"
+                    android:singleLine="true"
+                    app:layout_constraintEnd_toStartOf="@id/barrierFtMax"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@+id/tvFtAmountLabel"
+                    tools:text="@string/test_value" />
+
+                <androidx.constraintlayout.widget.Barrier
+                    android:id="@+id/barrierFtMax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:barrierDirection="start"
+                    app:constraint_referenced_ids="btnFtMax,tvFtMax" />
+
+                <TextView
+                    android:id="@+id/tvFtMax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/max"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toEndOf="@id/barrierFtMax"
+                    app:layout_constraintTop_toTopOf="@+id/tvFtAmountLabel" />
+
+                <CheckBox
+                    android:id="@+id/btnFtMax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:layout_constraintBottom_toBottomOf="@+id/etFtAmount"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toEndOf="@id/barrierFtMax"
+                    app:layout_constraintTop_toBottomOf="@+id/tvFtMax"
+                    tools:checked="true" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/bchRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="12dp">
+
+                <include
+                    android:id="@+id/incAmount"
+                    layout="@layout/amount_box"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    app:layout_constraintEnd_toStartOf="@id/barrierMax"
+                    app:layout_constraintStart_toStartOf="parent" />
+
+                <androidx.constraintlayout.widget.Barrier
+                    android:id="@+id/barrierMax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:barrierDirection="start"
+                    app:constraint_referenced_ids="btnMax,tvMax"
+                    tools:layout_editor_absoluteX="320dp" />
+
+                <TextView
+                    android:id="@+id/tvMax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/max"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toEndOf="@id/barrierMax"
+                    app:layout_constraintTop_toTopOf="@+id/incAmount" />
+
+                <CheckBox
+                    android:id="@+id/btnMax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:layout_constraintBottom_toBottomOf="@+id/incAmount"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toEndOf="@id/barrierMax"
+                    app:layout_constraintTop_toBottomOf="@+id/tvMax"
+                    tools:checked="true" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/textView7"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_toStartOf="@+id/tvFeeLabel"
+                    android:text="@string/mining_fee" />
+
+                <TextView
+                    android:id="@+id/tvFeeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:layout_marginStart="8dp"
+                    android:gravity="end"
+                    android:textAppearance="@style/Medium"
+                    tools:text="@string/sats_per" />
+
+            </RelativeLayout>
+
+            <SeekBar
+                android:id="@+id/sbFee"
+                style="@style/Widget.AppCompat.SeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:paddingBottom="12dp"
+                tools:max="10"
+                tools:progress="1" />
+
+            <TextView
+                android:id="@+id/tvDescriptionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/description"
+                app:layout_constraintStart_toStartOf="@+id/sbFee"
+                app:layout_constraintTop_toBottomOf="@+id/sbFee" />
+
+            <EditText
+                android:id="@+id/etDescription"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                app:layout_constraintEnd_toEndOf="@+id/sbFee"
+                app:layout_constraintHorizontal_bias="1.0"
+                app:layout_constraintStart_toStartOf="@+id/tvDescriptionLabel"
+                app:layout_constraintTop_toBottomOf="@+id/tvDescriptionLabel"
+                tools:text="@string/lorem" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

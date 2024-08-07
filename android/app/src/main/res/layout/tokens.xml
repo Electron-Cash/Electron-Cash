@@ -3,32 +3,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:paddingTop="12dp">
+    android:layout_height="match_parent">
 
-    <Spinner
-        android:id="@+id/spnContactType"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:paddingStart="0dp"
-        android:paddingEnd="0dp"
-        android:textAlignment="center"
-        app:layout_constraintTop_toTopOf="parent" />
-
+    <!-- RecyclerView adjusted to be below the header -->
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvContacts"
+        android:id="@+id/rvTokens"
         style="@style/List.WithFAB"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/spnContactType"
+        app:layout_constraintTop_toTopOf="parent"
         tools:itemCount="3"
-        tools:listitem="@layout/contact_list" />
+        tools:listitem="@layout/token_list" />
 
+    <!-- FloatingActionButton -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnAdd"
         style="@style/FAB.Main"

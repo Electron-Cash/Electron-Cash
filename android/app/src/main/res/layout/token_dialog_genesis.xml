@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/etAmount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/Fungible_amount"
+        android:inputType="number"
+        android:maxLength="15" />
+
+    <CheckBox
+        android:id="@+id/cbNFT"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/is_nft" />
+
+    <RadioGroup
+        android:id="@+id/rgNFTCapabilities"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:id="@+id/rbNone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/none" />
+
+        <RadioButton
+            android:id="@+id/rbMutable"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/mutable" />
+
+        <RadioButton
+            android:id="@+id/rbMinting"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/minting" />
+    </RadioGroup>
+
+</LinearLayout>

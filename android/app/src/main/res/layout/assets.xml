@@ -8,7 +8,7 @@
     tools:context=".TransactionsFragment">
 
     <Spinner
-        android:id="@+id/spnTxType"
+        android:id="@+id/spnAssetType"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
@@ -19,10 +19,11 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/transactions_container"
+        android:id="@+id/assets_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginTop="4dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/spnTxType" />
+        app:layout_constraintTop_toBottomOf="@+id/spnAssetType" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

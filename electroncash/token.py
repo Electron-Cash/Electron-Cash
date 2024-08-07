@@ -260,7 +260,9 @@ def format_fungible_amount(x: int, decimal_point: int, num_zeros=0, precision=No
         integer_part = "0"
     if len(fract_part) < num_zeros:
         fract_part += "0" * (num_zeros - len(fract_part))
-    result = integer_part + dp + fract_part
+    result = integer_part
+    if len(fract_part) > 0:
+        result += dp + fract_part
     if whitespaces:
         result += " " * (decimal_point - len(fract_part))
         result = " " * (19 - len(result)) + result

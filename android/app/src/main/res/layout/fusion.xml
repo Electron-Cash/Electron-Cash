@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -9,9 +8,11 @@
     <TextView
         android:id="@+id/tvFusion"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:text="@string/list_of"
-        android:textAlignment="center" />
+        android:textAlignment="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvFusion"
@@ -21,7 +22,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/tvFusion"
         tools:itemCount="3"
         tools:listitem="@layout/fusion_list" />
@@ -31,19 +31,19 @@
         style="@style/FAB.Main"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:contentDescription="@string/enable_disable_fusion"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="@drawable/ic_not_started_24dp"
-        android:contentDescription="@string/enable_disable_fusion" />
+        app:srcCompat="@drawable/ic_not_started_24dp" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnFusionSettings"
-        style="@style/FAB.Main"
+        style="@style/FAB.Main.Inner"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:contentDescription="@string/enable_disable_fusion"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/btnActivateFusion"
-        app:srcCompat="@drawable/ic_settings_24dp"
-        android:contentDescription="@string/enable_disable_fusion" />
+        app:srcCompat="@drawable/ic_settings_24dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

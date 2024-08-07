@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -17,7 +16,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
-            android:layout_marginLeft="24dp"
             android:text="@string/transaction"
             app:layout_constraintEnd_toStartOf="@+id/btnExplore"
             app:layout_constraintStart_toStartOf="parent"
@@ -29,12 +27,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="@dimen/fab_dialog_margin_inner"
-            android:layout_marginRight="@dimen/fab_dialog_margin_inner"
+            android:contentDescription="@string/block_explorer"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/btnCopy"
             app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/ic_browser_24dp"
-            android:contentDescription="@string/block_explorer" />
+            app:srcCompat="@drawable/ic_browser_24dp" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btnCopy"
@@ -42,12 +39,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="24dp"
-            android:layout_marginRight="24dp"
+            android:contentDescription="@string/copy_to"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/ic_copy_24dp"
-            android:contentDescription="@string/copy_to" />
+            app:srcCompat="@drawable/ic_copy_24dp" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -68,14 +64,13 @@
                 android:layout_height="wrap_content"
                 android:text="@string/id"
                 app:layout_constraintBaseline_toBaselineOf="@+id/tvTxid"
-                app:layout_constraintStart_toStartOf="parent"/>
+                app:layout_constraintStart_toStartOf="parent" />
 
             <TextView
                 android:id="@+id/tvTxid"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:layout_marginLeft="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@+id/barrier5"
@@ -88,20 +83,19 @@
                 android:layout_height="wrap_content"
                 android:text="@string/amount"
                 app:layout_constraintBaseline_toBaselineOf="@+id/tvAmount"
-                app:layout_constraintStart_toStartOf="@+id/textView18"/>
+                app:layout_constraintStart_toStartOf="@+id/textView18" />
 
             <TextView
                 android:id="@+id/tvAmount"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="6dp"
                 android:layout_marginStart="6dp"
                 android:layout_marginTop="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@+id/barrier5"
                 app:layout_constraintTop_toBottomOf="@+id/tvTxid"
-                tools:text="@string/test_value_signed"/>
+                tools:text="@string/test_value_signed" />
 
             <TextView
                 android:id="@+id/textView14"
@@ -109,20 +103,19 @@
                 android:layout_height="wrap_content"
                 android:text="@string/date"
                 app:layout_constraintBaseline_toBaselineOf="@+id/tvTimestamp"
-                app:layout_constraintStart_toStartOf="@+id/textView19"/>
+                app:layout_constraintStart_toStartOf="@+id/textView19" />
 
             <TextView
                 android:id="@+id/tvTimestamp"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="6dp"
                 android:layout_marginStart="6dp"
                 android:layout_marginTop="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@+id/barrier5"
                 app:layout_constraintTop_toBottomOf="@+id/tvAmount"
-                tools:text="@string/test_timestamp"/>
+                tools:text="@string/test_timestamp" />
 
             <TextView
                 android:id="@+id/textView12"
@@ -130,14 +123,13 @@
                 android:layout_height="wrap_content"
                 android:text="@string/status"
                 app:layout_constraintBaseline_toBaselineOf="@+id/tvStatus"
-                app:layout_constraintStart_toStartOf="@+id/textView14"/>
+                app:layout_constraintStart_toStartOf="@+id/textView14" />
 
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:layout_marginLeft="6dp"
                 android:layout_marginTop="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -151,14 +143,13 @@
                 android:layout_height="wrap_content"
                 android:text="@string/size"
                 app:layout_constraintBaseline_toBaselineOf="@+id/tvSize"
-                app:layout_constraintStart_toStartOf="@+id/textView12"/>
+                app:layout_constraintStart_toStartOf="@+id/textView12" />
 
             <TextView
                 android:id="@+id/tvSize"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:layout_marginLeft="6dp"
                 android:layout_marginTop="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -172,20 +163,140 @@
                 android:layout_height="wrap_content"
                 android:text="@string/mining_fee"
                 app:layout_constraintBaseline_toBaselineOf="@+id/tvFee"
-                app:layout_constraintStart_toStartOf="@+id/textView16"/>
+                app:layout_constraintStart_toStartOf="@+id/textView16" />
 
             <TextView
                 android:id="@+id/tvFee"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:layout_marginLeft="6dp"
                 android:layout_marginTop="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@+id/barrier5"
                 app:layout_constraintTop_toBottomOf="@+id/tvSize"
-                tools:text="@string/sat_byte" />
+                tools:text="@string/test_fee" />
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/tokenDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/tvFee">
+
+                <TextView
+                    android:id="@+id/tokenDetailsLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/token_details"
+                    android:textAppearance="@style/Heading"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/categoryIdLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/category_id"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@+id/tokenDetailsLabel" />
+
+                <TextView
+                    android:id="@+id/categoryId"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="6dp"
+                    android:textAppearance="@style/Medium"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@+id/categoryIdLabel"
+                    tools:text="@string/test_category_id" />
+
+                <LinearLayout
+                    android:id="@+id/ftAmountBlock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    app:layout_constraintTop_toBottomOf="@+id/categoryId">
+
+                    <TextView
+                        android:id="@+id/fungibleAmountLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/Fungible_amount"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/fungibleAmount"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="6dp"
+                        android:textAppearance="@style/Medium"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@+id/fungibleAmountLabel"
+                        tools:text="@string/test_value_signed" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/nftsReceivedBlock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    app:layout_constraintTop_toBottomOf="@+id/ftAmountBlock">
+
+                    <TextView
+                        android:id="@+id/nftsReceivedLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/nfts_received"
+                        app:layout_constraintStart_toStartOf="parent" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvNftsReceived"
+                        style="@style/List"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        tools:itemCount="3"
+                        tools:listitem="@layout/nft_list" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/nftsSentBlock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    app:layout_constraintTop_toBottomOf="@+id/nftsReceivedBlock">
+
+                    <TextView
+                        android:id="@+id/nftsSentLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/nfts_sent"
+                        app:layout_constraintStart_toStartOf="parent" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvNftsSent"
+                        style="@style/List"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:layout_constraintTop_toBottomOf="@+id/nftsSentLabel"
+                        tools:itemCount="3"
+                        tools:listitem="@layout/nft_list" />
+
+                </LinearLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <TextView
                 android:id="@+id/textView22"
@@ -194,7 +305,7 @@
                 android:layout_marginTop="12dp"
                 android:text="@string/description"
                 app:layout_constraintStart_toStartOf="@+id/textView17"
-                app:layout_constraintTop_toBottomOf="@+id/tvFee" />
+                app:layout_constraintTop_toBottomOf="@+id/tokenDetails" />
 
             <EditText
                 android:id="@+id/etDescription"
@@ -205,7 +316,7 @@
                 app:layout_constraintHorizontal_bias="1.0"
                 app:layout_constraintStart_toStartOf="@+id/textView22"
                 app:layout_constraintTop_toBottomOf="@+id/textView22"
-                tools:text="@string/lorem"/>
+                tools:text="@string/lorem" />
 
             <androidx.constraintlayout.widget.Barrier
                 android:id="@+id/barrier5"

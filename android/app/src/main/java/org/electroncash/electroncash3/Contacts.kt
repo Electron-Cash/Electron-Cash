@@ -5,8 +5,14 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
 import com.google.zxing.integration.android.IntentIntegrator
@@ -21,11 +27,16 @@ class ContactsFragment : ListFragment(R.layout.contacts, R.id.rvContacts) {
     private var _binding: ContactsBinding? = null
     private val binding get() = _binding!!
 
+    class Model : ViewModel() {
+        val contactType = MutableLiveData<Int>().apply { setValue(0) }
+    }
+    val model: Model by viewModels()
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         super.onCreateView(inflater, container, savedInstanceState)
         _binding = ContactsBinding.inflate(LayoutInflater.from(context))
         return binding.root
@@ -40,13 +51,30 @@ class ContactsFragment : ListFragment(R.layout.contacts, R.id.rvContacts) {
         with (listModel) {
             trigger.addSource(daemonUpdate)
             trigger.addSource(settings.getBoolean("cashaddr_format"))
-            data.function = { guiContacts.callAttr("get_contacts", wallet)!! }
+            trigger.addSource(model.contactType)
+            data.function = { guiContacts.callAttr("get_contacts", wallet, model.contactType.value)!! }
         }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.btnAdd.setOnClickListener { showDialog(this, ContactDialog()) }
+        val spinner: Spinner = view.findViewById(R.id.spnContactType)
+        ArrayAdapter.createFromResource(activity!!, R.array.contact_type, android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+        }
+
+        spinner.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                model.contactType.setValue(position)
+
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) { }
+        }
     }
 
     override fun onCreateAdapter() =
@@ -61,13 +89,17 @@ class ContactModel(wallet: PyObject, val contact: PyObject) : ListItemModel(wall
     val addr by lazy {
         makeAddress(contact.get("address").toString())
     }
-    val addrUiString by lazy {
-        addr.callAttr("to_ui_string").toString()
+    val addrString by lazy {
+        val addrFormat = if (tokenaddr) "to_token_string" else "to_ui_string"
+        addr.callAttr(addrFormat).toString()
+    }
+    val tokenaddr by lazy {
+        contact.get("type").toString() == "tokenaddr"
     }
     override val dialogArguments by lazy {
         Bundle().apply {
             putString("name", name)
-            putString("address", addrUiString)
+            putString("address", addrString)
         }
     }
 }
@@ -112,7 +144,7 @@ class ContactDialog : DetailDialog() {
                 try {
                     showDialog(activity!!, SendDialog().apply {
                         arguments = Bundle().apply {
-                            putString("address", contact.addrUiString)
+                            putString("address", contact.addrString)
                         }
                     })
                     dismiss()
@@ -130,7 +162,7 @@ class ContactDialog : DetailDialog() {
         val contact = existingContact
         if (contact != null) {
             binding.etName.setText(contact.name)
-            binding.etAddress.setText(contact.addrUiString)
+            binding.etAddress.setText(contact.addrString)
         } else {
             binding.etName.requestFocus()
         }
@@ -182,9 +214,13 @@ class ContactDeleteDialog : AlertDialogFragment() {
 }
 
 
-fun makeContact(name: String, addr: String) =
-    libContacts.callAttr("Contact", name, makeAddress(addr).callAttr("to_storage_string"),
-                         "address")!!
+fun makeContact(name: String, addr: String): PyObject {
+    val addressType = if (isTokenAddress(addr)) "tokenaddr" else "address"
+    return libContacts.callAttr(
+        "Contact", name, makeAddress(addr).callAttr("to_storage_string"),
+        addressType
+    )!!
+}
 
 
 fun saveContacts(wallet: PyObject, contacts: PyObject) {

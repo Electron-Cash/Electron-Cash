@@ -8,7 +8,10 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.viewModels
@@ -19,8 +22,8 @@ import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
 import com.chaquo.python.PyObject.fromJava
 import com.google.zxing.integration.android.IntentIntegrator
-import org.electroncash.electroncash3.databinding.AmountBoxBinding
 import org.electroncash.electroncash3.databinding.SendBinding
+import kotlin.math.pow
 
 
 val libPaymentRequest by lazy { libMod("paymentrequest") }
@@ -41,8 +44,17 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             notifyIncomplete = false  // Only notify transactions which match the UI state.
             function = { it.invoke() }
         }
+        var tokenSend: Boolean = false
+        var hasNfts: Boolean = false
+        var hasFts: Boolean = false
     }
     val model: Model by viewModels()
+
+    class LabelWithId(val label: String, val id: String) {
+        override fun toString(): String {
+            return label
+        }
+    }
 
     // This is currently used by the sweep private keys command. In the future it could also be
     // used for coin selection.
@@ -67,6 +79,16 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val multisigType = libStorage.callAttr("multisig_type", daemonModel.walletType)
                 ?.toJava(IntArray::class.java)
             multisigType != null && multisigType[0] != 1
+        }
+    }
+
+    // Whether or not the dialog started up as a bch send or token send dialog
+    // (model.tokenSend reflects the current state)
+    val initialTokenSend by lazy {
+        if (arguments != null && arguments!!.containsKey("token_send")) {
+            arguments!!.getBoolean("token_send")
+        } else {
+            false
         }
     }
 
@@ -95,16 +117,143 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SendBinding.inflate(LayoutInflater.from(context))
+        buildCategorySpinner()
+        buildNftSpinner()
         if (!unbroadcasted) {
-            builder.setTitle(R.string.send)
-                .setPositiveButton(R.string.send, null)
+            builder.setPositiveButton(R.string.send, null)
         } else {
             builder.setTitle(R.string.sign_transaction)
                 .setPositiveButton(R.string.sign, null)
+            binding.tvTitle.visibility = View.GONE
+            binding.header.removeView(binding.spnCoinType)
+            binding.sendRow.addView(binding.spnCoinType)
+            binding.sendRow.visibility = View.VISIBLE
         }
         builder.setView(binding.root)
             .setNegativeButton(android.R.string.cancel, null)
             .setNeutralButton(R.string.scan_qr, null)
+    }
+
+    private fun buildCategorySpinner() {
+        val categoryLabels = getCategoryOptions()
+        val spnAdapter = ArrayAdapter(context!!, android.R.layout.simple_spinner_dropdown_item,
+                                      categoryLabels)
+        binding.spnCategory.setAdapter(spnAdapter)
+        binding.spnCategory.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                val category = getSelectedCategory()
+                val nftLabels = getNftOptions(category)
+                val newAdapter = ArrayAdapter(
+                    context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
+                binding.spnNft.setAdapter(newAdapter)
+                model.hasNfts = nftLabels.size > 1
+                var fungibles = "0"
+                category?.let {
+                    fungibles = it.fungibles
+                }
+                model.hasFts = fungibles != "0"
+                binding.etFtAmount.setText("")
+                val decimals = if (category == null) 0 else {
+                    guiTokens.callAttr("get_token_decimals", category.id).toInt()
+                }
+                var hint = "0"
+                if (decimals > 0) {
+                    hint += "." + "0".repeat(decimals)
+                }
+                binding.etFtAmount.setHint(hint)
+                refreshTx()
+                updateUI()
+
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    class Category(val id: String, val name: String, val fungibles: String,
+                   val nfts: ArrayList<NFT>)
+
+    private fun getCategoryOptions(): ArrayList<LabelWithId> {
+        val options = ArrayList<LabelWithId>()
+        options.add(LabelWithId(getString(R.string.please_select), ""))
+        val tokens = guiTokens.callAttr("get_tokens", wallet)!!
+        for (token in tokens.asList()) {
+            val tokenMap: Map<String, PyObject> = token.asMap().mapKeys { it.key.toString() }
+            val tokenName = tokenMap["tokenName"].toString()
+            val tokenId = tokenMap["tokenId"].toString()
+            options.add(LabelWithId(tokenName, tokenId))
+        }
+        return options
+    }
+
+    private fun getSelectedCategory(): Category? {
+        val selectedOption = binding.spnCategory.selectedItem as LabelWithId
+        val categoryId = selectedOption.id
+        return getCategoriesDetails(categoryId)[categoryId]
+    }
+
+    private fun getNftOptions(category: Category?): ArrayList<LabelWithId> {
+        val options = ArrayList<LabelWithId>()
+        options.add(LabelWithId(getString(R.string.none), ""))
+        category?.let {
+            for (nft in it.nfts) {
+                options.add(LabelWithId(nft.label, nft.utxoId))
+            }
+        }
+        return options
+    }
+
+    private fun getCategoriesDetails(categoryIdFilter: String = ""): HashMap<String, Category> {
+        val categories = HashMap<String, Category>()
+        val tokens = guiTokens.callAttr("get_tokens", wallet,
+                                        Kwarg("category_id_filter", categoryIdFilter))!!
+        for (token in tokens.asList()) {
+            val tokenMap: Map<String, PyObject> = token.asMap().mapKeys { it.key.toString() }
+            val categoryId = tokenMap["tokenId"].toString();
+            val nftList = tokenMap["nftDetails"]!!.asList().map { it.asList().map{ it.toString() } }
+            val nfts = ArrayList<NFT>()
+            for (nft in nftList) {
+                nfts.add(NFT(nft[0], nft[1], nft[2]))
+            }
+            val category = Category(
+                categoryId,
+                tokenMap["name"].toString(),
+                tokenMap["amount"]!!.toString(),
+                nfts)
+            categories[categoryId] = category
+        }
+        return categories
+    }
+
+    private fun buildNftSpinner() {
+        val nftArray = ArrayList<String>()
+        val spnAdapter = ArrayAdapter(context!!, android.R.layout.simple_spinner_dropdown_item,
+                                      nftArray)
+        binding.spnNft.setAdapter(spnAdapter)
+        binding.spnNft.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                refreshTx()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+    }
+
+    private fun setMaxFungibleAmount() {
+        val category = getSelectedCategory()
+        var amount: String = "0"
+        category?.let {
+            amount = it.fungibles
+        }
+        try {
+            settingAmount = true
+            binding.etFtAmount.setText(amount)
+            binding.etFtAmount.setSelection(binding.etFtAmount.text.length)
+        } finally {
+            settingAmount = false
+        }
     }
 
     override fun onShowDialog() {
@@ -129,6 +278,19 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         binding.btnMax.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 setAmount(null)
+            }
+            refreshTx()
+        }
+
+        binding.etFtAmount.addAfterTextChangedListener {
+            if (!settingAmount) {
+                binding.btnFtMax.isChecked = false
+            }
+            refreshTx()
+        }
+        binding.btnFtMax.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                setMaxFungibleAmount()
             }
             refreshTx()
         }
@@ -189,6 +351,30 @@ class SendDialog : TaskLauncherDialog<Unit>() {
              dialog.getButton(AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
         }
 
+        val spinner: Spinner = binding.spnCoinType
+        ArrayAdapter.createFromResource(
+            activity!!,
+            R.array.coin_type,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+        }
+        spinner.setSelection(if (model.tokenSend) 1 else 0)
+        spinner.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>, view: View?,
+                position: Int, id: Long
+            ) {
+                model.tokenSend = (position == 1)
+                updateUI()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+        updateUI()
+
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
         model.tx.observe(this, Observer { onTx(it) })
     }
@@ -201,7 +387,20 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 amountBox.requestFocus()
             }
         }
+        model.tokenSend = initialTokenSend
+        binding.spnCoinType.setSelection(if (model.tokenSend) 1 else 0)
         refreshTx()
+    }
+
+    private fun updateUI() {
+        binding.tvAddressLabel.setText(if (model.tokenSend) R.string.Send_to else R.string.Pay_to)
+        val showIf = fun(view: View, condition: Boolean) {
+            view.visibility = if (condition) View.VISIBLE else View.GONE
+        }
+        showIf(binding.bchRow, !model.tokenSend)
+        showIf(binding.categoryRow, model.tokenSend)
+        showIf(binding.nftRow, model.tokenSend && model.hasNfts)
+        showIf(binding.fungiblesRow, model.tokenSend && model.hasFts)
     }
 
     val feeSpb: Int
@@ -209,8 +408,15 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     fun refreshTx() {
         if (arguments?.containsKey("txHex") != true) {
+            val selectedCategory = binding.spnCategory.selectedItem as LabelWithId?
+            val categoryId = selectedCategory?.id ?: ""
+            val selectedNft = binding.spnNft.selectedItem as LabelWithId?
+            val nftId = selectedNft?.id ?: ""
+            val ftAmountStr = binding.etFtAmount.text.toString()
             model.tx.refresh(TxArgs(wallet, model.paymentRequest, binding.etAddress.text.toString(),
-                amountBox.amount, binding.btnMax.isChecked, inputs))
+                amountBox.amount, binding.btnMax.isChecked, inputs,
+                categoryId, ftAmountStr, nftId,
+                model.tokenSend, model.hasNfts, model.hasFts, feeSpb * 1000))
         }
     }
 
@@ -235,6 +441,10 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
     }
 
+    fun setAddress(address: String) {
+        binding.etAddress.setText(address)
+    }
+
     fun setFeeLabel(tx: PyObject? = null): Int {
         val fee = tx?.callAttr("get_fee")?.toInt()
         val spb = if (fee != null) fee / tx.callAttr("estimated_size").toInt()
@@ -247,38 +457,101 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         return spb
     }
 
-    class TxArgs(val wallet: PyObject, val pr: PyObject?, val addrStr: String,
-                 val amount: Long?, val max: Boolean, val inputs: PyObject?) {
-        fun invoke(): TxResult {
-            var isDummy = false
-            val outputs: PyObject
-            if (pr != null) {
-                outputs =  pr.callAttr("get_outputs")
-            } else {
-                val addr = try {
-                    makeAddress(addrStr)
-                } catch (e: ToastException) {
-                    isDummy = true
-                    wallet.callAttr("dummy_address")
-                }
-                if (amount == null && !max) {
-                    return TxResult(ToastException(R.string.Invalid_amount))
-                }
-                val output = py.builtins.callAttr(
-                    "tuple", arrayOf(libBitcoin.get("TYPE_ADDRESS"), addr,
-                                     if (max) "!" else amount))
-                outputs = py.builtins.callAttr("list", arrayOf(output))
-            }
+    enum class AddressType {
+        CASH, TOKEN, DUMMY
+    }
 
-            var inputs = this.inputs ?:
-                         wallet.callAttr("get_spendable_coins", null,daemonModel.config,
-                                         Kwarg("isInvoice", pr != null))
-            val fusion = daemonModel.daemon.get("plugins")!!.callAttr("find_plugin", "fusion")
-            fusion.callAttr("spendable_coin_filter", daemonModel.wallet, inputs)
+    class TxArgs(val wallet: PyObject, val pr: PyObject?, val addrStr: String,
+                 val amount: Long?, val max: Boolean, val inputs: PyObject?,
+                 val categoryId: String, val fungibleAmountStr: String, val nft: String,
+                 val isTokenSend: Boolean, val hasNfts: Boolean, val hasFts: Boolean,
+                 val feePerKb: Int) {
+
+
+        private fun getAddress(): Pair<PyObject, AddressType> {
             return try {
-                TxResult(wallet.callAttr("make_unsigned_transaction", inputs, outputs,
-                                         daemonModel.config, Kwarg("sign_schnorr", signSchnorr())),
-                         isDummy)
+                val address = makeAddress(addrStr)
+                val type = if (isTokenAddress(addrStr)) {
+                    AddressType.TOKEN
+                } else {
+                    AddressType.CASH
+                }
+                Pair(address, type)
+            } catch (e: ToastException) {
+                Pair(wallet.callAttr("dummy_address"), AddressType.DUMMY)
+            }
+        }
+
+        private fun hasFractionalFTs(amountStr: String, categoryId: String): Boolean {
+            if (amountStr.toDoubleOrNull() !in setOf(null, 0.0)) {
+                val amount = amountStr.toDouble()
+                val decimals = guiTokens.callAttr("get_token_decimals", categoryId).toInt()
+                val units = amount * 10.0.pow(decimals)
+                val subunits = units % 1
+                return subunits != 0.0
+            }
+            return false
+        }
+
+        fun invoke(): TxResult {
+            return try {
+                val addressType: AddressType
+                val transaction: PyObject?
+                if (isTokenSend) {
+                    val hasFungible = fungibleAmountStr.toDoubleOrNull() !in setOf(null, 0.0)
+                    if (categoryId.isEmpty()) {
+                        return TxResult(ToastException(R.string.please_select_a))
+                    } else if (nft.isEmpty() && !hasFungible) {
+                        return TxResult(ToastException(
+                            if (hasNfts && hasFts) {
+                                R.string.please_choose_an
+                            } else if (hasNfts) {
+                                R.string.please_select_an
+                            } else {
+                                R.string.please_choose_a_fungible
+                            }
+                        ))
+                    } else if (hasFractionalFTs(fungibleAmountStr, categoryId)) {
+                        return TxResult(ToastException(R.string.too_many_fungible))
+                    } else {
+                        val (toAddress, type) = getAddress()
+                        addressType = type
+                        transaction = guiTokens.callAttr(
+                            "make_tx", wallet, daemonModel.config, toAddress,
+                            feePerKb, categoryId, fungibleAmountStr, nft
+                        )
+                    }
+                } else {
+                    val inputs = this.inputs ?: wallet.callAttr(
+                        "get_spendable_coins", null, daemonModel.config,
+                        Kwarg("isInvoice", pr != null)
+                    )
+                    val fusion = daemonModel.daemon.get("plugins")!!.callAttr("find_plugin", "fusion")
+                    fusion.callAttr("spendable_coin_filter", daemonModel.wallet, inputs)
+                    val outputs: PyObject
+                    if (pr != null) {
+                        outputs = pr.callAttr("get_outputs")
+                        addressType = AddressType.DUMMY
+                    } else {
+                        if (amount == null && !max) {
+                            return TxResult(ToastException(R.string.Invalid_amount))
+                        }
+                        val (toAddress, type) = getAddress()
+                        addressType = type
+                        val output = py.builtins.callAttr(
+                            "tuple", arrayOf(
+                                libBitcoin.get("TYPE_ADDRESS"), toAddress,
+                                if (max) "!" else amount
+                            )
+                        )
+                        outputs = py.builtins.callAttr("list", arrayOf(output))
+                    }
+                    transaction = wallet.callAttr(
+                        "make_unsigned_transaction", inputs, outputs,
+                        daemonModel.config, Kwarg("sign_schnorr", signSchnorr())
+                    )
+                }
+                TxResult(transaction, addressType)
             } catch (e: PyException) {
                 TxResult(if (e.message!!.startsWith("NotEnoughFunds"))
                          ToastException(R.string.insufficient_funds) else e)
@@ -286,9 +559,9 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
     }
 
-    class TxResult(val tx: PyObject?, val isDummy: Boolean = false,
+    class TxResult(val tx: PyObject?, val addressType: AddressType = AddressType.CASH,
                    val error: Throwable? = null) {
-        constructor(error: Throwable) : this(null, false, error)
+        constructor(error: Throwable) : this(null, AddressType.TOKEN, error)
         fun get() = tx ?: throw error!!
     }
 
@@ -416,15 +689,18 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     override fun onPostExecute(result: Unit) {
         if (arguments != null && arguments!!.containsKey("sweepKeypairs")) {
-            toast(R.string.payment_sent)
+            toast(if (model.tokenSend) R.string.tokens_sent else R.string.payment_sent)
             closeDialogs(this)
         } else {
             try {
                 // Verify the transaction is valid before asking for a password.
                 val txResult = model.tx.value!!
-                if (txResult.isDummy) throw ToastException(R.string.Invalid_address)
+                when (txResult.addressType) {
+                    AddressType.CASH -> throw ToastException(R.string.not_a_cashtoken)
+                    AddressType.DUMMY -> throw ToastException(R.string.Invalid_address)
+                    AddressType.TOKEN -> {}
+                }
                 txResult.get()   // May throw ToastException.
-
                 showDialog(this, SendPasswordDialog().apply { arguments = Bundle().apply {
                     putString("description", this@SendDialog.binding.etDescription.text.toString())
                 }})
@@ -478,7 +754,11 @@ class SendContactsDialog : MenuDialog() {
 
     val sendDialog by lazy { targetFragment as SendDialog }
     val contacts: List<PyObject> by lazy {
-        guiContacts.callAttr("get_contacts", sendDialog.wallet).asList()
+        val typeFilter = if (sendDialog.model.tokenSend) 2 else 0
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, typeFilter).asList()
+    }
+    val hasAnyContacts: Boolean by lazy {
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, 0).asList().isNotEmpty()
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder, menu: Menu) {
@@ -490,15 +770,25 @@ class SendContactsDialog : MenuDialog() {
 
     override fun onShowDialog() {
         if (contacts.isEmpty()) {
-            toast(R.string.you_dont_have_any_contacts)
+            toast (if (hasAnyContacts) {
+                R.string.you_dont_have_any_token
+            } else {
+                R.string.you_dont_have_any_contacts
+            })
             dismiss()
         }
     }
 
     override fun onMenuItemSelected(item: MenuItem) {
-        val address = makeAddress(contacts.get(item.itemId).get("address").toString())
+        val contact = contacts[item.itemId]
+        val addressFormat = if (contact["type"].toString() == "tokenaddr") {
+            "to_token_string"
+        } else {
+            "to_ui_string"
+        }
+        val address = makeAddress(contact["address"].toString())
         with (sendDialog) {
-            binding.etAddress.setText(address.callAttr("to_ui_string").toString())
+            setAddress(address.callAttr(addressFormat).toString())
             amountBox.requestFocus()
         }
     }
@@ -529,7 +819,7 @@ class SendPasswordDialog : PasswordDialog<Unit>() {
     override fun onPostExecute(result: Unit) {
         closeDialogs(sendDialog)
         if (!sendDialog.unbroadcasted) {
-            toast(R.string.payment_sent, Toast.LENGTH_SHORT)
+            toast(if (sendDialog.model.tokenSend) R.string.tokens_sent else R.string.payment_sent, Toast.LENGTH_SHORT)
         } else {
             showDialog(this, SignedTransactionDialog().apply { arguments = Bundle().apply {
                 putString("txHex", tx.toString())

@@ -6,47 +6,45 @@
     <data>
         <variable
             name="model"
-            type="org.electroncash.electroncash3.ContactModel"/>
+            type="org.electroncash.electroncash3.ContactModel" />
     </data>
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        style="@style/Clickable"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        style="@style/Clickable">
+        android:layout_height="wrap_content">
 
         <TextView
             android:id="@+id/tvName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:layout_marginLeft="16dp"
-            android:layout_marginRight="16dp"
             android:layout_marginStart="16dp"
             android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
             android:text="@{model.name}"
             android:textAppearance="@style/Heavy"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            tools:text="@string/test_contact"/>
+            tools:text="@string/test_contact" />
 
         <TextView
             android:id="@+id/tvAddress"
             style="@style/Address"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
             android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp"
             android:singleLine="true"
-            android:text="@{model.addrUiString}"
+            android:text="@{model.addrString}"
             android:textAppearance="@style/Medium"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@+id/tvName"
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="@+id/tvName"
             app:layout_constraintTop_toBottomOf="@+id/tvName"
-            tools:text="@string/test_address"/>
+            tools:text="@string/test_address" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>
