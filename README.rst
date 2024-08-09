@@ -27,7 +27,7 @@ Electron Cash - Lightweight Bitcoin Cash client
 Getting started
 ===============
 
-**Note: If running from source, Python 3.7 or above is required to run Electron Cash.** If your system lacks Python 3.7,
+**Note: If running from source, Python 3.8 or above is required to run Electron Cash.** If your system lacks Python 3.8,
 you have other options, such as the `AppImage / binary releases <https://github.com/Electron-Cash/Electron-Cash/releases/>`_
 or running from source using `pyenv` (see section `Running from source on old Linux`_ below).
 
@@ -76,7 +76,7 @@ If you still have problems connecting to your Nano S please have a look at this
 Development version
 ===================
 
-Check your python version >= 3.7, and install pyqt5, as instructed above in the
+Check your python version >= 3.8, and install pyqt5, as instructed above in the
 `Getting started`_ section above or `Running from source on old Linux`_ section below.
 
 If you are on macOS, see the `Running from source on macOS`_ section below.
@@ -137,7 +137,7 @@ Running from source on macOS
 You need to install **either** `MacPorts <https://www.macports.org>`_  **or** `HomeBrew <https://www.brew.sh>`_.  Follow the instructions on either site for installing (Xcode from `Apple's developer site <https://developer.apple.com>`_ is required for either).
 
 1. After installing either HomeBrew or MacPorts, clone this repository and switch to the directory: ``git clone https://github.com/Electron-Cash/Electron-Cash && cd Electron-Cash``
-2. Install python 3.7 or later. For brew: ``brew install python3`` or if using MacPorts: ``sudo port install python311``
+2. Install python 3.8 or later. For brew: ``brew install python3`` or if using MacPorts: ``sudo port install python311``
 3. Install PyQt5: ``python3 -m pip install --user pyqt5``
 4. Install Electron Cash requirements: ``python3 -m pip install --user -r contrib/requirements/requirements.txt``
 5. Compile libsecp256k1 (optional, yet highly recommended): ``./contrib/make_secp``.
