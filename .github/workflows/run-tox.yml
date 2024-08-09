@@ -15,13 +15,11 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
         exclude:
             # Only use the python version we package for macos/win
             # Better exclude handling would be nice
             # (https://github.com/orgs/community/discussions/7835)
-          - os: macos-latest
-            python-version: '3.7'
           - os: macos-latest
             python-version: '3.8'
           - os: macos-latest
