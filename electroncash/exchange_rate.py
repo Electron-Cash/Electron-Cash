@@ -135,6 +135,8 @@ class ExchangeBase(PrintError):
                     # Paranoia: No data; abort early rather than write out an
                     # empty file
                     raise RuntimeWarning(f"received empty history for {ccy}")
+                if not cached_history:
+                    cached_history = {}
                 cached_history.update(new_history)
                 self._cache_historical_rates(cached_history, ccy, cache_dir)
             except Exception as e:
