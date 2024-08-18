@@ -568,5 +568,9 @@
     ],
     "BitstampYadio": [
     "ARS"
+    ],
+     "YahooFinance": [
+    "AUD",
+    "USD"
     ]
 }

@@ -275,6 +275,37 @@ class CoinGecko(ExchangeBase):
         return dict([(dt.utcfromtimestamp(h[0]/1000).strftime('%Y-%m-%d'), h[1])
                      for h in history['prices']])
 
+class YahooFinance(ExchangeBase):
+	
+    # Current price not easily available from YahooFinance, so we get from CoinGecko instead
+    def get_rates(self, ccy):
+        json = self.get_json('api.coingecko.com', '/api/v3/coins/bitcoin-cash?localization=False&sparkline=false')
+        prices = json["market_data"]["current_price"]
+        return dict([(a[0].upper(),to_decimal(a[1])) for a in prices.items()])
+
+    def history_ccys(self):
+        return ['AUD', 'USD']
+
+    # Historical prices are OK though
+    def request_history(self, ccy):
+		# URL requires exact GMT epoch date with no time
+        gmt_epoch_date = int(time.time()) - (int(time.time()) % 86400)
+        path = '/v7/finance/download/BCH-{}?period1=1510272000&period2={}&interval=1d&events=history&includeAdjustedClose=true'.format(ccy, gmt_epoch_date)
+        print(path)
+        history = self.get_csv('query1.finance.yahoo.com', path)
+        
+        def safe_float(value):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0
+        # average of open,high,low,close prices. interpret garbage data as zero
+        return dict({
+            i['Date']: (safe_float(i.get('Open', 0)) + safe_float(i.get('High', 0)) + safe_float(i.get('Low', 0)) + safe_float(i.get('Close', 0))) / 4 
+            for i in history
+        })
+
+
 class BitstampYadio(ExchangeBase):
     def get_rates(self, ccy):
         json_usd = self.get_json('www.bitstamp.net', '/api/v2/ticker/bchusd')
