@@ -291,7 +291,6 @@ class YahooFinance(ExchangeBase):
 		# URL requires exact GMT epoch date with no time
         gmt_epoch_date = int(time.time()) - (int(time.time()) % 86400)
         path = '/v7/finance/download/BCH-{}?period1=1510272000&period2={}&interval=1d&events=history&includeAdjustedClose=true'.format(ccy, gmt_epoch_date)
-        print(path)
         history = self.get_csv('query1.finance.yahoo.com', path)
         
         def safe_float(value):
