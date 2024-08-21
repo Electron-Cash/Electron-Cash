@@ -1,8 +1,10 @@
 construct-classes==0.1.2 \
     --hash=sha256:72ac1abbae5bddb4918688713f991f5a7fb6c9b593646a82f4bf3ac53de7eeb5 \
     --hash=sha256:e82437261790758bda41e45fb3d5622b54cfbf044ceb14774af68346faf5e08e
-btchip-python==0.1.31 \
-    --hash=sha256:4167f3c6ea832dd189d447d0d7a8c2a968027671ae6f43c680192f2b72c39b2c
+# btchip-python 0.1.32 with a patch to fix a malformed dependency
+# See https://github.com/LedgerHQ/btchip-python/pull/54
+https://github.com/EchterAgo/btchip-python/archive/f65cca5dea1cae6031accc961b5754d02c52a106.tar.gz \
+    --hash=sha256:586f8ea4d48287c4b744b47dee031dbdaa3a7a2483ba49d3e87efc340177f52d
 click==7.1.2 \
     --hash=sha256:d2b5255c7c6349bc1bd1e59e08cd12acbbd63ce649f2588755783aa94dfb6b1a \
     --hash=sha256:dacca89f4bfadd5de3d7489b7c8a566eee0d3676333fbb50030263894c38c0dc
