@@ -3523,11 +3523,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.save_payment_requests()
         return True
 
-    def get_sorted_requests(self, config, *, filter_asset: str = None):
+    def get_sorted_requests(self, config, *, filter_asset: Optional[str] = None):
         # `filter_asset` may be either None to indicate no filter, 'token' to return only
         # token requests, and any other value to return only BCH requests
         m = map(lambda x: self.get_payment_request(x, config), self.receive_requests.keys())
-        if filter_asset != None:
+        if filter_asset is not None:
             def is_request_for_asset(req, asset):
                 return (asset == 'token') == req.get('tokenreq', False)
             m = filter(lambda x: is_request_for_asset(x, filter_asset), m)
