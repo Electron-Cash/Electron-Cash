@@ -81,29 +81,34 @@ if crowdin_api_key:
     response = requests.request('GET', 'https://api.crowdin.com/api/project/' + crowdin_identifier + '/export?key=' + crowdin_api_key)
     print("", "export:", "-" * 20, response.text, "-" * 20, sep="\n")
 
-if len(sys.argv) < 2:
+use_electrum_locale = True
+if len(sys.argv) > 1:
+    use_electrum_locale = False
     # Download & unzip
-    s = requests.request('GET', 'https://github.com/Electron-Cash/electrum-locale/archive/refs/heads/master.zip').content
-    zfobj = zipfile.ZipFile(io.BytesIO(s))
-else:
-    zfobj = zipfile.ZipFile(os.path.join(os.path.relpath(original_dir, os.getcwd()), sys.argv[1]))
-
-print('Unzip translations')
-for name in zfobj.namelist():
-    if name.endswith('/'):
-        if not os.path.exists(name):
-            os.mkdir(name)
+    if sys.argv[1] == "--crowdin":
+        s = requests.request('GET', 'https://crowdin.com/backend/download/project/' + crowdin_identifier + '.zip').content
+        zfobj = zipfile.ZipFile(io.BytesIO(s))
     else:
-        with open(name, 'wb') as output:
-            output.write(zfobj.read(name))
+        zfobj = zipfile.ZipFile(os.path.join(os.path.relpath(original_dir, os.getcwd()), sys.argv[1]))
+
+    print('Unzip translations')
+    for name in zfobj.namelist():
+        if name.endswith('/'):
+            if not os.path.exists(name):
+                os.mkdir(name)
+        else:
+            with open(name, 'wb') as output:
+                output.write(zfobj.read(name))
 
 # Convert .po to .mo
 print('Installing')
-for lang in os.listdir('locale'):
-    if not isdir(join('locale', lang)) or lang == "__pycache__":
+os.chdir('..')
+src_dir = 'contrib/electrum-locale/locale' if use_electrum_locale else 'contrib'
+for lang in os.listdir(src_dir):
+    if not isdir(join(src_dir, lang)) or lang == "__pycache__":
         continue
     # Check LC_MESSAGES folder
-    msg_dir = 'locale/{}/LC_MESSAGES'.format(lang)
+    msg_dir = src_dir + '/{}/LC_MESSAGES'.format(lang)
     if not os.path.exists(msg_dir):
         os.mkdir(msg_dir)
     cmd = 'msgfmt --output-file="{0}/electron-cash.mo" "{0}/electron-cash.po"'.format(msg_dir)
