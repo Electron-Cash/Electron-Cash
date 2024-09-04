@@ -107,10 +107,12 @@ src_dir = 'contrib/electrum-locale/locale' if use_electrum_locale else 'contrib'
 for lang in os.listdir(src_dir):
     if not isdir(join(src_dir, lang)) or lang == "__pycache__":
         continue
+    msg_dir = src_dir + '/{}'.format(lang)
+    msg_mo_dir = msg_dir + '/LC_MESSAGES'
+    msg_po_dir = msg_dir if use_electrum_locale else msg_mo_dir
     # Check LC_MESSAGES folder
-    msg_dir = src_dir + '/{}/LC_MESSAGES'.format(lang)
-    if not os.path.exists(msg_dir):
-        os.mkdir(msg_dir)
-    cmd = 'msgfmt --output-file="{0}/electron-cash.mo" "{0}/electron-cash.po"'.format(msg_dir)
+    if not os.path.exists(msg_mo_dir):
+        os.mkdir(msg_mo_dir)
+    cmd = 'msgfmt --output-file="{0}/electron-cash.mo" "{1}/electron-cash.po"'.format(msg_mo_dir, msg_po_dir)
     print('Installing', lang)
     run(cmd)
