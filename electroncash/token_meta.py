@@ -88,7 +88,6 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
     def set_icon(self, token_id_hex: str, icon: Any):
         fname = self._icon_filepath(token_id_hex)
         buf = (icon is not None and self._icon_to_bytes(icon)) or None
-        util.print_msg("writing icon to: ", fname)
         self._write_icon_file(fname, buf)
         if icon is not None:
             self._icon_cache[token_id_hex] = icon

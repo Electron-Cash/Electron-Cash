@@ -55,7 +55,7 @@ class EmbeddedMetaData:
     def __repr__(self):
         icon_thing = len(self.icon) if self.icon is not None else None
         return (
-            f"<TemplateMetaData name={self.name} description={self.description} decimals={self.decimals}"
+            f"<EmbeddedMetaData name={self.name} description={self.description} decimals={self.decimals}"
             f" symbol={self.symbol}, icon_ext={self.icon_ext} icon={icon_thing} bytes>"
         )
 
@@ -83,18 +83,17 @@ def validate_pre_genesis_bchn(transaction):
     # Get the first cashaddr,
     addr_or_script = str(transaction.get_output_addresses()[0])
     
-    # Get the first output commitment and category
+    # Get the first output token data and category
     output0tokenData = transaction.token_datas()[0]
     output0Category = output0tokenData.id[::-1].hex()
 
     # If the first output of the pre-genesis transaction
     # was sent to a valid gantry and it carried the minting baton...
     if addr_or_script in GANTRY_ADDRESSES and output0Category == BATON:
-        # Get the series
+        # Parse the series from the commitment
         series = int.from_bytes(
             output0tokenData.commitment, byteorder="little", signed=False
         )
-
         # Return the series.
         return series
     else:
