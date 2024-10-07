@@ -939,6 +939,10 @@ class Commands:
         # for the python console
         return sorted(known_commands.keys())
 
+    @command('w')
+    def getdspstatus(self, txid):
+        return self.wallet.get_dsp_status(txid).value
+
 param_descriptions = {
     'wallet_path': 'Wallet path(create/restore commands)',
     'privkey': 'Private key. Type \'?\' to get a prompt.',
