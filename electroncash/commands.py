@@ -50,6 +50,12 @@ from .paymentrequest import PR_PAID, PR_UNCONFIRMED, PR_UNPAID, PR_UNKNOWN, PR_E
 from .simple_config import SimpleConfig
 from .version import PACKAGE_VERSION
 
+
+from electroncash.consolidate import (
+    MAX_STANDARD_TX_SIZE,
+    MAX_TX_SIZE,
+    AddressConsolidator,
+)
 known_commands = {}
 
 
@@ -346,6 +352,48 @@ class Commands:
         sh = Address.from_string(address).to_scripthash_hex()
         return self.network.synchronous_get(('blockchain.scripthash.get_history', [sh]))
 
+    @command('w')
+    def consolidatecoins(self,address):
+        
+        """Minimal CLI implementation for consolidate coins tool.  
+        Can be expanded to include additional paramaters.
+        
+        Currently takes a single parameter for the address to
+        consolidate and creates transactions to a destination
+        of the same address.
+        
+        Returns the array of (unsigned) transactions.
+        """
+        address_obj = Address.from_string(address)
+        include_coinbase=True
+        include_non_coinbase=True
+        include_frozen=False
+        include_slp=False
+        minimum_value=0
+        maximum_value=999999999999999
+        minimum_height=0
+        maximum_height=999999999
+        max_tx_size=MAX_STANDARD_TX_SIZE
+        output_address = address_obj
+        self.consolidator = AddressConsolidator(
+            address_obj,
+            self.wallet,
+            include_coinbase,
+            include_non_coinbase,
+            include_frozen,
+            include_slp,
+            minimum_value,
+            maximum_value,
+            minimum_height,
+            maximum_height,
+            output_address,
+            max_tx_size,
+        )
+        transactions = []
+        for i, tx in enumerate(self.consolidator.iter_transactions()):
+            transactions.append(tx) 
+        return transactions
+   
     @command('w')
     def listunspent(self):
         """List unspent outputs. Returns the list of unspent transaction
