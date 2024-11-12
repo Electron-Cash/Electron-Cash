@@ -41,6 +41,7 @@ from . import rpa
 from . import util
 from .address import Address, AddressError
 from .bitcoin import hash_160, COIN, TYPE_ADDRESS
+from .consolidate import AddressConsolidator
 from .i18n import _
 from .plugins import run_hook
 from .wallet import create_new_wallet, restore_wallet_from_text
@@ -51,11 +52,6 @@ from .simple_config import SimpleConfig
 from .version import PACKAGE_VERSION
 
 
-from electroncash.consolidate import (
-    MAX_STANDARD_TX_SIZE,
-    MAX_TX_SIZE,
-    AddressConsolidator,
-)
 known_commands = {}
 
 
@@ -353,47 +349,23 @@ class Commands:
         return self.network.synchronous_get(('blockchain.scripthash.get_history', [sh]))
 
     @command('w')
-    def consolidatecoins(self,address):
-        
-        """Minimal CLI implementation for consolidate coins tool.  
-        Can be expanded to include additional paramaters.
-        
-        Currently takes a single parameter for the address to
-        consolidate and creates transactions to a destination
-        of the same address.
-        
-        Returns the array of (unsigned) transactions.
-        """
-        address_obj = Address.from_string(address)
-        include_coinbase=True
-        include_non_coinbase=True
-        include_frozen=False
-        include_slp=False
-        minimum_value=0
-        maximum_value=999999999999999
-        minimum_height=0
-        maximum_height=999999999
-        max_tx_size=MAX_STANDARD_TX_SIZE
-        output_address = address_obj
-        self.consolidator = AddressConsolidator(
-            address_obj,
-            self.wallet,
-            include_coinbase,
-            include_non_coinbase,
-            include_frozen,
-            include_slp,
-            minimum_value,
-            maximum_value,
-            minimum_height,
-            maximum_height,
-            output_address,
-            max_tx_size,
-        )
-        transactions = []
-        for i, tx in enumerate(self.consolidator.iter_transactions()):
-            transactions.append(tx) 
-        return transactions
-   
+    def consolidatecoins(self, address):
+        """Minimal CLI implementation for consolidate coins tool.
+        Can be expanded to include additional parameters.
+
+        Currently, takes a single parameter for the address to
+        consolidate and creates 1 or more transaction(s) to a
+        destination of the same address.
+
+        Returns the array of (unsigned) transaction(s) (as hex strings)."""
+        if isinstance(address, str):
+            address = Address.from_string(address)
+        elif not isinstance(address, Address):
+            raise TypeError('address parameter must be either a string or an Address object')
+
+        consolidator = AddressConsolidator(address=address, wallet_instance=self.wallet, output_address=address)
+        return [tx.serialize() for tx in consolidator.iter_transactions()]
+
     @command('w')
     def listunspent(self):
         """List unspent outputs. Returns the list of unspent transaction

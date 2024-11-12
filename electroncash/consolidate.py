@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Electrum ABC - lightweight eCash client
-# Copyright (C) 2021 The Electrum ABC developers 
+# Electron Cash - lightweight Bitcoin Cash client
+# Copyright (C) 2021 The Electrum ABC developers
+# Copyright (C) 2024 The Electrum Cash developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -22,9 +23,9 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """
-This module provides coin consolidation tools.  
+This module provides coin consolidation tools.
 Attribution: https://github.com/scinklja/Electron-Cash/tree/consolidate_address
-""" 
+"""
 import copy
 from typing import Iterator, List, Optional, Tuple
 
@@ -34,13 +35,10 @@ from .bitcoin import TYPE_ADDRESS
 from .transaction import Transaction
 
 MAX_STANDARD_TX_SIZE: int = 100_000
-"""Maximum size for transactions that nodes are willing to relay/mine.
-"""
+"""Maximum size for transactions that nodes are willing to relay/mine."""
 
 MAX_TX_SIZE: int = 1_000_000
-"""
-Maximum allowed size for a transaction in a block.
-"""
+"""Maximum allowed size for a transaction in a block."""
 
 FEERATE: int = 1
 """satoshis per byte"""
@@ -57,6 +55,7 @@ class AddressConsolidator:
         include_non_coinbase: bool = True,
         include_frozen: bool = False,
         include_slp: bool = False,
+        include_cashtokens: bool = False,
         min_value_sats: Optional[int] = None,
         max_value_sats: Optional[int] = None,
         min_height: Optional[int] = None,
@@ -76,6 +75,7 @@ class AddressConsolidator:
                 (include_coinbase or not utxo["coinbase"])
                 and (include_non_coinbase or utxo["coinbase"])
                 and (include_slp or utxo["slp_token"] is None)
+                and (include_cashtokens or utxo["token_data"] is None)
                 and (include_frozen or not utxo["is_frozen_coin"])
                 and (min_value_sats is None or utxo["value"] >= min_value_sats)
                 and (max_value_sats is None or utxo["value"] <= max_value_sats)
