@@ -676,7 +676,7 @@ class Transaction:
         return s
 
     def serialize_output_n_bytes(self, n: int) -> bytes:
-        assert 0 <= n < len(self._outputs) 
+        assert 0 <= n < len(self._outputs)
         assert len(self._token_datas) == len(self._outputs)
         output = self._outputs[n]
         token_data = self._token_datas[n]
@@ -828,11 +828,12 @@ class Transaction:
         self._inputs.extend(inputs)
         self.raw = None
         self.invalidate_common_sighash_cache()
- 
+
     def set_inputs(self, inputs):
+        self.deserialize()  # Ensure class invariant, since we will clobber self.raw below, ensure we deserialized first
         self._inputs = inputs
         self.raw = None
-        
+
     def add_outputs(self, outputs, token_datas=None):
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
                    for output in outputs)
@@ -844,18 +845,23 @@ class Transaction:
         self._token_datas.extend(token_datas)
         self.raw = None
         self.invalidate_common_sighash_cache()
-   
-    def set_outputs(self, outputs):
+
+    def set_outputs(self, outputs, token_datas=None):
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
-                   for output in outputs) 
+                   for output in outputs)
+        assert token_datas is None or (len(token_datas) == len(outputs)
+                                       and all(isinstance(td, (token.OutputData, type(None))) for td in token_datas))
+        self.deserialize()  # Ensure class invariant, since we will clobber self.raw below, ensure we deserialized first
         self._outputs = outputs
-        self.raw = None 
-        token_datas = []
-        self._token_datas=token_datas
-        if len(token_datas) < len(outputs):
-            token_datas = [None] * (len(outputs) - len(token_datas)) 
-        self._token_datas.extend(token_datas)  
-   
+        self.raw = None
+        if token_datas is None:
+            # if they specified no token_datas, just grab what we had before from self._token_datas
+            token_datas = [None] * len(outputs)  # Class invariant: outputs and token_datas must have same length.
+            token_datas_prev = self._token_datas or []
+            for i in range(min(len(token_datas), len(token_datas_prev))):
+                token_datas[i] = token_datas_prev[i]
+        self._token_datas = token_datas
+
     def input_value(self):
         """ Will return the sum of all input values, if the input values
         are known (may consult self.fetched_inputs() to get a better idea of
