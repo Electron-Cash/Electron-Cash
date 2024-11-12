@@ -21,19 +21,21 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         for is_coinbase in (True, False):
             for is_frozen_coin in (True, False):
                 for slp in (None, "not None"):
-                    coins[f"dummy_txid:{i}"] = {
-                        "address": TEST_ADDRESS,
-                        "prevout_n": i,
-                        "prevout_hash": "a" * 64,
-                        "height": 700_000 + i,
-                        "value": 1000 + i,
-                        "coinbase": is_coinbase,
-                        "is_frozen_coin": is_frozen_coin,
-                        "slp_token": slp,
-                        "type": "p2pkh",
-                    }
-                    i += 1  # noqa: SIM113
-                tx_history.append(("a" * 64, 1))
+                    for td in (None, "not None"):
+                        coins[f"dummy_txid:{i}"] = {
+                            "address": TEST_ADDRESS,
+                            "prevout_n": i,
+                            "prevout_hash": "a" * 64,
+                            "height": 700_000 + i,
+                            "value": 1000 + i,
+                            "coinbase": is_coinbase,
+                            "is_frozen_coin": is_frozen_coin,
+                            "slp_token": slp,
+                            "token_data": td,
+                            "type": "p2pkh",
+                        }
+                        i += 1  # noqa: SIM113
+                    tx_history.append(("a" * 64, 1))
 
         self.mock_wallet = Mock()
         self.mock_wallet.get_addr_utxo.return_value = coins
@@ -64,46 +66,52 @@ class TestConsolidateCoinSelection(unittest.TestCase):
             for incl_noncoinbase in (True, False):
                 for incl_frozen in (True, False):
                     for incl_slp in (True, False):
-                        consolidator = consolidate.AddressConsolidator(
-                            TEST_ADDRESS,
-                            self.mock_wallet,
-                            incl_coinbase,
-                            incl_noncoinbase,
-                            incl_frozen,
-                            incl_slp,
-                        )
-                        for coin in consolidator._coins:
-                            if not incl_coinbase:
-                                self.assertFalse(coin["coinbase"])
-                            if not incl_noncoinbase:
-                                self.assertTrue(coin["coinbase"])
-                            if not incl_frozen:
-                                self.assertFalse(coin["is_frozen_coin"])
-                            if not incl_slp:
-                                self.assertIsNone(coin["slp_token"])
+                        for incl_tokens in (True, False):
+                            consolidator = consolidate.AddressConsolidator(
+                                address=TEST_ADDRESS,
+                                wallet_instance=self.mock_wallet,
+                                include_coinbase=incl_coinbase,
+                                include_non_coinbase=incl_noncoinbase,
+                                include_frozen=incl_frozen,
+                                include_slp=incl_slp,
+                                include_cashtokens=incl_tokens,
+                            )
+                            for coin in consolidator._coins:
+                                if not incl_coinbase:
+                                    self.assertFalse(coin["coinbase"])
+                                if not incl_noncoinbase:
+                                    self.assertTrue(coin["coinbase"])
+                                if not incl_frozen:
+                                    self.assertFalse(coin["is_frozen_coin"])
+                                if not incl_slp:
+                                    self.assertIsNone(coin["slp_token"])
+                                if not incl_tokens:
+                                    self.assertIsNone(coin["token_data"])
 
         # test minimum and maximum value
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_value_sats=1003,
             max_value_sats=None,
         )
         for coin in consolidator._coins:
             self.assertGreaterEqual(coin["value"], 1003)
-        self.assertEqual(len(consolidator._coins), 5)
+        self.assertEqual(len(consolidator._coins), 13)
 
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_value_sats=None,
             max_value_sats=1005,
         )
@@ -112,12 +120,13 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 6)
 
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_value_sats=1003,
             max_value_sats=1005,
         )
@@ -128,12 +137,13 @@ class TestConsolidateCoinSelection(unittest.TestCase):
 
         # test minimum and maximum height
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_height=None,
             max_height=700_005,
         )
@@ -142,26 +152,28 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 6)
 
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_height=700_003,
             max_height=None,
         )
         for coin in consolidator._coins:
             self.assertGreaterEqual(coin["height"], 700_003)
-        self.assertEqual(len(consolidator._coins), 5)
+        self.assertEqual(len(consolidator._coins), 13)
 
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_height=700_003,
             max_height=700_005,
         )
@@ -172,12 +184,13 @@ class TestConsolidateCoinSelection(unittest.TestCase):
 
         # Filter both on height and value
         consolidator = consolidate.AddressConsolidator(
-            TEST_ADDRESS,
-            self.mock_wallet,
-            True,
-            True,
-            True,
-            True,
+            address=TEST_ADDRESS,
+            wallet_instance=self.mock_wallet,
+            include_coinbase=True,
+            include_non_coinbase=True,
+            include_frozen=True,
+            include_slp=True,
+            include_cashtokens=True,
             min_value_sats=1004,
             max_value_sats=1006,
             min_height=700_003,
@@ -191,18 +204,19 @@ class TestConsolidateCoinSelection(unittest.TestCase):
         self.assertEqual(len(consolidator._coins), 2)
 
     def test_get_unsigned_transactions(self):
-        n_coins = 8
+        n_coins = 16
         min_value = 1000
-        max_value = 1007
+        max_value = 1015
         for max_tx_size in range(200, 1500, 100):
             # select all coins
             consolidator = consolidate.AddressConsolidator(
-                TEST_ADDRESS,
-                self.mock_wallet,
-                True,
-                True,
-                True,
-                True,
+                address=TEST_ADDRESS,
+                wallet_instance=self.mock_wallet,
+                include_coinbase=True,
+                include_non_coinbase=True,
+                include_frozen=True,
+                include_slp=True,
+                include_cashtokens=True,
                 min_value_sats=None,
                 max_value_sats=None,
                 output_address=TEST_ADDRESS,
