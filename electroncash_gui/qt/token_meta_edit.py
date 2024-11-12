@@ -230,20 +230,17 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
                                            max(self.sb_token_dec.minimum(), self.bcmr_downloaded.decimals)))
             if self.bcmr_downloaded.icon:
 
-                # TODO: if svgs won't load on meta edit, try loading from icon directly 
-                # if(self.bcmr_downloaded.icon_ext == ".svg"):
-                #     icon = QtGui.QIcon(QtGui.QPixmap.fromImage(QtGui.QImage.fromData(self.bcmr_downloaded.icon)))    
-                #     self.but_icon.setIcon(icon)
-                #     self.selected_icon = icon
-                # else:                
-
-                # e.g.: /path/to/tmp/XXXXXX.svg
-                f = QtCore.QTemporaryFile(os.path.join(QtCore.QDir.tempPath(), "XXXXXX") 
-                                        + (self.bcmr_downloaded.icon_ext or ''))
-                if f.open():
-                    f.writeData(self.bcmr_downloaded.icon)
-                    f.flush()
-                    icon = QtGui.QIcon(f.fileName())
+                if(self.bcmr_downloaded.icon_ext == ".svg"):
+                    icon = QtGui.QIcon(QtGui.QPixmap.fromImage(QtGui.QImage.fromData(self.bcmr_downloaded.icon)))
+                else:
+                    # e.g.: /path/to/tmp/XXXXXX.png
+                    f = QtCore.QTemporaryFile(os.path.join(QtCore.QDir.tempPath(), "XXXXXX") 
+                                            + (self.bcmr_downloaded.icon_ext or ''))
+                    if f.open():
+                        f.writeData(self.bcmr_downloaded.icon)
+                        f.flush()
+                        icon = QtGui.QIcon(f.fileName())
+                if icon is not None:
                     self.but_icon.setIcon(icon)
                     self.selected_icon = icon
 
