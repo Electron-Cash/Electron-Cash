@@ -229,15 +229,15 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
             self.sb_token_dec.setValue(min(self.sb_token_dec.maximum(),
                                            max(self.sb_token_dec.minimum(), self.bcmr_downloaded.decimals)))
             if self.bcmr_downloaded.icon:
-                # e.g.: /path/to/tmp/XXXXXX.svg
-                # icon = QtGui.QIcon(QtGui.QPixmap.fromImage(QtGui.QImage.fromData(self.bcmr_downloaded.icon)))    
-                # self.but_icon.setIcon(icon)
-                # self.selected_icon = icon
-                # if(self.bcmr_downloaded.icon_ext ==".svg"):
+
+                # TODO: if svgs won't load on meta edit, try loading from icon directly 
+                # if(self.bcmr_downloaded.icon_ext == ".svg"):
                 #     icon = QtGui.QIcon(QtGui.QPixmap.fromImage(QtGui.QImage.fromData(self.bcmr_downloaded.icon)))    
                 #     self.but_icon.setIcon(icon)
                 #     self.selected_icon = icon
                 # else:                
+
+                # e.g.: /path/to/tmp/XXXXXX.svg
                 f = QtCore.QTemporaryFile(os.path.join(QtCore.QDir.tempPath(), "XXXXXX") 
                                         + (self.bcmr_downloaded.icon_ext or ''))
                 if f.open():
