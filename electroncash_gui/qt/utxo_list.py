@@ -27,6 +27,7 @@ from electroncash.i18n import _, ngettext
 from electroncash.plugins import run_hook
 from electroncash.address import Address
 from electroncash.bitcoin import COINBASE_MATURITY
+from electroncash.wallet import DSPStatus
 from electroncash import cashacct
 from collections import defaultdict
 from functools import wraps
@@ -140,6 +141,7 @@ class UTXOList(MyTreeWidget):
                 tool_tip0 = self.wallet.cashacct.fmt_info(ca_info, emoji=True)
             height = x['height']
             is_immature = x['coinbase'] and height > local_maturity_height
+            dsp_status = self.wallet.get_dsp_status(x['prevout_hash'])
             name = self.get_name(x)
             name_short = self.get_name_short(x)
             label = self.wallet.get_label(x['prevout_hash'])
@@ -156,6 +158,8 @@ class UTXOList(MyTreeWidget):
             utxo_item.setFont(2, self.monospaceFont)
             utxo_item.setFont(4, self.monospaceFont)
             utxo_item.setData(0, self.DataRoles.name, name)
+            if dsp_status == DSPStatus.DETECTED:
+                for i in range(self.columnCount()): utxo_item.setBackground(i, QBrush(QColor("#FF0000")))
             a_frozen = self.wallet.is_frozen(address)
             c_frozen = x['is_frozen_coin']
             toolTipMisc = ''
