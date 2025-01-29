@@ -69,6 +69,7 @@ def get_bitcoind_rpc_connection() -> AuthServiceProxy:
 def make_bitcoind_rpc_connection(docker_ip: str, docker_services: pytest_docker.plugin.Services) -> AuthServiceProxy:
     """ Connects to bitcoind, generates 100 blocks and returns the connection """
     global _bitcoind
+    global _datadir
     if _bitcoind is not None:
         return _bitcoind
 
@@ -78,9 +79,12 @@ def make_bitcoind_rpc_connection(docker_ip: str, docker_services: pytest_docker.
 
     poll_for_answer(url, request('uptime'))
     block_count = _bitcoind.getblockcount()
+    _bitcoind.unloadwallet("")
+    wallet = _bitcoind.createwallet(_datadir +"/test_misc")
     if block_count < 101:
         _bitcoind.generate(101)
-
+    _bitcoind.unloadwallet(wallet["name"])
+    _bitcoind.createwallet(_datadir + "/test_other")
     return _bitcoind
 
 # Creates a temp directory on disk for wallet storage
@@ -118,8 +122,30 @@ def start_ec_daemon(docker_ip: str, docker_services: pytest_docker.plugin.Servic
 
     from ...version import PACKAGE_VERSION
     assert result == PACKAGE_VERSION
+    recreate_wallet()
 
-    r = request('create', params={"wallet_path": _datadir+"/default_wallet"})
+def switch_wallet(name: str):
+    if _datadir is None:
+        return False
+    bitcoind = get_bitcoind_rpc_connection()
+    wallets = bitcoind.listwallets()
+    for w in wallets:
+        bitcoind.unloadwallet(w)
+    bitcoind.loadwallet(_datadir + "/" + name)
+
+def recreate_wallet():
+    if _datadir is None:
+        assert False
+    wallet_file = _datadir+"/default_wallet"
+    if os.path.isfile(wallet_file):
+        r = request('close_wallet')
+        result = poll_for_answer(EC_DAEMON_RPC_URL, r)
+        if _datadir is None or _datadir.startswith("/tmp") is False:  # Paranoia
+            assert False
+        os.remove(_datadir+"/default_wallet")
+
+    r = request('create', params={"wallet_path": wallet_file})
+    assert r
     result = poll_for_answer(EC_DAEMON_RPC_URL, r)
     assert "seed" in result
     assert len(result["seed"].split(" ")) == 12
