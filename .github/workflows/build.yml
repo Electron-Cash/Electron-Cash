@@ -44,7 +44,7 @@ jobs:
     - name: Build AppImage
       run: contrib/build-linux/appimage/build.sh ${{ github.ref_name }}
     - name: Archive build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: dist/Electron-Cash*.AppImage
   build_sdist:
@@ -61,7 +61,7 @@ jobs:
     - name: Build srcdist
       run: contrib/build-linux/srcdist_docker/build.sh ${{ github.ref_name }}
     - name: Archive build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: |
           dist/Electron-Cash*.zip
@@ -80,7 +80,7 @@ jobs:
     - name: Build wine
       run: contrib/build-wine/build.sh ${{ github.ref_name }}
     - name: Archive build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: dist/Electron-Cash*.exe
   build_android:
@@ -97,7 +97,7 @@ jobs:
         cp android/dummykeystore.jks android/keystore.jks
         android/build.sh
     - name: Archive build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: android/release/*.apk
   build_macos:
@@ -116,6 +116,6 @@ jobs:
         brew install pyenv
         ./make_osx
     - name: Archive build
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: dist/Electron-Cash*.dmg
