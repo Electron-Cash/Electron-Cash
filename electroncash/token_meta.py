@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Union
 from electroncash import address, token, util
 from electroncash.simple_config import SimpleConfig
 from electroncash.transaction import Transaction
-
+from electroncash.token_meta_fbch import try_to_get_fbch_metadata
 
 class TokenMeta(util.PrintError, metaclass=ABCMeta):
 
@@ -345,6 +345,10 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30) -> Optional[Downl
     an object describing what was found. May return None on timeout or other error."""
     pushes = try_to_get_bcmr_op_return_pushes(wallet, token_id_hex, timeout=timeout)
     if not pushes or len(pushes) < 2:
+        # If bcmr failed, see if the token category is FBCH
+        fbch_md = try_to_get_fbch_metadata(wallet, token_id_hex)
+        if fbch_md:
+            return fbch_md
         return None
 
     shasum = pushes[0]
