@@ -1808,8 +1808,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         # can only do it after making sure it's the *only*
                         # OP_RETURN in the tx.
                         deferred_cashacct_add = (
-                            lambda _tx_hash=tx_hash, _tx=tx, _n=n, _addr=addr:
-                                self.cashacct.add_transaction_hook(_tx_hash, _tx, _n, _addr)
+                            lambda _tx_hash=tx_hash, _tx=tx, _addr=addr:
+                                self.cashacct.add_transaction_hook(_tx_hash, _tx, _addr)
                         )
                 elif self.is_mine(addr):
                     # add coin to self.txo since it's mine.
