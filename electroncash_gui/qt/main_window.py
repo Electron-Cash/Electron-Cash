@@ -304,7 +304,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.print_error("Sound effect: Failed:", str(e))
             return
 
-
     _first_shown = True
     def showEvent(self, event):
         super().showEvent(event)
@@ -752,10 +751,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From &QR Code") + "...", self.read_tx_from_qrcode)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
-        if ColorScheme.dark_scheme and sys.platform != 'darwin':  # use dark icon in menu except for on macOS where we can't be sure it will look right due to the way menus work on macOS
-            icon = QIcon(":icons/cashacct-button-darkmode.png")
-        else:
-            icon = QIcon(":icons/cashacct-logo.png")
+        icon = QIcon(":icons/cashacct-logo.png")
         tools_menu.addAction(icon, _("Lookup &Cash Account..."), self.lookup_cash_account_dialog, QKeySequence("Ctrl+L"))
         tools_menu.addAction(icon, _("&Register Cash Account..."), lambda: self.register_new_cash_account(addr='pick'), QKeySequence("Ctrl+G"))
         tools_menu.addSeparator()
@@ -1223,7 +1219,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             def __init__(slf, *args):
                 super().__init__(*args)
                 slf.font_default_size = slf.font().pointSize()
-                icon = ":icons/cashacct-button-darkmode.png" if ColorScheme.dark_scheme else ":icons/cashacct-logo.png"
+                icon = ":icons/cashacct-logo.png"
                 slf.ca_but = slf.addButton(icon, self.register_new_cash_account, _("Register a new Cash Account for this address"))
                 slf.ca_copy_b = slf.addCopyButton()
                 slf.setReadOnly(True)

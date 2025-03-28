@@ -66,7 +66,7 @@ class ContactList(PrintError, MyTreeWidget):
         self.monospace_font = QFont(MONOSPACE_FONT)
         self.cleaned_up = False
         self.do_update_signal.connect(self.update)
-        self.icon_cashacct = QIcon(":icons/cashacct-logo.png" if not ColorScheme.dark_scheme else ":icons/cashacct-button-darkmode.png")
+        self.icon_cashacct = QIcon(":icons/cashacct-logo.png")
         self.icon_openalias = QIcon(":icons/openalias-logo.svg")
         self.icon_contacts = QIcon(":icons/tab_contacts.png")
         self.icon_unverif = QIcon(":/icons/unconfirmed.svg")
