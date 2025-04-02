@@ -751,7 +751,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From &QR Code") + "...", self.read_tx_from_qrcode)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
-        icon = QIcon(":icons/cashacct-logo.png")
+        icon = QIcon(":icons/cashacct-logo.svg")
         tools_menu.addAction(icon, _("Lookup &Cash Account..."), self.lookup_cash_account_dialog, QKeySequence("Ctrl+L"))
         tools_menu.addAction(icon, _("&Register Cash Account..."), lambda: self.register_new_cash_account(addr='pick'), QKeySequence("Ctrl+G"))
         tools_menu.addSeparator()
@@ -1219,7 +1219,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             def __init__(slf, *args):
                 super().__init__(*args)
                 slf.font_default_size = slf.font().pointSize()
-                icon = ":icons/cashacct-logo.png"
+                icon = ":icons/cashacct-logo.svg"
                 slf.ca_but = slf.addButton(icon, self.register_new_cash_account, _("Register a new Cash Account for this address"))
                 slf.ca_copy_b = slf.addCopyButton()
                 slf.setReadOnly(True)
@@ -5590,7 +5590,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if you want this function to present the user with a UI for choosing
         an address to register.'''
         if addr == 'pick':
-            addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo.png"))
+            addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo.svg"))
             if addr is None:
                 return  # user cancel
         addr = addr or self.receive_address or self.wallet.get_receiving_address(preferred=True)
@@ -5628,7 +5628,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                _("Proceed to Send Tab"), default=name, linkActivated=on_link,
                                placeholder=placeholder, disallow_empty=True,
                                line_edit_widget = le,
-                               icon=QIcon(":icons/cashacct-logo.png"))
+                               icon=QIcon(":icons/cashacct-logo.svg"))
             if name is None:
                 # user cancel
                 return
@@ -5685,7 +5685,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
             res = self.msg_box(
                 # TODO: get SVG icon..
-                parent = self, icon=QIcon(":icons/cashacct-logo.png").pixmap(75, 75),
+                parent = self, icon=QIcon(":icons/cashacct-logo.svg").pixmap(75, 75),
                 title=_('Register A New Cash Account'), rich_text=True,
                 text = msg1, informative_text = msg2, detail_text = msg3,
                 checkbox_text=_("Never show this again"), checkbox_ischecked=False
