@@ -195,9 +195,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.console_tab = self.create_console_tab()
         self.contacts_tab = self.create_contacts_tab()
         self.converter_tab = self.create_converter_tab()
-        tabs.addTab(self.create_history_tab(), QIcon(":icons/tab_history.png"), _('History'))
-        tabs.addTab(self.send_tab, QIcon(":icons/tab_send.png"), _('Send'))
-        tabs.addTab(self.receive_tab, QIcon(":icons/tab_receive.png"), _('Receive'))
+        tabs.addTab(self.create_history_tab(), QIcon(":icons/tab_history.svg"), _('History'))
+        tabs.addTab(self.send_tab, QIcon(":icons/tab_send.svg"), _('Send'))
+        tabs.addTab(self.receive_tab, QIcon(":icons/tab_receive.svg"), _('Receive'))
         # clears/inits the opreturn widgets
         self.on_toggled_opreturn(bool(self.config.get('enable_opreturn')))
 
@@ -3189,7 +3189,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         q_icon_prefs = QIcon(":icons/preferences.svg"), _("Preferences"), self.settings_dialog
         sb.addPermanentWidget(StatusBarButton(*q_icon_prefs))
-        q_icon_seed = QIcon(":icons/seed.png"), _("Seed"), self.show_seed_dialog
+        q_icon_seed = QIcon(":icons/seed.svg"), _("Seed"), self.show_seed_dialog
         self.seed_button = StatusBarButton(*q_icon_seed)
         sb.addPermanentWidget(self.seed_button)
         weakSelf = Weak.ref(self)

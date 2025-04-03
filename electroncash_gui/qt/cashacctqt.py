@@ -437,7 +437,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                         button_make_naked(ab)
                         hbox.addWidget(ab)
             # copy button
-            copy_but = QPushButton(QIcon(":icons/copy.png"), "")
+            copy_but = QPushButton(QIcon(":icons/copy.svg"), "")
             button_make_naked(copy_but)
             hbox.addWidget(copy_but)
             grid.addLayout(hbox, row*3, col*5+3, 1, 1)
@@ -839,7 +839,7 @@ def cash_account_detail_dialog(parent : MessageBoxMixin,  # Should be an Electru
     grid.addWidget(name_lbl, 0, 1, 1, 1)
     # copy name
     copy_name_but = QPushButton()
-    copy_name_but.setIcon(QIcon(":icons/copy.png"))
+    copy_name_but.setIcon(QIcon(":icons/copy.svg"))
     button_make_naked(copy_name_but)
     copy_name_but.setToolTip('<span style="white-space:nowrap">'
                                 + _("Copy <b>{cash_account_name}</b>").format(cash_account_name=ca_string_em)
@@ -853,7 +853,7 @@ def cash_account_detail_dialog(parent : MessageBoxMixin,  # Should be an Electru
     grid.addWidget(addr_lbl, 1, 1, 1, 1)
     # copy address label
     copy_addr_but = QPushButton()
-    copy_addr_but.setIcon(QIcon(":icons/copy.png"))
+    copy_addr_but.setIcon(QIcon(":icons/copy.svg"))
     button_make_naked(copy_addr_but)
     copy_addr_but.setToolTip(_("Copy {}").format(_("Address")))
     copy_addr_but.clicked.connect(lambda ignored=None, text=info.address.to_ui_string(), copy_but=copy_addr_but:

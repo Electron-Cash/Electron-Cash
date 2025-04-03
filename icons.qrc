@@ -10,7 +10,7 @@
     <file>icons/clock4.svg</file>
     <file>icons/clock5.svg</file>
     <file>icons/confirmed.svg</file>
-    <file>icons/copy.png</file>
+    <file>icons/copy.svg</file>
     <file>icons/digitalbitbox.png</file>
     <file>icons/digitalbitbox_unpaired.png</file>
     <file>icons/edit_nft.png</file>
@@ -39,7 +39,7 @@
     <file>icons/satochip_unpaired.png</file>
     <file>icons/save.svg</file>
     <file>icons/save_dark_theme.svg</file>
-    <file>icons/seed.png</file>
+    <file>icons/seed.svg</file>
     <file>icons/status_connected.svg</file>
     <file>icons/status_connected_fork.svg</file>
     <file>icons/status_connected_proxy.svg</file>
@@ -63,17 +63,17 @@
     <file>icons/CashShuffleLogos/logo-vertical_grayed.svg</file>
     <file>icons/question-mark-dark.svg</file>
     <file>icons/question-mark-light.svg</file>
-    <file>icons/tab_history.png</file>
-    <file>icons/tab_receive.png</file>
-    <file>icons/tab_send.png</file>
+    <file>icons/tab_history.svg</file>
+    <file>icons/tab_receive.svg</file>
+    <file>icons/tab_send.svg</file>
     <file>icons/tor_logo.svg</file>
     <file>icons/speaker.png</file>
-    <file>icons/trash-10-24.png</file>
-    <file>icons/trezor_unpaired.png</file>
-    <file>icons/trezor.png</file>
+    <file>icons/trash-10-24.svg</file>
+    <file>icons/trezor_unpaired.svg</file>
+    <file>icons/trezor.svg</file>
     <file>icons/unconfirmed.svg</file>
     <file>icons/unpaid.svg</file>
     <file>icons/unlock.svg</file>
-    <file>icons/warning.png</file>
+    <file>icons/warning.svg</file>
   </qresource>
 </RCC>
