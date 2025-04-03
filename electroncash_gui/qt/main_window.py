@@ -3170,7 +3170,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         sb.addPermanentWidget(self.search_box, 1)
         
         spacer = QWidget()
-        spacer.setFixedWidth(1)  # 1px spacer
         sb.addPermanentWidget(spacer)
 
         self.update_available_button = StatusBarButton(QIcon(":icons/electron-cash-update.svg"), _("Update available, click for details"), lambda: self.gui_object.show_update_checker(self, skip_check=True))
@@ -3178,14 +3177,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         sb.addPermanentWidget(self.update_available_button)
         self.update_available_button.setVisible(bool(self.gui_object.new_version_available))  # if hidden now gets unhidden by on_update_available when a new version comes in
         spacer = QWidget()
-        spacer.setFixedWidth(1)  # 1px spacer
         sb.addPermanentWidget(spacer)
 
         self.lock_icon = QIcon()
         self.password_button = StatusBarButton(self.lock_icon, _("Password"), self.change_password_dialog)
         sb.addPermanentWidget(self.password_button)
         spacer = QWidget()
-        spacer.setFixedWidth(1)  # 1px spacer
         sb.addPermanentWidget(spacer)
 
         self.addr_converter_button = StatusBarButton(
@@ -3198,20 +3195,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.addr_converter_button.setHidden(self.gui_object.is_cashaddr_status_button_hidden())
         self.gui_object.cashaddr_status_button_hidden_signal.connect(self.addr_converter_button.setHidden)
         spacer = QWidget()
-        spacer.setFixedWidth(1)  # 1px spacer
         sb.addPermanentWidget(spacer)
 
         q_icon_prefs = QIcon(":icons/preferences.svg"), _("Preferences"), self.settings_dialog
         sb.addPermanentWidget(StatusBarButton(*q_icon_prefs))
         spacer = QWidget()
-        spacer.setFixedWidth(1)  # 1px spacer
         sb.addPermanentWidget(spacer)
         
         q_icon_seed = QIcon(":icons/seed.svg"), _("Seed"), self.show_seed_dialog
         self.seed_button = StatusBarButton(*q_icon_seed)
         sb.addPermanentWidget(self.seed_button)
         spacer = QWidget()
-        spacer.setFixedWidth(1)  # 1px spacer
         sb.addPermanentWidget(spacer)
         
         weakSelf = Weak.ref(self)
