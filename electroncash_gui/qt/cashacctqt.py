@@ -196,12 +196,18 @@ class ButtonAssociatedLabel(QLabel):
 
 
 def naked_button_style() -> str:
-    ''' Returns a stylesheet for a small 'naked' (flat) QPushButton button which
-    is used in the lookup results and other associated widgets in this file '''
-    but_style_sheet = 'QPushButton { border-width: 1px; padding: 0px; margin: 0px; }'
-    if not ColorScheme.dark_scheme:
-        but_style_sheet += ''' QPushButton { border: 1px solid transparent; }
-        QPushButton:hover { border: 1px solid #3daee9; }'''
+    ''' Returns a stylesheet for a small 'naked' (flat) QPushButton button '''
+    but_style_sheet = '''
+        QPushButton {
+            border: none;  /* Remove border to avoid artifacts */
+            background: transparent;  /* Ensure no background */
+            padding: 2px;  /* Small padding for better click area */
+            margin: 0px;
+        }
+        QPushButton:hover {
+            background: rgba(61, 174, 233, 20);  /* Light hover effect */
+        }
+    '''
     return but_style_sheet
 
 def button_make_naked(but: QAbstractButton) -> QAbstractButton:
@@ -209,7 +215,7 @@ def button_make_naked(but: QAbstractButton) -> QAbstractButton:
     which is the look we use for the lookup results and various other odds and
     ends. Returns the button passed to it. '''
     but.setStyleSheet(naked_button_style())
-    but.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    but.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)  # Allow horizontal growth
     return but
 
 class InfoGroupBox(PrintError, QGroupBox):
@@ -429,7 +435,7 @@ class InfoGroupBox(PrintError, QGroupBox):
             # misc buttons
             hbox = QHBoxLayout()
             hbox.setContentsMargins(0,0,0,0)
-            hbox.setSpacing(4)
+            hbox.setSpacing(1)
             for func in self.extra_buttons:
                 if callable(func):
                     ab = func(item)
