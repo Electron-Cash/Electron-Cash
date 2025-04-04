@@ -16,7 +16,7 @@ class _QrCodeTextEdit(ButtonsTextEdit):
         self.qr_button = None
 
     def get_qr_icon(self):
-        return ":icons/qrcode_white.svg" if ColorScheme.dark_scheme else ":icons/qrcode.svg"
+        return ":icons/qrcode.svg"
 
     def showEvent(self, e):
         super().showEvent(e)

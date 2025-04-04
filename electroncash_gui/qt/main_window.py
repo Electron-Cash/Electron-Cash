@@ -1694,7 +1694,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 "</pre>")
         self.payto_label = payto_label = HelpLabel(_('Pay &to'), msg)
         payto_label.setBuddy(self.payto_e)
-        qmark = ":icons/question-mark-dark.svg" if ColorScheme.dark_scheme else ":icons/question-mark-light.svg"
+        qmark = ":icons/question-mark.svg"
         qmark_help_but = HelpButton(msg, button_text='', fixed_size=False, icon=QIcon(qmark), custom_parent=self)
         self.payto_e.addWidget(qmark_help_but, index=0)
         grid.addWidget(payto_label, 1, 0)
@@ -5619,7 +5619,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                          '<p>After the registration transaction receives <i>1 confirmation</i>, you can use your new <b>Cash Account name</b> as if it were an address and give it out to other people (Electron Cash or another Cash Account enabled wallet is required).</p>'
                          '<p><span style="font-weight:100;">You will be offered the opportunity to review the generated transaction before broadcasting it to the blockchain.</span></p>') + \
                        '</span>'
-            qmark = ":icons/question-mark-dark.svg" if ColorScheme.dark_scheme else ":icons/question-mark-light.svg"
+            qmark = ":icons/question-mark.svg"
             help_but = HelpButton(help_msg, button_text='', fixed_size=False, icon=QIcon(qmark), custom_parent=self)
             le.addWidget(help_but)
             name = line_dialog(self.top_level_window(),

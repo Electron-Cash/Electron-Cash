@@ -245,11 +245,11 @@ class ContactList(PrintError, MyTreeWidget):
         menu.addAction(self.icon_cashacct,
                        _("Register Cash Account..."), self.parent.register_new_cash_account)
         menu.addSeparator()
-        menu.addAction(QIcon(":icons/import.svg" if not ColorScheme.dark_scheme else ":icons/import_dark_theme.svg"),
+        menu.addAction(QIcon(":icons/import.svg"),
                        _("Import file"), self.import_contacts)
         if not self.parent.contacts.empty:
-            menu.addAction(QIcon(":icons/save.svg" if not ColorScheme.dark_scheme else ":icons/save_dark_theme.svg"),
-                           _("Export file"), self.export_contacts)
+            menu.addAction(QIcon(":icons/save.svg"),
+                       _("Export file"), self.export_contacts)
 
         menu.addSeparator()
         a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)

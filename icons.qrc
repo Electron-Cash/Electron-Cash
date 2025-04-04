@@ -20,7 +20,6 @@
     <file>icons/expired.svg</file>
     <file>icons/file.svg</file>
     <file>icons/import.svg</file>
-    <file>icons/import_dark_theme.svg</file>
     <file>icons/keepkey.png</file>
     <file>icons/keepkey_unpaired.png</file>
     <file>icons/key.svg</file>
@@ -31,7 +30,6 @@
     <file>icons/mutable.png</file>
     <file>icons/openalias-logo.svg</file>
     <file>icons/qrcode.svg</file>
-    <file>icons/qrcode_white.svg</file>
     <file>icons/qr_finder.svg</file>
     <file>icons/paper-plane.svg</file>
     <file>icons/paper-plane_dark_theme.svg</file>
@@ -39,7 +37,6 @@
     <file>icons/satochip.png</file>
     <file>icons/satochip_unpaired.png</file>
     <file>icons/save.svg</file>
-    <file>icons/save_dark_theme.svg</file>
     <file>icons/seed.svg</file>
     <file>icons/status_connected.svg</file>
     <file>icons/status_connected_fork.svg</file>
@@ -63,8 +60,7 @@
     <file>icons/cashshuffle_off.svg</file>
     <file>icons/CashShuffleLogos/logo-vertical.svg</file>
     <file>icons/CashShuffleLogos/logo-vertical_grayed.svg</file>
-    <file>icons/question-mark-dark.svg</file>
-    <file>icons/question-mark-light.svg</file>
+    <file>icons/question-mark.svg</file>
     <file>icons/tab_history.svg</file>
     <file>icons/tab_receive.svg</file>
     <file>icons/tab_send.svg</file>
