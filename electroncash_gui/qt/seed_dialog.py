@@ -107,7 +107,7 @@ class SeedLayout(QVBoxLayout):
         if icon:
             logo = QLabel()
             logo.setPixmap(QIcon(":icons/seed.svg").pixmap(64))
-            logo.setMaximumWidth(60)
+            logo.setMaximumWidth(75)
             hbox.addWidget(logo)
         hbox.addWidget(self.seed_e)
         self.addLayout(hbox)
