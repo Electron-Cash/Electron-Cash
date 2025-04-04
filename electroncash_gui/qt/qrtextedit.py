@@ -61,7 +61,7 @@ class ScanQRTextEdit(_QrCodeTextEdit, MessageBoxMixin):
         qr_menu.addAction(_("Read QR code from camera"), self.qr_input)
         qr_menu.addAction(_("Read QR from screen"), self.screenshot_input)
         self.qr_button.setMenu(qr_menu)
-        self.addButton(":icons/file.png", self.file_input, _("Read text or image file"))
+        self.addButton(":icons/file.svg", self.file_input, _("Read text or image file"))
         run_hook('scan_text_edit', self)
         self.config = get_config()
 
