@@ -4220,7 +4220,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                             task, on_success, self.on_error, disable_escape_key=True,
                             auto_exec=False, auto_show=False, progress_bar=True, progress_min=0, progress_max=100)
         dlg.exec_()
-        # this will block heere in the WaitingDialog event loop... and set success to True if success
+        # this will block here in the WaitingDialog event loop... and set success to True if success
         return success
 
     def sweep_key_dialog(self):
