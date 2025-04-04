@@ -5593,7 +5593,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if you want this function to present the user with a UI for choosing
         an address to register.'''
         if addr == 'pick':
-            addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo.svg"))
+            addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo-original.svg"))
             if addr is None:
                 return  # user cancel
         addr = addr or self.receive_address or self.wallet.get_receiving_address(preferred=True)
@@ -5688,7 +5688,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
             res = self.msg_box(
                 # TODO: get SVG icon..
-                parent = self, icon=QIcon(":icons/cashacct-logo.svg").pixmap(75, 75),
+                parent = self, icon=QIcon(":icons/cashacct-logo-original.svg").pixmap(75, 75),
                 title=_('Register A New Cash Account'), rich_text=True,
                 text = msg1, informative_text = msg2, detail_text = msg3,
                 checkbox_text=_("Never show this again"), checkbox_ischecked=False

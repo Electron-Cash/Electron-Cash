@@ -2,6 +2,7 @@
   <qresource prefix="/" >
     <file>icons/baton.png</file>
     <file>icons/cashacct-logo.svg</file>
+    <file>icons/cashacct-logo-original.svg</file>
     <file>icons/electron-cash.svg</file>
     <file>icons/electron-cash-update.svg</file>
     <file>icons/clock1.svg</file>
@@ -22,7 +23,7 @@
     <file>icons/import_dark_theme.svg</file>
     <file>icons/keepkey.png</file>
     <file>icons/keepkey_unpaired.png</file>
-    <file>icons/key.png</file>
+    <file>icons/key.svg</file>
     <file>icons/ledger.png</file>
     <file>icons/ledger_unpaired.png</file>
     <file>icons/lock.svg</file>
@@ -56,6 +57,7 @@
     <file>icons/tab_converter.svg</file>
     <file>icons/tab_converter_bw.svg</file>
     <file>icons/tab_token.svg</file>
+    <file>icons/tab_token-original.svg</file>
     <file>icons/cashshuffle_on_error.svg</file>
     <file>icons/cashshuffle_on.svg</file>
     <file>icons/cashshuffle_off.svg</file>
