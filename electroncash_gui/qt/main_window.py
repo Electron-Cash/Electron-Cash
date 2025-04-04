@@ -5631,7 +5631,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                _("Proceed to Send Tab"), default=name, linkActivated=on_link,
                                placeholder=placeholder, disallow_empty=True,
                                line_edit_widget = le,
-                               icon=QIcon(":icons/cashacct-logo.svg"))
+                               icon=QIcon(":icons/cashacct-logo-original.svg"))
             if name is None:
                 # user cancel
                 return
