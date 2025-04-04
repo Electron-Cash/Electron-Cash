@@ -73,5 +73,6 @@
     <file>icons/unpaid.svg</file>
     <file>icons/unlock.svg</file>
     <file>icons/warning.svg</file>
+    <file>icons/transparent.svg</file>
   </qresource>
 </RCC>

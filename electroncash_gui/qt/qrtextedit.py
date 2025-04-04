@@ -61,6 +61,18 @@ class ScanQRTextEdit(_QrCodeTextEdit, MessageBoxMixin):
         qr_menu.addAction(_("Read QR code from camera"), self.qr_input)
         qr_menu.addAction(_("Read QR from screen"), self.screenshot_input)
         self.qr_button.setMenu(qr_menu)
+        self.qr_button.setStyleSheet("""
+            QAbstractButton::menu-indicator {
+                background-color: transparent;  /* Make caret transparent */
+            }
+            QAbstractButton {
+                padding-bottom: 6px;                   /* Minimize padding */
+                icon-size: 16px;                /* Ensure icon size is consistent */
+            }
+        """)
+        # Center the icon explicitly
+        self.qr_button.setIconSize(QSize(16, 16))  # Match typical button icon size
+        self.qr_button.setMaximumHeight(self.height())  # Match text edit height
         self.addButton(":icons/file.svg", self.file_input, _("Read text or image file"))
         run_hook('scan_text_edit', self)
         self.config = get_config()
