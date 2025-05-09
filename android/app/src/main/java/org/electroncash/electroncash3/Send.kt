@@ -458,7 +458,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     }
 
     enum class AddressType {
-        CASH, TOKEN, DUMMY
+        CASH, TOKEN, DUMMY, PAYMENT_REQUEST
     }
 
     class TxArgs(val wallet: PyObject, val pr: PyObject?, val addrStr: String,
@@ -531,7 +531,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                     val outputs: PyObject
                     if (pr != null) {
                         outputs = pr.callAttr("get_outputs")
-                        addressType = AddressType.DUMMY
+                        addressType = AddressType.PAYMENT_REQUEST
                     } else {
                         if (amount == null && !max) {
                             return TxResult(ToastException(R.string.Invalid_amount))
@@ -699,6 +699,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                     AddressType.CASH -> if (model.tokenSend) throw ToastException(R.string.not_a_cashtoken)
                     AddressType.DUMMY -> throw ToastException(R.string.Invalid_address)
                     AddressType.TOKEN -> {}
+                    AddressType.PAYMENT_REQUEST -> {}
                 }
                 txResult.get()   // May throw ToastException.
                 showDialog(this, SendPasswordDialog().apply { arguments = Bundle().apply {
