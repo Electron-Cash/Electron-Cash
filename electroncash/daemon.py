@@ -305,6 +305,8 @@ class Daemon(DaemonThread):
         config.fee_estimates = self.network.config.fee_estimates.copy()
         cmdname = config.get('cmd')
         cmd = known_commands[cmdname]
+        if cmdname == 'signtransaction' and config.get('privkey'):
+            cmd.requires_wallet = False
         if cmd.requires_wallet:
             path = config.get_wallet_path()
             wallet = self.wallets.get(path)

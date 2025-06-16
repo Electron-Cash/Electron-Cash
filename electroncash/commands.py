@@ -111,6 +111,8 @@ def command(s):
             wallet = args[0].wallet
             network = args[0].network
             password = kwargs.get('password')
+            if c.name == 'signtransaction' and kwargs.get('privkey'):
+                c.requires_password = False
             if c.requires_network and network is None:
                 raise BaseException("Daemon offline")  # Same wording as in daemon.py.
             if c.requires_wallet and wallet is None:
@@ -419,9 +421,9 @@ class Commands:
         return tx.as_dict()
 
     @command('wp')
-    def signtransaction(self, tx, privkey=None, password=None):
+    def signtransaction(self, tx, privkey=None, password=None, schnorr=False):
         """Sign a transaction. The wallet keys will be used unless a private key is provided."""
-        tx = Transaction(tx, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
+        tx = Transaction(tx, sign_schnorr=schnorr or (self.wallet and self.wallet.is_schnorr_enabled()))
         if privkey:
             txin_type, privkey2, compressed = bitcoin.deserialize_privkey(privkey)
             pubkey = bitcoin.public_key_from_private_key(privkey2, compressed)
@@ -1029,8 +1031,9 @@ command_options = {
     'password':    ("-W", "Password"),
     'payment_url': (None, 'Optional URL where you would like users to POST the BIP70 Payment message'),
     'pending':     (None, "Show only pending requests."),
-    'privkey':     (None, "Private key. Set to '?' to get a prompt."),
+    'privkey':     (None, "Private key. Set to ':' to get a non-echoing prompt."),
     'receiving':   (None, "Show only receiving addresses"),
+    'schnorr':     (None, "Use Schnorr signatures instead of ECDSA"),
     'seed_type':   (None, "The type of seed to create, currently: 'electrum' and 'bip39' is supported. Default 'bip39'."),
     'show_addresses': (None, "Show input and output addresses"),
     'show_fiat':   (None, "Show fiat value of transactions"),
