@@ -638,7 +638,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             menu.addSeparator()
             num_utxos = len(non_frozen_utxos)
             if num_utxos:
-                menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
+                menu.addAction(QtGui.QIcon(":icons/tab_send.svg"),
                                ngettext("Send Token", "Send Tokens", num_utxos)
                                + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
                                lambda: self.send_tokens(non_frozen_utxos))

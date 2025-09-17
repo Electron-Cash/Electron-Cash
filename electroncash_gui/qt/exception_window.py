@@ -116,7 +116,7 @@ class Exception_Window(QWidget):
 
         report_button = QPushButton(_('Send Bug Report'))
         report_button.clicked.connect(self.send_report)
-        report_button.setIcon(QIcon(":icons/tab_send.png"))
+        report_button.setIcon(QIcon(":icons/tab_send.svg"))
         buttons.addWidget(report_button)
 
         close_button = QPushButton(_('Not Now'))
