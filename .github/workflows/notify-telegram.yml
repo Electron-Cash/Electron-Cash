@@ -4,21 +4,25 @@ on:
   pull_request:
     types: [opened, closed]
     branches: [master]
+  pull_request_target:
+    types: [opened, closed]
+    branches: [master]
   issues:
     types: [opened, closed]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target' || github.event_name == 'issues' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Send Telegram Notification
-        uses: appleboy/telegram-action@master
+        uses: appleboy/telegram-action@v1.0.1
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           format: markdown
           message: |
-            ${{ github.event_name == 'pull_request' && '🔀' || '💡' }} ${{ github.event.action == 'opened' && '🔓' || '🔒' }} *${{ github.actor }}* ${{ github.event.action }} ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Issue' }} #${{ github.event.pull_request.number || github.event.issue.number }}
+            ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '🔀' || '💡' }} ${{ github.event.action == 'opened' && '🔓' || '🔒' }} *${{ github.actor }}* ${{ github.event.action }} ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && 'Pull Request' || 'Issue' }} #${{ github.event.pull_request.number || github.event.issue.number }}
 
             📝 *${{ github.event.pull_request.title || github.event.issue.title }}*
 
