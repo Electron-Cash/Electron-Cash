@@ -100,7 +100,7 @@ Compile libsecp256k1 (optional, yet highly recommended)::
     sudo apt-get install libtool automake
     ./contrib/make_secp
 
-For plugin development, see the `plugin documentation <plugins/README.rst>`_.
+For plugin development, see the `plugin documentation <electroncash_plugins/README.rst>`_.
 
 Running unit tests (very optional, advanced users only)::
 
