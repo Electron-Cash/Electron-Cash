@@ -1080,6 +1080,8 @@ arg_types = {
     'imax': int,
     'year': int,
     'entropy': int,
+    'from_height': int,
+    'to_height': int,
     'tx': tx_from_str,
     'pubkeys': json_loads,
     'jsontx': json_loads,
