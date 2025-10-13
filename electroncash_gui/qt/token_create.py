@@ -248,7 +248,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
                       " {coin_amt} satoshis will accompany the token on the same UTXO. You can either send this new"
                       " token to a new receiving address in your wallet, or you can send it to any Bitcoin Cash"
                       " address outside this wallet.").format(
-            coin_amt=token.heuristic_dust_limit_for_token_bearing_output())
+            coin_amt=wallet.dust_threshold(self.network, output_bytes=118))
         tt = _("Address to which to send the newly created token")
         l = HelpLabel(_("Send To"), help_text)
         l.setToolTip(tt)
@@ -503,7 +503,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         # genesis-capable UTXOs.
         change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False) or utxo["address"]
         outputs = [(bitcoin.TYPE_ADDRESS, change_addr, '!'),
-                   (bitcoin.TYPE_ADDRESS, addr, token.heuristic_dust_limit_for_token_bearing_output())]
+                   (bitcoin.TYPE_ADDRESS, addr, wallet.dust_threshold(self.network, output_bytes=118))]
         if hash_bytes and url_bytes:
             script = address.ScriptOutput.from_string("OP_RETURN {BCMR} {hash} {url}"
                                                       .format(BCMR=b'BCMR'.hex(),
@@ -644,8 +644,8 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
 
         # Try and guess the worst-case value we need on a single utxo for creating a new token.
         # min_val: roughly 800 + 310 byte txn -> 1310 sats.
-        min_val = token.heuristic_dust_limit_for_token_bearing_output() + self.est_tx_fee()
-        min_val_other = token.heuristic_dust_limit_for_token_bearing_output() + self.est_tx_fee(200) * 2
+        min_val = wallet.dust_threshold(self.network, output_bytes=118) + self.est_tx_fee()
+        min_val_other = wallet.dust_threshold(self.network, output_bytes=118) + self.est_tx_fee(200) * 2
         utxos = []
         utxos_other = []
         for utxo in self.get_utxos():
