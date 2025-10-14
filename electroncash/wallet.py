@@ -2244,9 +2244,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 continue
             if to_timestamp and timestamp_safe >= to_timestamp:
                 continue
-            if from_height and height < from_height:
+            if from_height is not None and height < from_height:
                 continue
-            if to_height and height > to_height:
+            if to_height is not None and height > to_height:
                 continue
             try:
                 fee = try_calc_fee(tx_hash)
