@@ -71,6 +71,19 @@ class OutputData:
         return (self.id, self.bitfield, self.amount, self.commitment) == (other.id, other.bitfield, other.amount,
                                                                           other.commitment)
 
+    def to_ui_string(self) -> dict:
+        return {
+            "id": self.id_hex,
+            "bitfield": self.bitfield,
+            "amount": self.amount,
+            "commitment": self.commitment.hex() if self.commitment else ""
+        }
+
+    def __str__(self) -> str:
+        data = self.to_ui_string()
+        return f"Token(id={data['id'][:8]}..., bitfield={data['bitfield']:02x}, amount={data['amount']}, " \
+               f"commitment={data['commitment'][:8] or 'none'})"
+
     def __repr__(self) -> str:
         return f"<token.OutputData(id={self.id_hex}, bitfield={self.bitfield:02x}, amount={self.amount}, " \
                f"commitment={self.commitment[:MAX_CONSENSUS_COMMITMENT_LENGTH].hex()})>"
