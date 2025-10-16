@@ -1,4 +1,4 @@
-Electron Cash is a libre self-custodial Bitcoin Cash wallet. Forked from <a href="https://f-droid.org/packages/org.electrum.electrum/">Electrum Bitcoin Wallet</a>.
+Electron Cash is a full-featured SPV wallet for Bitcoin Cash. Forked from <a href="https://f-droid.org/packages/org.electrum.electrum/">Electrum Bitcoin Wallet</a>.
 
 It's secure, feature rich and trusted by the Bitcoin Cash community since 2017.
 
