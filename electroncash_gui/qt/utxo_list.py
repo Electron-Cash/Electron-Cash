@@ -243,7 +243,7 @@ class UTXOList(MyTreeWidget):
             spend_action.setEnabled(bool(spendable_coins))
             if sendable_cash_tokens:
                 num_utxos = len(sendable_cash_tokens)
-                menu.addAction(QIcon(":icons/tab_send.png"),
+                menu.addAction(QIcon(":icons/tab_send.svg"),
                                ngettext("Send Token", "Send Tokens", num_utxos)
                                + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
                                lambda: self.parent.send_tokens(sendable_cash_tokens))
