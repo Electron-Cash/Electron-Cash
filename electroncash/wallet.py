@@ -3438,12 +3438,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         tx_hashes = []
         vsum = 0
         amount = amount or 0
+        is_paid = False
+        result_conf = None
         for conf, v, tx_hash in reversed(sorted(l)):
             vsum += v
             tx_hashes.append(tx_hash)
             if vsum >= amount:
-                return True, conf, tx_hashes
-        return False, None, tx_hashes
+                is_paid = True
+                result_conf = conf
+        return is_paid, result_conf, tx_hashes
 
     def has_payment_request(self, addr):
         ''' Returns True iff Address addr has any extant payment requests
