@@ -874,7 +874,7 @@ class Commands:
             PR_EXPIRED: 'Expired',
             PR_UNCONFIRMED: 'Unconfirmed'
         }
-        out['address'] = out.get('address').to_ui_string()
+        out['address'] = out.get('address').to_ui_string() if not out.get('tokenreq') else out.get('address').to_token_string()
         out['amount (BCH)'] = format_satoshis(out.get('amount'))
         out['status'] = pr_str[out.get('status', PR_UNKNOWN)]
         return out
@@ -920,7 +920,7 @@ class Commands:
         return self.wallet.get_unused_address().to_ui_string()
 
     @command('w')
-    def addrequest(self, amount, memo='', expiration=None, force=False, payment_url=None, index_url=None):
+    def addrequest(self, amount, memo='', expiration=None, force=False, payment_url=None, index_url=None, token_request=None, category_id=None):
         """Create a payment request, using the first unused address of the wallet.
         The address will be condidered as used after this operation.
         If no payment is received, the address will be considered as unused if the payment request is deleted from the wallet."""
@@ -936,7 +936,7 @@ class Commands:
                 return False
         amount = satoshis(amount)
         expiration = int(expiration) if expiration else None
-        req = self.wallet.make_payment_request(addr, amount, memo, expiration, payment_url = payment_url, index_url = index_url)
+        req = self.wallet.make_payment_request(addr, amount, memo, expiration, payment_url = payment_url, index_url = index_url, token_request = token_request, category_id = category_id)
         self.wallet.add_payment_request(req, self.config)
         out = self.wallet.get_payment_request(addr, self.config)
         return self._format_request(out)
@@ -1023,6 +1023,7 @@ param_descriptions = {
 command_options = {
     'addtransaction': (None, 'Whether transaction is to be used for broadcasting afterwards. Adds transaction to the wallet'),
     'balance':     ("-b", "Show the balances of listed addresses"),
+    'category_id': (None, "Cashtoken Category ID"),
     'change':      (None, "Show only change addresses"),
     'change_addr': ("-c", "Change address. Default is a spare address, or the source address if it's not in the wallet"),
     'domain':      ("-D", "List of addresses"),
@@ -1059,6 +1060,7 @@ command_options = {
     'show_addresses': (None, "Show input and output addresses"),
     'show_fiat':   (None, "Show fiat value of transactions"),
     'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
+    'token_request': (None, "Cashtokens payment request"),
     'unsigned':    ("-u", "Do not sign transaction"),
     'unused':      (None, "Show only unused addresses"),
     'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations and/or token meta-data for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates and/or token meta-data."),
