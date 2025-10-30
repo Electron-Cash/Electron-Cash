@@ -97,6 +97,24 @@ def parse_scriptSig(d, _bytes):
         print_error("cannot find address in input script", bh2u(_bytes))
         return
 
+    # p2sh, non m of n
+    multisig_match = [ opcodes.OP_0 ] + [ opcodes.OP_PUSHDATA4 ] * (len(decoded) - 1)
+    if  len(decoded) >= 3 and match_decoded(decoded, multisig_match):
+        pass
+    else:
+        redeem_script = None
+        for op, data in reversed(decoded):
+            if data is not None:
+                redeem_script = data
+                break
+        if redeem_script:
+            try:
+                d['address'] = Address.from_P2SH_hash(hash_160(redeem_script))
+                d['type'] = 'p2sh'
+                return
+            except:
+                pass
+
     match = [ opcodes.OP_PUSHDATA4 ]
     if match_decoded(decoded, match):
         item = decoded[0][1]
@@ -130,8 +148,7 @@ def parse_scriptSig(d, _bytes):
         return
 
     # p2sh transaction, m of n
-    match = [ opcodes.OP_0 ] + [ opcodes.OP_PUSHDATA4 ] * (len(decoded) - 1)
-    if not match_decoded(decoded, match):
+    if not match_decoded(decoded, multisig_match):
         print_error("cannot find address in input script", bh2u(_bytes))
         return
     x_sig = [bh2u(x[1]) for x in decoded[1:-1]]
