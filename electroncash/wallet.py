@@ -94,6 +94,13 @@ TX_STATUS = [
     _('Not Verified'),
 ]
 
+class DSPStatus(Enum):
+    UNKNOWN = 1
+    NOT_APPLICABLE = 2
+    PROCESSING = 3
+    UNDETECTED = 4
+    DETECTED = 5
+
 del _
 from .i18n import _
 
@@ -368,6 +375,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # invoices and contacts
         self.invoices = InvoiceStore(self.storage)
         self.contacts = Contacts(self.storage)
+
+        # txid's with network-triggered double spend proofs
+        self._dsp_statuses = {}
 
         # cashacct is started in start_threads, but it needs to have relevant
         # data here, before the below calls happen
@@ -3847,6 +3857,36 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # 'ask me per tx', so for now True -> 2.
         self.storage.put('sign_schnorr', 2 if b else 0)
 
+    def is_dsp_detected(self, txid) -> bool:
+        with self.lock:
+            if txid not in self._dsp_statuses:
+                return False
+            return True if self._dsp_statuses[txid] == DSPStatus.DETECTED else False
+
+    def get_dsp_status(self, txid) -> DSPStatus:
+        with self.lock:
+            if not self.network.force_dsproof:
+                return DSPStatus.UNKNOWN
+            if txid in self._dsp_statuses:
+                return self._dsp_statuses[txid]
+            else:
+                return DSPStatus.NOT_APPLICABLE
+
+    def set_dsp_status(self, txid, status: DSPStatus):
+        with self.lock:
+            self._dsp_statuses[txid] = status
+
+    def add_detected_dsproofs(self, txids):
+        with self.lock:
+            for t in txids:
+                if t in self._dsp_statuses:
+                    self._dsp_statuses[t] = DSPStatus.DETECTED
+
+    def remove_detected_dsproof(self, txid):
+        with self.lock:
+            if txid in self._dsp_statuses:
+                del(self._dsp_statuses[txid])
+        
     def get_history_values(self) -> ValuesView[Tuple[str, int]]:
         """ Returns the an iterable (view) of all the List[tx_hash, height] pairs for each address in the wallet."""
         return self._history.values()
@@ -3883,6 +3923,96 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         CashTokens.  This is True for hardware wallets that cannot sign txns that send CashTokens, which
         are all of them other than the satochip-based HW wallets."""
         return any(k.is_hw_without_cashtoken_support() for k in self.get_keystores())
+
+    @profiler
+    def _process_dsp_viability(self, tx_hash, callback):
+
+        total_parents = 0
+        verified_proofs = {}
+        
+        # This function can and should be replaced by an Electrum API that functions
+        # the same way as the bitcoind RPC getdsproofscore
+        def validate_dsp_eligibility(txid, input, depth = 0) -> bool:
+            nonlocal total_parents
+            nonlocal verified_proofs
+
+            def _valid_tx_input_type(input) -> bool:
+                if input['type'] != "p2pkh":
+                    return False
+                for sig in input['signatures']:
+                    if sig[-2:] != "41":
+                        return False
+                return True
+
+            def _valid_tx_proof(txid, merkel) -> bool:
+                if self.verifier:
+                    return self.verifier.verify_merkel_txid(merkel, txid)
+                return False
+
+            if depth > 6 or total_parents > 20:
+                return False
+
+            if input is not None and not _valid_tx_input_type(input):
+                return False
+
+            block_height = 0
+            if txid in verified_proofs:
+                return True
+            else:
+                try:
+                    merkel = self.network.synchronous_get(('blockchain.transaction.get_merkle',[txid]), timeout=5)
+                    if 'block_height' in merkel:
+                        block_height = merkel['block_height']
+                except Exception as e:
+                    # The network call will throw if the tx isn't confirmed.
+                    # Done this way to save on an extra call to get_height.
+                    # Just assume that any problems is treated as an unconfirmed tx
+                    pass
+
+                if block_height > 0 and _valid_tx_proof(txid, merkel):
+                    verified_proofs[txid] = True
+                    return True
+
+            tx = self.try_to_get_tx(txid)
+            inputs = tx.inputs()
+            total_parents = total_parents + len(inputs)
+            for inp in inputs:
+                if not validate_dsp_eligibility(inp['prevout_hash'], inp, depth+1):
+                    return False
+            return True
+        
+        if validate_dsp_eligibility(tx_hash, None):
+            if self.get_dsp_status(tx_hash) != DSPStatus.DETECTED:
+                self.set_dsp_status(tx_hash, DSPStatus.UNDETECTED)
+                self.network.subscribe_to_dsproof(tx_hash, callback)
+        else:
+            self.set_dsp_status(tx_hash, DSPStatus.NOT_APPLICABLE)
+
+    def subscribe_to_dsp(self, history):
+        for tx_hash, tx_height in history:
+            subscribed = self.network.is_dsp_subscribed(tx_hash, self.synchronizer.dsproof_callback)
+            if tx_height > 0:
+                self.remove_detected_dsproof(tx_hash)
+                if subscribed:
+                    self.network.unsubscribe_to_dsproof(tx_hash, self.synchronizer.dsproof_callback)
+            else:
+                if self.network.force_dsproof and not subscribed:
+                    self.set_dsp_status(tx_hash, DSPStatus.PROCESSING)
+                    dsp_validation_thread = threading.Thread(target=self._process_dsp_viability, args=[tx_hash, self.synchronizer.dsproof_callback])
+                    dsp_validation_thread.start()
+
+    def toggle_dsp_on_history(self, enable: bool):
+        if enable:
+            h = self.get_history(domain=None, reverse=True, receives_before_sends=True, include_tokens=True, include_tokens_balances=False)
+            for h_item in h:
+                tx_hash, height, _, _, _, _, _, _ = h_item
+                if height < 1:
+                    self.subscribe_to_dsp([(tx_hash, height)])
+        else:
+            self.network.unsubscribe_to_dsproof_for_callback(self.synchronizer.dsproof_callback)
+            with self.lock:
+                self._dsp_statuses = {}
+        self.network.trigger_callback('wallet_updated', self)
 
 
 class Simple_Wallet(Abstract_Wallet):

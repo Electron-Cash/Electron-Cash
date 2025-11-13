@@ -278,6 +278,8 @@ class Network(util.DaemonThread):
         self.donation_address = ''
         self.features = None
         self.relay_fee = None
+        self.force_dsproof = self.config.get('dsproof', False)
+
         # callbacks passed with subscriptions
         self.subscriptions = defaultdict(list)
         self.sub_cache = {}                     # note: needs self.interface_lock
@@ -305,6 +307,7 @@ class Network(util.DaemonThread):
         self.connecting = set()
         self.requested_chunks = set()
         self.socket_queue = queue.Queue()
+        self.dsp_subscriptions = {}
         if Network.INSTANCE:
             # This happens on iOS which kills and restarts the daemon on app sleep/wake
             self.print_error("A new instance has started and is replacing the old one.")
@@ -520,7 +523,12 @@ class Network(util.DaemonThread):
                 self.subscribed_addresses.discard(h)
                 self.subscriptions.pop(k, None)  # it may be an empty list (or missing), so pop it just in case it's a list.
                 n_defunct += 1
-        self.print_error('sent subscriptions to', self.interface.server, len(old_reqs),"reqs", len(self.subscribed_addresses), "subs", n_defunct, "defunct subs")
+        dsp_subs_copy = self.dsp_subscriptions.copy()
+        for dsp_sub in dsp_subs_copy:
+            for cb in dsp_subs_copy[dsp_sub]:
+                self.subscribe_to_dsproof(dsp_sub, cb)
+
+        self.print_error('sent subscriptions to', self.interface.server, len(old_reqs),"reqs", len(self.subscribed_addresses), "subs", n_defunct, "defunct subs", len(dsp_subs_copy), "dsp subs")
 
     def request_fee_estimates(self):
         self.print_error("request_fee_estimates called: DISABLED in network.py")
@@ -729,6 +737,12 @@ class Network(util.DaemonThread):
             server = pick_random_server(hostmap, exclude_set=self.blacklisted_servers)
         return server
 
+    def toogle_dsproof_interface(self, force_dsproof):
+        self.force_dsproof = force_dsproof
+        if force_dsproof and 'dsproof' in self.interface.features:
+            if not self.interface.features['dsproof']:
+                self.switch_to_random_interface()
+
     def switch_to_random_interface(self):
         """Switch to a random connected server other than the current one"""
         servers = self.get_interfaces()    # Those in connected state
@@ -770,6 +784,12 @@ class Network(util.DaemonThread):
             # stop any current interface in order to terminate subscriptions
             # fixme: we don't want to close headers sub
             #self.close_interface(self.interface)
+            if self.force_dsproof and 'dsproof' in i.features:
+                if not i.features['dsproof']:
+                    self.connection_down(server, blacklist=False)
+                    return
+            elif self.force_dsproof:
+                return
             self.interface = i
             self.send_subscriptions()
             self.set_status('connected')
@@ -832,6 +852,10 @@ class Network(util.DaemonThread):
         elif method == 'server.features':
             if error is None and isinstance(result, dict):
                 self.features = result
+                if 'dsproof' in result:
+                    interface.features['dsproof'] = True
+                else:
+                    interface.features['dsproof'] = False
                 self.notify('features')
         elif method == 'blockchain.estimatefee':
             try:
@@ -929,6 +953,55 @@ class Network(util.DaemonThread):
         msgs = [('blockchain.scripthash.subscribe', [sh])
                 for sh in scripthashes]
         self.send(msgs, callback)
+
+    def is_dsp_subscribed(self, txid, callback) -> bool:
+        with self.lock:
+            if txid in self.dsp_subscriptions:
+                if callback in self.dsp_subscriptions[txid]:
+                    return True
+            return False            
+
+    def subscribe_to_dsproof(self, txid, callback):
+        with self.lock:
+            if txid in self.dsp_subscriptions:
+                if callback in self.dsp_subscriptions[txid]:
+                    return
+                self.dsp_subscriptions[txid].update({callback})
+            else:
+                self.dsp_subscriptions[txid] = {callback}
+
+        msg = [[('blockchain.transaction.dsproof.subscribe'), [txid]]]
+        self.send(msg, callback)
+
+    def unsubscribe_to_dsproof(self, txid, callback):
+        with self.lock:
+            if txid not in self.dsp_subscriptions:
+                if callback not in self.dsp_subscriptions[txid]:
+                    return
+                else:
+                    self.dsp_subscriptions[txid].remove(callback)
+            if self.dsp_subscriptions[txid] == set():
+                del(self.dsp_subscriptions[txid])
+        msg = [[('blockchain.transaction.dsproof.unsubscribe'), [txid]]]
+        self.send(msg, callback)
+
+    def unsubscribe_to_dsproof_for_callback(self, callback):
+        to_delete_sub = []
+        to_send = []
+        with self.lock:
+            for txid in self.dsp_subscriptions:
+                if len(self.dsp_subscriptions[txid]) == 1 and callback in self.dsp_subscriptions[txid]:
+                    msg = [[('blockchain.transaction.dsproof.unsubscribe'), [txid]]]
+                    to_send.append((msg, callback))
+                    to_delete_sub.append(txid)
+                elif callback in self.dsp_subscriptions[txid]:
+                    self.dsp_subscriptions[txid].remove(callback)
+
+            for txid in to_delete_sub:
+                del(self.dsp_subscriptions[txid])
+
+        for msg, callback in to_send:
+            self.send(msg, callback)
 
     def unsubscribe_from_scripthashes(self, scripthashes: Iterable[str], callback):
         method_sub = 'blockchain.scripthash.subscribe'
@@ -1112,6 +1185,7 @@ class Network(util.DaemonThread):
         self.queue_request('server.version', params, interface)
         # The interface will immediately respond with it's last known header.
         self.queue_request('blockchain.headers.subscribe', [], interface)
+        self.queue_request('server.features', [], interface)
 
         if server_key == self.default_server:
             self.switch_to_interface(server_key, self.SWITCH_DEFAULT)
