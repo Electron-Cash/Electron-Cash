@@ -387,11 +387,8 @@ class Commands:
         query that excludes token UTXOs by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
-        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else None
-        params = [sh]
-        if token_filter:
-            params.append(token_filter)
-        return self.network.synchronous_get(('blockchain.scripthash.listunspent', params))
+        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else "exclude_tokens"
+        return self.network.synchronous_get(('blockchain.scripthash.listunspent', [sh, token_filter]))
 
     @command('')
     def serialize(self, jsontx):
@@ -538,11 +535,8 @@ class Commands:
         query that excludes token dust by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
-        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else None
-        params = [sh]
-        if token_filter:
-            params.append(token_filter)
-        out = self.network.synchronous_get(('blockchain.scripthash.get_balance', params))
+        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else "exclude_tokens"
+        out = self.network.synchronous_get(('blockchain.scripthash.get_balance', [sh, token_filter]))
         out["confirmed"] =  str(PyDecimal(out["confirmed"])/COIN)
         out["unconfirmed"] =  str(PyDecimal(out["unconfirmed"])/COIN)
         return out
