@@ -383,8 +383,8 @@ class Commands:
 
     @command('n')
     def getaddressunspent(self, address, include_tokens=False, tokens_only=False):
-        """Returns the UTXO list of any address. Note: This
-        is a walletless server query, results are not checked by SPV.
+        """Returns the UTXO list of any address. Note: This is a walletless server
+        query that excludes token UTXOs by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
         token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else None
@@ -534,8 +534,8 @@ class Commands:
 
     @command('n')
     def getaddressbalance(self, address, include_tokens=False, tokens_only=False):
-        """Return the balance of any address. Note: This is a walletless
-        server query, results are not checked by SPV.
+        """Return the balance of any address. Note: This is a walletless server
+        query that excludes token dust by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
         token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else None
