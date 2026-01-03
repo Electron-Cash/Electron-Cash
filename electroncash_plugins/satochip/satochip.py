@@ -703,8 +703,7 @@ class SatochipPlugin(HW_PluginBase):
         # All client interaction should not be in the main GUI thread
         devmgr = self.device_manager()
         handler = keystore.handler
-        with devmgr.hid_lock:
-            client = devmgr.client_for_keystore(self, handler, keystore, force_pair)
+        client = devmgr.client_for_keystore(self, handler, keystore, force_pair)
         # returns the client for a given keystore. can use xpub
         #if client:
         #    client.used()
