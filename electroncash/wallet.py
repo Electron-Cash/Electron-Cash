@@ -2130,7 +2130,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             return "???"
 
     def export_history(self, domain=None, from_timestamp=None, to_timestamp=None, fx=None,
-                       show_addresses=False, decimal_point=8,
+                       show_addresses=False, decimal_point=8, from_height=None, to_height=None,
                        *, fee_calc_timeout=10.0, download_inputs=False,
                        progress_callback=None, receives_before_sends=False, fee_calc_timeout_callback=None):
         """Export history. Used by RPC & GUI.
@@ -2266,6 +2266,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if from_timestamp and timestamp_safe < from_timestamp:
                 continue
             if to_timestamp and timestamp_safe >= to_timestamp:
+                continue
+            if from_height is not None and height < from_height:
+                continue
+            if to_height is not None and height > to_height:
                 continue
             try:
                 fee, tx_maybe_has_fetched_inputs = try_calc_fee(tx_hash)
