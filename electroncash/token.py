@@ -16,6 +16,8 @@ from .i18n import _
 from .serialize import BCDataStream, SerializationError
 from .util import print_error
 
+from . import wallet
+
 # By consensus, NFT commitment byte blobs may not exceed this length
 MAX_CONSENSUS_COMMITMENT_LENGTH = 40
 
@@ -202,13 +204,13 @@ def unwrap_spk(wrapped_spk: bytes) -> Tuple[Optional[OutputData], bytes]:
 
 
 def heuristic_dust_limit_for_token_bearing_output() -> int:
-    """Returns the dust limit in sats for a token-bearing output in a transaction (which is a heavier output than
-    normal).  This value is ideally calculated by serializing the token UTXO and then returning a number in the
-    600-700 sat range, depending on the token UTXO's serialized data size in bytes.
-
-    Rather than doing that, for simplicity, we just return a hard-coded value which is expected to be enough to allow
-    all conceivable token-bearing UTXOs to be beyond the dust limit."""
-    return 800  # Worst-case; hard-coded for now.
+    """If calculating dust, wallet.dust_threshold should be used instead of a new function, but it may be desirable 
+    to retain this function beyond deprecation to support hypothetical private plugins."""
+    #return 800
+    """800 was hard-coded at implementation and expected to be enough to cover all conceivable token-bearing UTXOs
+    however, if my math is correct and there aren't any conflicts between components of the UTXO, worst-case for a
+    standard transaction may at least theoretically be 1392 (output size of 316 bytes)."""
+    return wallet.dust_threshold(None, output_bytes=118) # This should return 798, supports same UTXOs as 800.
 
 
 def get_nft_flag_text(td: OutputData) -> Optional[str]:
