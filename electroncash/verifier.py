@@ -238,6 +238,18 @@ class SPV(ThreadJob):
             self.wallet.save_verified_tx(write=True)
             self.network.trigger_callback('wallet_updated', self.wallet)  # This callback will happen very rarely.. mostly right as the last tx is verified. It's to ensure GUI is updated fully.
 
+    def verify_merkel_txid(self, merkle, txid):
+        tx_height = merkle['block_height']
+        pos = merkle['pos']
+        merkle_root = self.hash_merkle_root(merkle['merkle'], txid, pos)
+
+        header = self.network.blockchain().read_header(tx_height)
+        if not header:
+            return False       
+        if header.get('merkle_root') != merkle_root:
+            return False
+        return True
+
     @classmethod
     def hash_merkle_root(cls, merkle_s, target_hash, pos):
         h = hash_decode(target_hash)

@@ -250,7 +250,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.network_signal.connect(self.on_network_qt)
             interests = ['blockchain_updated', 'wallet_updated',
                          'new_transaction', 'status', 'banner', 'verified2',
-                         'fee', 'ca_verified_tx', 'ca_verification_failed', 'features']
+                         'fee', 'ca_verified_tx', 'ca_verification_failed', 'features',
+                         'new_dsproof']
             # To avoid leaking references to "self" that prevent the
             # window from being GC-ed when closed, callbacks should be
             # methods of this class only, and specifically not be
@@ -439,6 +440,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.network_signal.emit(event, args)
         elif event == 'features':
             self.network_signal.emit(event, args)
+        elif event == 'new_dsproof':
+            self.network_signal.emit(event, args)
+            self.need_update.set()
         else:
             self.print_error("unexpected network message:", event, args)
 
@@ -459,6 +463,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             pass
         elif event == 'features':
             self.check_necessary_server_features()
+        elif event == 'new_dsproof':
+            pass
         else:
             self.print_error("unexpected network_qt signal:", event, args)
 
@@ -4968,6 +4974,21 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         unconf_cb.setChecked(conf_only)
         unconf_cb.stateChanged.connect(on_unconf)
         global_tx_widgets.append((unconf_cb, None))
+
+        def on_dsproof(x):
+            force = bool(x)
+            self.config.set_key('dsproof', force)
+            if self.network:
+                self.network.toogle_dsproof_interface(force)
+                for w in self.gui_object.windows:
+                    w.wallet.toggle_dsp_on_history(force)
+
+        dsproof = self.config.get('dsproof', False)
+        dsproof_cb = QCheckBox(_('Receive double spend notifications'))
+        dsproof_cb.setToolTip(_('Receive an alert if a double spend attempt has been found on the network.'))
+        dsproof_cb.setChecked(dsproof)
+        dsproof_cb.stateChanged.connect(on_dsproof)
+        global_tx_widgets.append((dsproof_cb, None))
 
         # Fiat Currency
         hist_checkbox = QCheckBox()

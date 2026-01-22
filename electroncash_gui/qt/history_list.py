@@ -28,6 +28,7 @@ import electroncash.web as web
 from electroncash.i18n import _, ngettext
 from electroncash.util import timestamp_to_datetime, PrintError, profiler, Weak
 from electroncash.plugins import run_hook
+from electroncash.wallet import DSPStatus
 
 
 TX_ICONS = [
@@ -143,8 +144,9 @@ class HistoryList(MyTreeWidget, PrintError):
                 # This flag is checked in main_window.py, TxUpadteMgr class.
                 self.has_unknown_balances = True
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
+            dsp_status = self.wallet.get_dsp_status(tx_hash)
             has_invoice = self.wallet.invoices.paid.get(tx_hash)
-            icon = self.get_icon_for_status(status)
+            icon = self.get_icon_for_status(status) if dsp_status != DSPStatus.DETECTED else self.get_icon_for_status(0)
             v_str = self.parent.format_amount(value, True, whitespaces=True)
             balance_str = self.parent.format_amount(balance, whitespaces=True)
             entry = ['', tx_hash, status_str, label, v_str, balance_str]
@@ -154,8 +156,20 @@ class HistoryList(MyTreeWidget, PrintError):
                     text = fx.historical_value_str(amount, date)
                     entry.append(text)
             item = SortableTreeWidgetItem(entry)
+            if height < 1:
+                if dsp_status == DSPStatus.DETECTED:
+                    for i in range(self.columnCount()): item.setBackground(i, QBrush(QColor("#FF0000")))
+                    icon = self.get_icon_for_status(0)
+                    item.setToolTip(0, _("Conflicting transaction detected"))
+                elif dsp_status == DSPStatus.UNDETECTED:
+                    icon = self.get_icon_for_status(2)
+                    item.setToolTip(0, _("Monitoring for conflicting transactions"))
+                elif dsp_status == DSPStatus.NOT_APPLICABLE:
+                    icon = self.get_icon_for_status(0)
+                    item.setToolTip(0, _("Unable to monitor for conflicting transactions"))
+            else:
+                item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
             if icon: item.setIcon(0, icon)
-            item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
             item.setData(0, SortableTreeWidgetItem.DataRole, (status, conf))
             if has_invoice:
                 item.setIcon(3, self.invoiceIcon)

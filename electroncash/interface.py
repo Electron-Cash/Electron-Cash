@@ -320,6 +320,7 @@ class Interface(util.PrintError):
         self.unsent_requests = []
         self.unanswered_requests = {}
         self.last_send = time.time()
+        self.features = {}
 
         self.mode = None
 
