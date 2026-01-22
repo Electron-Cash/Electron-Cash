@@ -712,7 +712,7 @@ class Commands:
         return tx.as_dict()
 
     @command('w')
-    def history(self, year=0, show_addresses=False, show_fiat=False, use_net=False, timeout=30.0):
+    def history(self, year=0, show_addresses=False, show_fiat=False, use_net=False, from_height=None, to_height=None, timeout=30.0):
         """Wallet history. Returns the transaction history of your wallet."""
         t0 = time.time()
         year, show_addresses, show_fiat, use_net, timeout = (
@@ -721,7 +721,9 @@ class Commands:
         def time_remaining(): return max(timeout - (time.time()-t0), 0)
         kwargs = { 'show_addresses'   : show_addresses,
                    'fee_calc_timeout' : timeout,
-                   'download_inputs'  : use_net,        }
+                   'download_inputs'  : use_net,
+                   'from_height'      : from_height,
+                   'to_height'        : to_height,      }
         if year:
             start_date = datetime.datetime(year, 1, 1)
             end_date = datetime.datetime(year+1, 1, 1)
@@ -1034,6 +1036,7 @@ command_options = {
     'feerate':     (None, "Transaction fee rate (in sat/byte)"),
     'force':       (None, "Create new address beyond gap limit, if no more addresses are available."),
     'from_addr':   ("-F", "Source address (must be a wallet address; use sweep to spend from non-wallet address)."),
+    'from_height': (None, "Filter history to show only transactions at or above this block height"),
     'frozen':      (None, "Show only frozen addresses"),
     'funded':      (None, "Show only funded addresses"),
     'imax':        (None, "Maximum number of inputs"),
@@ -1059,6 +1062,7 @@ command_options = {
     'show_addresses': (None, "Show input and output addresses"),
     'show_fiat':   (None, "Show fiat value of transactions"),
     'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
+    'to_height':   (None, "Filter history to show only transactions at or below this block height"),
     'token_request': (None, "Cashtokens payment request"),
     'unsigned':    ("-u", "Do not sign transaction"),
     'unused':      (None, "Show only unused addresses"),
@@ -1077,6 +1081,8 @@ arg_types = {
     'imax': int,
     'year': int,
     'entropy': int,
+    'from_height': int,
+    'to_height': int,
     'tx': tx_from_str,
     'pubkeys': json_loads,
     'jsontx': json_loads,
