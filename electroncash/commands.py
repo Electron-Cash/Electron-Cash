@@ -37,6 +37,7 @@ from functools import wraps
 
 from . import bitcoin
 from . import rpa
+from . import token
 from . import token_meta
 from . import util
 from .address import Address, AddressError
@@ -161,11 +162,11 @@ class Commands:
             def ChkList(l):
                 for i in range(0,len(l)): l[i] = DoChk(l[i]) # recurse
                 return l
-            def EncodeNamedTupleObject(nt):
+            def EncodeObject(nt):
                 if hasattr(nt, 'to_ui_string'): return nt.to_ui_string()
                 return nt
 
-            if isinstance(v, tuple): v = EncodeNamedTupleObject(v)
+            if isinstance(v, (tuple, token.OutputData)): v = EncodeObject(v)
             elif isinstance(v, list): v = ChkList(v) # may recurse
             elif isinstance(v, dict): v = Commands._EnsureDictNamedTuplesAreJSONSafe(v) # recurse
             return v
@@ -398,8 +399,16 @@ class Commands:
         keypairs = {}
         inputs = jsontx.get('inputs')
         outputs = jsontx.get('outputs')
-        locktime = jsontx.get('locktime', 0)
-        locktime = jsontx.get('lockTime', locktime)
+        for txin in inputs:
+            token_data = txin.get('token_data')
+            if isinstance(token_data, dict):
+                txin['token_data'] = token.OutputData(
+                    id=bytes.fromhex(token_data['id'])[::-1],
+                    bitfield=token_data['bitfield'],
+                    amount=token_data['amount'],
+                    commitment=bytes.fromhex(token_data['commitment'] or '')
+                )
+        locktime = jsontx.get('locktime', jsontx.get('lockTime', 0))
         version = jsontx.get('version', 1)
         for txin in inputs:
             if txin.get('output'):
@@ -416,8 +425,25 @@ class Commands:
                 txin['signatures'] = [None]
                 txin['num_sig'] = 1
 
-        outputs = [(TYPE_ADDRESS, Address.from_string(x['address']), int(x['value'])) for x in outputs]
-        tx = Transaction.from_io(inputs, outputs, locktime=locktime, version=version, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
+        outputs_list = []
+        token_datas = []
+        for txout in outputs:
+            addr = Address.from_string(txout['address'])
+            value = int(txout['value'])
+            output_type = txout.get('type', TYPE_ADDRESS)
+            outputs_list.append((output_type, addr, value))
+            token_data = txout.get('token_data')
+            if isinstance(token_data, dict):
+                token_datas.append(token.OutputData(
+                    id=bytes.fromhex(token_data['id'])[::-1],
+                    bitfield=token_data['bitfield'],
+                    amount=token_data['amount'],
+                    commitment=bytes.fromhex(token_data['commitment'] or '')
+                ))
+            else:
+                token_datas.append(None)
+
+        tx = Transaction.from_io(inputs, outputs_list, locktime=locktime, version=version, token_datas=token_datas, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
         tx.sign(keypairs)
         return tx.as_dict()
 
