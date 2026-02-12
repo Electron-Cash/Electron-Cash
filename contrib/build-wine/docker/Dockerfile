@@ -16,7 +16,7 @@ RUN echo deb ${UBUNTU_MIRROR} ${UBUNTUDIST} main restricted universe multiverse 
     dpkg --add-architecture i386 && \
     apt-get update -q && \
     apt-get install -qy \
-        gnupg2=2.2.27-3ubuntu2.4 \
+        gnupg2=2.2.27-3ubuntu2.5 \
         ca-certificates=20211016 \
         wget=1.21.2-2ubuntu1 \
         git=1:2.34.1-1ubuntu1.15 \
