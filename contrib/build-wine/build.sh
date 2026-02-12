@@ -78,31 +78,41 @@ FRESH_CLONE_DIR="$FRESH_CLONE/$GIT_DIR_NAME"
 ) || fail "Could not create a fresh clone from git"
 
 (
-    # NOTE: We propagate forward the GIT_REPO override to the container's env,
-    # just in case it needs to see it.
-    $SUDO docker run $DOCKER_RUN_TTY \
-    -u $USER_ID:$GROUP_ID \
-    -e GIT_REPO="$GIT_REPO" \
-    -e BUILD_DEBUG="$BUILD_DEBUG" \
-    -e PYI_SKIP_TAG="$PYI_SKIP_TAG" \
-    --name ec-wine-builder-cont \
-    -v "$FRESH_CLONE_DIR":/homedir/wine/drive_c/electroncash:delegated \
-    --rm \
-    --workdir /homedir/wine/drive_c/electroncash/contrib/build-wine \
-    $IMGNAME \
-    ./_build.sh $REV
+    for triplet in x86_64-w64-mingw32 i686-w64-mingw32; do
+        pushd "$FRESH_CLONE_DIR"
+        git reset --hard || fail "Failed to reset git repository"
+        git clean -dfxq || fail "Failed to clean git repository"
+        git submodule foreach 'git reset --hard' || fail "Failed to reset git submodules"
+        git submodule foreach 'git clean -dfxq' || fail "Failed to clean git submodules"
+        popd
+
+        # NOTE: We propagate forward the GIT_REPO override to the container's env,
+        # just in case it needs to see it.
+        $SUDO docker run $DOCKER_RUN_TTY \
+            -u $USER_ID:$GROUP_ID \
+            -e GIT_REPO="$GIT_REPO" \
+            -e BUILD_DEBUG="$BUILD_DEBUG" \
+            -e PYI_SKIP_TAG="$PYI_SKIP_TAG" \
+            -e GCC_TRIPLET_HOST="$triplet" \
+            --name ec-wine-builder-cont \
+            -v "$FRESH_CLONE_DIR":/homedir/wine/drive_c/electroncash:delegated \
+            --rm \
+            --workdir /homedir/wine/drive_c/electroncash/contrib/build-wine \
+            $IMGNAME \
+            ./_build.sh $REV || fail "Build for $triplet inside docker container failed"
+
+        info "Copying .exe files out of our build directory ..."
+        mkdir -p "$here"/../../dist
+        files="$FRESH_CLONE_DIR"/contrib/build-wine/dist/*.exe
+        for f in $files; do
+            bn=`basename "$f"`
+            cp -fpv "$f" "$here"/../../dist/"$bn" || fail "Failed to copy $bn"
+            touch "$here"/../../dist/"$bn" || fail "Failed to update timestamp on $bn"
+        done
+    done
 ) || fail "Build inside docker container failed"
 
 popd
-
-info "Copying .exe files out of our build directory ..."
-mkdir -p dist/
-files="$FRESH_CLONE_DIR"/contrib/build-wine/dist/*.exe
-for f in $files; do
-    bn=`basename "$f"`
-    cp -fpv "$f" dist/"$bn" || fail "Failed to copy $bn"
-    touch dist/"$bn" || fail "Failed to update timestamp on $bn"
-done
 
 info "Removing $FRESH_CLONE ..."
 $SUDO rm -fr "$FRESH_CLONE"

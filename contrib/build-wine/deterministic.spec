@@ -44,7 +44,7 @@ binaries += [('C:/tmp/tor.exe', '.')]
 # Workaround for "Retro Look":
 binaries += [b for b in collect_dynamic_libs('PyQt5') if 'qwindowsvista' in b[0]]
 
-binaries += [('C:/python*/Lib/site-packages/smartcard/scard/_scard.cp*-win32.pyd', '.')]  # Satochip
+binaries += [('C:/python*/Lib/site-packages/smartcard/scard/_scard.*.pyd', '.')]  # Satochip
 
 datas = [
     (home+'electroncash/currencies.json', 'electroncash'),

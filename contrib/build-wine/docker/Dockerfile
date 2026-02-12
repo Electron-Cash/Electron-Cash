@@ -67,7 +67,7 @@ ARG USER_ID
 ARG GROUP_ID
 
 ENV HOME=/homedir
-ENV WINEARCH=win32
+ENV WINEARCH=win64
 ENV WINEPREFIX=${HOME}/wine
 ENV WINEDEBUG=-all
 
@@ -104,18 +104,18 @@ RUN wget https://aka.ms/vs/16/release/installer -O /tmp/vs_installer.opc && \
         --add "Microsoft.VisualStudio.Component.VC.Tools.x86.x64" \
         --add "Microsoft.VisualStudio.Component.Windows10SDK.19041" && \
     # vswhere.exe needs to be installed in this path so setuptools can detect the VS installation
-    mkdir "${WINEPREFIX}"/"drive_c/Program Files/Microsoft Visual Studio/Installer" && \
-    mv opc/Contents/vswhere.exe "${WINEPREFIX}"/"drive_c/Program Files/Microsoft Visual Studio/Installer" && \
+    mkdir "${WINEPREFIX}"/"drive_c/Program Files (x86)/Microsoft Visual Studio/Installer" && \
+    mv opc/Contents/vswhere.exe "${WINEPREFIX}"/"drive_c/Program Files (x86)/Microsoft Visual Studio/Installer" && \
     rm -rf opc && wineserver -w
 
 #RUN wine "${WINEPREFIX}"/"drive_c/windows/Microsoft.NET/Framework/v4.0.30319/ngen.exe" executequeueditems && \
 #    wineserver -w
 
 # Patch to make vcvarsall.bat work
-# "C:\Program Files\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86 && set
+# "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86 && set
 # python -c "from setuptools import msvc; print(msvc.msvc14_get_vc_env('x86'))"
 # Caused by wrong delayed expansion in Wine, see https://bugs.winehq.org/show_bug.cgi?id=38289
-RUN sed -i -e 's/!result:~0,3!/10./g' "${WINEPREFIX}"/"drive_c/Program Files/Microsoft Visual Studio/2019/BuildTools/Common7/Tools/vsdevcmd/core/winsdk.bat"
+RUN sed -i -e 's/!result:~0,3!/10./g' "${WINEPREFIX}"/"drive_c/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/Common7/Tools/vsdevcmd/core/winsdk.bat"
 
 # Clean up some left overs only needed for the Visual Studio installer
 USER 0:0

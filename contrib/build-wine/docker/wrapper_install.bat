@@ -1,7 +1,7 @@
 @echo off
 
 set VCYEAR=2019
-set VCDIR=c:\Program Files\Microsoft Visual Studio\%VCYEAR%\BuildTools\VC
+set VCDIR=c:\Program Files (x86)\Microsoft Visual Studio\%VCYEAR%\BuildTools\VC
 
 call "%VCDIR%\Auxiliary\Build\vcvarsall.bat" x86
 

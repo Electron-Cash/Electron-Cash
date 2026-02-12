@@ -7,7 +7,14 @@ here=`pwd`  # get an absolute path
 popd
 
 export BUILD_TYPE="wine"
-export GCC_TRIPLET_HOST="i686-w64-mingw32"
+export GCC_TRIPLET_HOST="${GCC_TRIPLET_HOST:-x86_64-w64-mingw32}"
+export GCC_TRIPLET_HOST_ARCH="${GCC_TRIPLET_HOST%%-*}"  # e.g. x86_64
+# Map GCC arch to Python installer directory name
+case "$GCC_TRIPLET_HOST_ARCH" in
+    x86_64) export PYTHON_ARCH="amd64" ;;
+    i686)   export PYTHON_ARCH="win32" ;;
+    *)      echo "Unknown architecture: $GCC_TRIPLET_HOST_ARCH" && exit 1 ;;
+esac
 export GCC_TRIPLET_BUILD="x86_64-pc-linux-gnu"
 export GCC_STRIP_BINARIES="1"
 export GIT_SUBMODULE_FLAGS="--recommend-shallow --depth 1"
@@ -88,12 +95,22 @@ prepare_wine() {
 
         for msifile in $msifiles ; do
             info "Downloading $msifile..."
-            wget "https://www.python.org/ftp/python/$PYTHON_VERSION/win32/${msifile}.msi"
-            wget "https://www.python.org/ftp/python/$PYTHON_VERSION/win32/${msifile}.msi.asc"
+            wget "https://www.python.org/ftp/python/$PYTHON_VERSION/$PYTHON_ARCH/${msifile}.msi"
+            wget "https://www.python.org/ftp/python/$PYTHON_VERSION/$PYTHON_ARCH/${msifile}.msi.asc"
             verify_signature "${msifile}.msi.asc" $KEYRING_PYTHON_DEV
         done
 
-        $SHA256_PROG -c - << EOF
+        if [ "$PYTHON_ARCH" = "amd64" ]; then
+            $SHA256_PROG -c - << EOF
+d5499530d9cddc316811630736eb1bd35f22637f889d562cd3e8e980b1aebd17 core.msi
+eb413f9579079f961d3f4c034ba8e00d28ff1cb703f873b9b585c0f467321fba dev.msi
+b0a7aaffc9b03d5c7d04d8522e30c5027a8c70ec4c14a6922d6c2cf560bc1459 exe.msi
+1e6f5cedc0158f6f2f23d0657d3e6858853569084669dac8f367fc3b94dc4c9b lib.msi
+014460c0444bfff5a003ca0a6375c4b41a257f5ed380a714cda3fbcf5d3c1579 pip.msi
+6d34cbc645c1b2dd360a0b0df79205b24f0d5f85fea2865f1cc1428d6a64b9cd tools.msi
+EOF
+        elif [ "$PYTHON_ARCH" = "win32" ]; then
+            $SHA256_PROG -c - << EOF
 f49a951a6ad7e733e64877b36c8fe43477c2b1c26d316f30a2379bb35a8538a8 core.msi
 45c3faeccbd7fa5041f00fea2d05dfcd1a4ef0211aa519508e168b4bcea92bac dev.msi
 6b18e724b5ae84df94c3d6cbe55c9143a46802e49c6c7310db7c6e9c1996dc24 exe.msi
@@ -101,6 +118,7 @@ f49a951a6ad7e733e64877b36c8fe43477c2b1c26d316f30a2379bb35a8538a8 core.msi
 2a1a5e6adb9d8120c448ab8df8501a16ad419daa93b230c635036f67e4719f5d pip.msi
 ee1a5d8ee16eaef3c84c6c4cea4621554d9d1de640fb84ba4f4d982a743fef81 tools.msi
 EOF
+        fi
         test $? -eq 0 || fail "Failed to verify Python checksums"
 
         for msifile in $msifiles ; do
@@ -133,13 +151,12 @@ EOF
             fi
             pushd bootloader
             # If switching to 64-bit Windows, edit CC= below
-            python3 ./waf all CC=i686-w64-mingw32-gcc CFLAGS="-Wno-stringop-overflow -static"
+            python3 ./waf all CC="$GCC_TRIPLET_HOST-gcc" CFLAGS="-Wno-stringop-overflow -static"
             # Note: it's possible for the EXE to not be there if the build
             # failed but didn't return exit status != 0 to the shell (waf bug?);
             # So we need to do this to make sure the EXE is actually there.
-            # If we switch to 64-bit, edit this path below.
             popd
-            [ -e PyInstaller/bootloader/Windows-32bit-intel/runw.exe ] || fail "Could not find runw.exe in target dir!"
+            [ -e PyInstaller/bootloader/Windows-32bit-intel/runw.exe -o -e PyInstaller/bootloader/Windows-64bit-intel/runw.exe ] || fail "Could not find runw.exe in target dir!"
             rm -fv pyinstaller.py  # workaround for https://github.com/pyinstaller/pyinstaller/pull/6701
         ) || fail "PyInstaller bootloader build failed"
         info "Installing PyInstaller ..."
@@ -167,12 +184,9 @@ EOF
             git checkout -b pinned "${LIBUSB_COMMIT}^{commit}"
             echo "libusb_1_0_la_LDFLAGS += -Wc,-static" >> libusb/Makefile.am
             ./bootstrap.sh || fail "Could not bootstrap libusb"
-            host="i686-w64-mingw32"
-            LDFLAGS="-Wl,--no-insert-timestamp" ./configure \
-                --host=$host \
-                --build=x86_64-pc-linux-gnu || fail "Could not run ./configure for libusb"
+            LDFLAGS="-Wl,--no-insert-timestamp" ./configure $AUTOCONF_FLAGS || fail "Could not run ./configure for libusb"
             make -j4 || fail "Could not build libusb"
-            ${host}-strip libusb/.libs/libusb-1.0.dll
+            host_strip libusb/.libs/libusb-1.0.dll
         ) || fail "libusb build failed"
 
         # libsecp256k1, libzbar & libusb
@@ -251,8 +265,8 @@ build_the_app() {
 
         # rename the output files
         pushd dist
-        mv $NAME_ROOT.exe $NAME_ROOT-$VERSION.exe
-        mv $NAME_ROOT-portable.exe $NAME_ROOT-$VERSION-portable.exe
+        mv $NAME_ROOT.exe $NAME_ROOT-$VERSION-$GCC_TRIPLET_HOST_ARCH.exe
+        mv $NAME_ROOT-portable.exe $NAME_ROOT-$VERSION-$GCC_TRIPLET_HOST_ARCH-portable.exe
         popd
 
         # set timestamps in dist, in order to make the installer reproducible
@@ -264,10 +278,10 @@ build_the_app() {
         # build NSIS installer
         info "Running makensis to build setup .exe version ..."
         # $VERSION could be passed to the electron-cash.nsi script, but this would require some rewriting in the script iself.
-        wine "$WINEPREFIX/drive_c/Program Files/NSIS/makensis.exe" /DPRODUCT_VERSION=$VERSION electron-cash.nsi || fail "makensis failed"
+        wine "$WINEPREFIX/drive_c/Program Files (x86)/NSIS/makensis.exe" /DPRODUCT_VERSION=$VERSION /DGCC_TRIPLET_HOST_ARCH=$GCC_TRIPLET_HOST_ARCH electron-cash.nsi || fail "makensis failed"
 
         cd dist
-        mv $NAME_ROOT-setup.exe $NAME_ROOT-$VERSION-setup.exe  || fail "Failed to move $NAME_ROOT-$VERSION-setup.exe to the output dist/ directory"
+        mv $NAME_ROOT-setup.exe $NAME_ROOT-$VERSION-$GCC_TRIPLET_HOST_ARCH-setup.exe  || fail "Failed to move $NAME_ROOT-$VERSION-$GCC_TRIPLET_HOST_ARCH-setup.exe to the output dist/ directory"
 
         ls -la *.exe
         sha256sum *.exe
