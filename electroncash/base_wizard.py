@@ -222,13 +222,14 @@ class BaseWizard(util.PrintError):
         title = _('Hardware Keystore')
         # check available plugins
         support = self.plugins.get_hardware_support()
-        # scan devices
+        # scan devices once upfront (not per-plugin) to avoid repeated enumeration
         devices = []
         devmgr = self.plugins.device_manager
+        scanned = devmgr.scan_devices()
         for name, description, plugin in support:
             try:
                 # FIXME: side-effect: unpaired_device_info sets client.handler
-                u = devmgr.unpaired_device_infos(None, plugin)
+                u = devmgr.unpaired_device_infos(None, plugin, devices=scanned)
             except:
                 devmgr.print_exception("error", name)
                 continue
