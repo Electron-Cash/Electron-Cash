@@ -66,12 +66,23 @@ class HistoryList(MyTreeWidget, PrintError):
         self.itemChanged.connect(self.item_changed)
 
         self.has_unknown_balances = False
+        self._last_tx_count = -1
 
     def diagnostic_name(self):
         return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
 
     def clean_up(self):
         self.cleaned_up = True
+
+    def _pre_check_skip(self):
+        '''Skip the entire update() — including setUpdatesEnabled toggles —
+        when the transaction set hasn't changed.  Verification events move
+        transactions between unverified_tx and verified_tx but don't add or
+        remove them, so len(wallet.transactions) stays the same.  The existing
+        TxUpdateMgr.process_verifs() already handles these incrementally.'''
+        if self.cleaned_up:
+            return True
+        return len(self.wallet.transactions) == self._last_tx_count
 
     def refresh_headers(self):
         headers = ['', '', _('Date'), _('Description') , _('Amount'), _('Balance')]
@@ -117,6 +128,9 @@ class HistoryList(MyTreeWidget, PrintError):
     @profiler
     def on_update(self):
         self.wallet = self.parent.wallet
+        # Record the current tx count so that _pre_check_skip() can detect
+        # that nothing changed on subsequent calls.
+        self._last_tx_count = len(self.wallet.transactions)
         h = self.wallet.get_history(self.get_domain(), reverse=True, receives_before_sends=True,
                                     include_tokens=True, include_tokens_balances=False)
         sels = self.selectedItems()

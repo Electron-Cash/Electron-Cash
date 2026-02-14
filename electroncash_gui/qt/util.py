@@ -740,6 +740,13 @@ class MyTreeWidget(QTreeWidget):
             self.deferred_update_ct += 1
         return ret
 
+    def _pre_check_skip(self):
+        '''Override in subclasses to return True when the data hasn't changed
+        and the full update() can be skipped entirely — before any Qt state
+        (setUpdatesEnabled, setSortingEnabled) is toggled.  The default
+        implementation always returns False (never skips).'''
+        return False
+
     def update(self):
         # Defer updates if editing
         if self.editor:
@@ -751,8 +758,17 @@ class MyTreeWidget(QTreeWidget):
             # on initial synch or when new TX's arrive.
             if self.should_defer_update_incr():
                 return
+            # Pre-check: let subclasses bail out BEFORE we touch any Qt
+            # state (setUpdatesEnabled / setSortingEnabled).  Each toggle
+            # of those flags can trigger Qt-internal layout / paint events,
+            # so skipping them entirely avoids measurable C++ overhead
+            # per call on widgets with many items.
+            if self._pre_check_skip():
+                self._update_skipped = True
+                return
             self.setUpdatesEnabled(False)
             scroll_pos_val = self.verticalScrollBar().value() # save previous scroll bar position
+            self._update_skipped = False
             self.on_update()
             self.deferred_update_ct = 0
             weakSelf = Weak.ref(self)

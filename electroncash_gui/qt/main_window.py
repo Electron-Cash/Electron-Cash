@@ -1094,7 +1094,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.contact_list.update()
         self.invoice_list.update()
         self.update_completions()
-        self.history_updated_signal.emit() # inform things like address_dialog that there's a new history, also clears self.tx_update_mgr.verif_q
+        # When HistoryList skipped its rebuild (no new/removed transactions),
+        # avoid the expensive history_updated_signal dispatch (~0.8s with
+        # connected receivers).  Just clear the verification queue directly
+        # since there's nothing new to process.
+        if getattr(self.history_list, '_update_skipped', False):
+            self.tx_update_mgr.verifs_get_and_clear()
+        else:
+            self.history_updated_signal.emit() # inform things like address_dialog that there's a new history, also clears self.tx_update_mgr.verif_q
         self.need_update.clear() # clear flag
         if self.labels_need_update.is_set():
             # if flag was set, might as well declare the labels updated since they necessarily were due to a full update.
