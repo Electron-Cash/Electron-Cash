@@ -15,7 +15,7 @@ import threading
 from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from electroncash import address, token, util
+from electroncash import address, networks, token, util
 from electroncash.simple_config import SimpleConfig
 from electroncash.transaction import Transaction
 
@@ -454,16 +454,17 @@ def _try_to_dl_icon(icon_url: str, *, timeout=30) -> Optional[Tuple[bytes, str]]
     return icon, icon_ext
 
 
-PAYTACA_HOST = "bcmr.paytaca.com"
-
 
 def _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=30, *, skip_icon=False,
                                     nft_hex=None) -> Optional[DownloadedMetaData]:
     """Download metadata from the paytaca indexer"""
+    host = networks.net.PAYTACA_HOST
+    if not host:
+        return None
     if not nft_hex:
-        url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/"
+        url = f"https://{host}/api/tokens/{token_id_hex}/"
     else:
-        url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/{nft_hex}"
+        url = f"https://{host}/api/tokens/{token_id_hex}/{nft_hex}"
     r = requests.get(url, timeout=timeout, allow_redirects=True)
     if not r.ok:
         util.print_error(f"Got error requesting url {url}: {r.status_code} {r.reason}")
@@ -619,7 +620,7 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=Fals
         md = _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=timeout, skip_icon=skip_icon,
                                              nft_hex=nft_hex)
         if md is not None:
-            util.print_error(f"Success in downloading token metadata from {PAYTACA_HOST} for:"
+            util.print_error(f"Success in downloading token metadata from {networks.net.PAYTACA_HOST} for:"
                              f" {token_id_hex} ({md.name})")
             return md
 
