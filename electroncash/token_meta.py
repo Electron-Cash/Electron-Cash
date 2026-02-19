@@ -15,7 +15,7 @@ import threading
 from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from electroncash import address, token, util
+from electroncash import address, networks, token, util
 from electroncash.simple_config import SimpleConfig
 from electroncash.transaction import Transaction
 
@@ -414,10 +414,16 @@ class DownloadedMetaData:
             self.decimals = int(self.decimals)
         except (ValueError, TypeError):
             pass
-        self.decimals = min(max(0, self.decimals), 19) if isinstance(self.decimals, int) else 0
-        self.name = self.name[:30] if isinstance(self.name, str) else ""
-        self.description = self.description[:80] if isinstance(self.description, str) else ""
-        self.symbol = self.symbol[:4] if isinstance(self.symbol, str) else ""
+        # BCMR spec: "An integer between 0 and 18 (inclusive)"
+        self.decimals = min(max(0, self.decimals), 18) if isinstance(self.decimals, int) else 0
+        # BCMR schema: "names should be hidden beyond ... 20 characters until revealed by the user"
+        # We allow up to 2 x 20 = 40 characters
+        self.name = self.name[:40] if isinstance(self.name, str) else ""
+        # BCMR spec: "descriptions should be hidden beyond ... 140 characters until revealed by the user"
+        # We allow up to 2 x 140 = 280 characters
+        self.description = self.description[:280] if isinstance(self.description, str) else ""
+        # BCMR spec: "this standard recommends that... clients accommodate up to 26 characters for full symbols"
+        self.symbol = self.symbol[:26] if isinstance(self.symbol, str) else ""
 
 
 def _rewrite_if_ipfs(u: str) -> str:
@@ -454,16 +460,17 @@ def _try_to_dl_icon(icon_url: str, *, timeout=30) -> Optional[Tuple[bytes, str]]
     return icon, icon_ext
 
 
-PAYTACA_HOST = "bcmr.paytaca.com"
-
 
 def _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=30, *, skip_icon=False,
                                     nft_hex=None) -> Optional[DownloadedMetaData]:
     """Download metadata from the paytaca indexer"""
+    host = networks.net.PAYTACA_HOST
+    if not host:
+        return None
     if not nft_hex:
-        url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/"
+        url = f"https://{host}/api/tokens/{token_id_hex}/"
     else:
-        url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/{nft_hex}"
+        url = f"https://{host}/api/tokens/{token_id_hex}/{nft_hex}"
     r = requests.get(url, timeout=timeout, allow_redirects=True)
     if not r.ok:
         util.print_error(f"Got error requesting url {url}: {r.status_code} {r.reason}")
@@ -619,7 +626,7 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=Fals
         md = _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=timeout, skip_icon=skip_icon,
                                              nft_hex=nft_hex)
         if md is not None:
-            util.print_error(f"Success in downloading token metadata from {PAYTACA_HOST} for:"
+            util.print_error(f"Success in downloading token metadata from {networks.net.PAYTACA_HOST} for:"
                              f" {token_id_hex} ({md.name})")
             return md
 

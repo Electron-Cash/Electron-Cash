@@ -47,6 +47,7 @@ class AbstractNet:
     BASE_UNITS = {'BCH': 8, 'mBCH': 5, 'bits': 2}
     DEFAULT_UNIT = "BCH"
     RPA_START_HEIGHT = 0
+    PAYTACA_HOST = ""
 
 
 class MainNet(AbstractNet):
@@ -62,6 +63,7 @@ class MainNet(AbstractNet):
     DEFAULT_PORTS = {'t': '50001', 's': '50002'}
     DEFAULT_SERVERS = _read_json_dict('servers.json')  # DO NOT MODIFY IN CLIENT CODE
     TITLE = 'Electron Cash'
+    PAYTACA_HOST = "bcmr.paytaca.com"
 
     # Bitcoin Cash fork block specification
     BITCOIN_CASH_FORK_BLOCK_HEIGHT = 478559
@@ -158,6 +160,7 @@ class TestNet4(TestNet):
 
 class ChipNet(TestNet4):
     TITLE = 'Electron Cash Chipnet'
+    PAYTACA_HOST = "bcmr-chipnet.paytaca.com"
     HEADERS_URL = "http://bitcoincash.com/files/chipnet_headers"  # Unused
     DEFAULT_SERVERS = _read_json_dict('servers_chipnet.json')  # DO NOT MODIFY IN CLIENT CODE
     DEFAULT_PORTS = {'t': '64001', 's': '64002'}
