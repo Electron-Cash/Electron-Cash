@@ -414,10 +414,16 @@ class DownloadedMetaData:
             self.decimals = int(self.decimals)
         except (ValueError, TypeError):
             pass
-        self.decimals = min(max(0, self.decimals), 19) if isinstance(self.decimals, int) else 0
-        self.name = self.name[:30] if isinstance(self.name, str) else ""
-        self.description = self.description[:80] if isinstance(self.description, str) else ""
-        self.symbol = self.symbol[:4] if isinstance(self.symbol, str) else ""
+        # BCMR spec: "An integer between 0 and 18 (inclusive)"
+        self.decimals = min(max(0, self.decimals), 18) if isinstance(self.decimals, int) else 0
+        # BCMR schema: "names should be hidden beyond ... 20 characters until revealed by the user"
+        # We allow up to 2 x 20 = 40 characters
+        self.name = self.name[:40] if isinstance(self.name, str) else ""
+        # BCMR spec: "descriptions should be hidden beyond ... 140 characters until revealed by the user"
+        # We allow up to 2 x 140 = 280 characters
+        self.description = self.description[:280] if isinstance(self.description, str) else ""
+        # BCMR spec: "this standard recommends that... clients accommodate up to 26 characters for full symbols"
+        self.symbol = self.symbol[:26] if isinstance(self.symbol, str) else ""
 
 
 def _rewrite_if_ipfs(u: str) -> str:
