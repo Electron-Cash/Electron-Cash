@@ -382,12 +382,13 @@ class Commands:
         return l
 
     @command('n')
-    def getaddressunspent(self, address):
-        """Returns the UTXO list of any address. Note: This
-        is a walletless server query, results are not checked by SPV.
+    def getaddressunspent(self, address, include_tokens=False, tokens_only=False):
+        """Returns the UTXO list of any address. Note: This is a walletless server
+        query that excludes token UTXOs by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
-        return self.network.synchronous_get(('blockchain.scripthash.listunspent', [sh]))
+        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else "exclude_tokens"
+        return self.network.synchronous_get(('blockchain.scripthash.listunspent', [sh, token_filter]))
 
     @command('')
     def serialize(self, jsontx):
@@ -529,12 +530,13 @@ class Commands:
         return out
 
     @command('n')
-    def getaddressbalance(self, address):
-        """Return the balance of any address. Note: This is a walletless
-        server query, results are not checked by SPV.
+    def getaddressbalance(self, address, include_tokens=False, tokens_only=False):
+        """Return the balance of any address. Note: This is a walletless server
+        query that excludes token dust by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
-        out = self.network.synchronous_get(('blockchain.scripthash.get_balance', [sh]))
+        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else "exclude_tokens"
+        out = self.network.synchronous_get(('blockchain.scripthash.get_balance', [sh, token_filter]))
         out["confirmed"] =  str(PyDecimal(out["confirmed"])/COIN)
         out["unconfirmed"] =  str(PyDecimal(out["unconfirmed"])/COIN)
         return out
@@ -1037,6 +1039,7 @@ command_options = {
     'frozen':      (None, "Show only frozen addresses"),
     'funded':      (None, "Show only funded addresses"),
     'imax':        (None, "Maximum number of inputs"),
+    'include_tokens': (None, "Include CashToken-containing UTXOs"),
     'index_url':   (None, 'Override the URL where you would like users to be shown the BIP70 Payment Request'),
     'labels':      ("-l", "Show the labels of listed addresses"),
     'language':    ("-L", "Default language for wordlist"),
@@ -1060,6 +1063,7 @@ command_options = {
     'show_fiat':   (None, "Show fiat value of transactions"),
     'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
     'token_request': (None, "Cashtokens payment request"),
+    'tokens_only': (None, "Return only CashToken-containing UTXOs"),
     'unsigned':    ("-u", "Do not sign transaction"),
     'unused':      (None, "Show only unused addresses"),
     'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations and/or token meta-data for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates and/or token meta-data."),
