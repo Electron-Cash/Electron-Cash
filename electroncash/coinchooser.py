@@ -99,7 +99,7 @@ class CoinChooserBase(PrintError):
         return list(map(make_Bucket, buckets.keys(), buckets.values()))
 
     def penalty_func(self, tx):
-        def penalty(candidate):
+        def penalty():
             return 0
         return penalty
 
