@@ -1131,7 +1131,7 @@ argparse.ArgumentParser.set_default_subparser = set_default_subparser
 # workaround https://bugs.python.org/issue23058
 # see https://github.com/nickstenning/honcho/pull/121
 
-def subparser_call(self, parser, namespace, values, option_string=None):
+def subparser_call(self, parser, namespace, values):
     from argparse import ArgumentError, SUPPRESS, _UNRECOGNIZED_ARGS_ATTR
     parser_name = values[0]
     arg_strings = values[1:]
