@@ -23,8 +23,8 @@ HistoryEntry = namedtuple("HistoryEntry", "tx tx_hash status_str label v_str bal
 # HELPER STUFF EXPORTED TO OTHER MODULES ('Addresses' uses these too) #
 #######################################################################
 StatusImages = [  # Indexed by 'status' from tx info and/or HistoryEntry
-    UIImage.imageNamed_("warning.png").retain(),
-    UIImage.imageNamed_("warning.png").retain(),
+    UIImage.imageNamed_("warning.svg").retain(),
+    UIImage.imageNamed_("warning.svg").retain(),
     UIImage.imageNamed_("unconfirmed.png").retain(),
     UIImage.imageNamed_("unconfirmed.png").retain(),
     UIImage.imageNamed_("clock1.png").retain(),

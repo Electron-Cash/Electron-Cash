@@ -98,10 +98,10 @@ class StatusBarButton(QPushButton):
         QPushButton.__init__(self, icon, '')
         self.setToolTip(tooltip)
         self.setFlat(True)
-        self.setMaximumWidth(25)
+        self.setMaximumWidth(26) # 1px larger than Icon Size to prevent cutoff
+        self.setIconSize(QSize(25,25))
         self.clicked.connect(self.onPress)
         self.func = func
-        self.setIconSize(QSize(25,25))
         self.setCursor(Qt.PointingHandCursor)
 
     def onPress(self, checked=False):
@@ -195,9 +195,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.console_tab = self.create_console_tab()
         self.contacts_tab = self.create_contacts_tab()
         self.converter_tab = self.create_converter_tab()
-        tabs.addTab(self.create_history_tab(), QIcon(":icons/tab_history.png"), _('History'))
-        tabs.addTab(self.send_tab, QIcon(":icons/tab_send.png"), _('Send'))
-        tabs.addTab(self.receive_tab, QIcon(":icons/tab_receive.png"), _('Receive'))
+        tabs.addTab(self.create_history_tab(), QIcon(":icons/tab_history.svg"), _('History'))
+        tabs.addTab(self.send_tab, QIcon(":icons/tab_send.svg"), _('Send'))
+        tabs.addTab(self.receive_tab, QIcon(":icons/tab_receive.svg"), _('Receive'))
         # clears/inits the opreturn widgets
         self.on_toggled_opreturn(bool(self.config.get('enable_opreturn')))
 
@@ -215,7 +215,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         add_optional_tab(tabs, self.token_history_tab, QIcon(":icons/tab_token.svg"), _("Token History"), "token_history")
         add_optional_tab(tabs, self.contacts_tab, QIcon(":icons/tab_contacts.png"), _("Con&tacts"), "contacts")
         add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.svg"), _("Address Converter"), "converter")
-        add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.png"), _("Con&sole"), "console", False)
+        add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.svg"), _("Con&sole"), "console", False)
 
         tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setCentralWidget(tabs)
@@ -303,7 +303,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except Exception as e:
             self.print_error("Sound effect: Failed:", str(e))
             return
-
 
     _first_shown = True
     def showEvent(self, event):
@@ -752,10 +751,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         raw_transaction_menu.addAction(_("From &QR Code") + "...", self.read_tx_from_qrcode)
         self.raw_transaction_menu = raw_transaction_menu
         tools_menu.addSeparator()
-        if ColorScheme.dark_scheme and sys.platform != 'darwin':  # use dark icon in menu except for on macOS where we can't be sure it will look right due to the way menus work on macOS
-            icon = QIcon(":icons/cashacct-button-darkmode.png")
-        else:
-            icon = QIcon(":icons/cashacct-logo.png")
+        icon = QIcon(":icons/cashacct-logo.svg")
         tools_menu.addAction(icon, _("Lookup &Cash Account..."), self.lookup_cash_account_dialog, QKeySequence("Ctrl+L"))
         tools_menu.addAction(icon, _("&Register Cash Account..."), lambda: self.register_new_cash_account(addr='pick'), QKeySequence("Ctrl+G"))
         tools_menu.addSeparator()
@@ -1223,7 +1219,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             def __init__(slf, *args):
                 super().__init__(*args)
                 slf.font_default_size = slf.font().pointSize()
-                icon = ":icons/cashacct-button-darkmode.png" if ColorScheme.dark_scheme else ":icons/cashacct-logo.png"
+                icon = ":icons/cashacct-logo.svg"
                 slf.ca_but = slf.addButton(icon, self.register_new_cash_account, _("Register a new Cash Account for this address"))
                 slf.ca_copy_b = slf.addCopyButton()
                 slf.setReadOnly(True)
@@ -1698,7 +1694,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 "</pre>")
         self.payto_label = payto_label = HelpLabel(_('Pay &to'), msg)
         payto_label.setBuddy(self.payto_e)
-        qmark = ":icons/question-mark-dark.svg" if ColorScheme.dark_scheme else ":icons/question-mark-light.svg"
+        qmark = ":icons/question-mark.svg"
         qmark_help_but = HelpButton(msg, button_text='', fixed_size=False, icon=QIcon(qmark), custom_parent=self)
         self.payto_e.addWidget(qmark_help_but, index=0)
         grid.addWidget(payto_label, 1, 0)
@@ -3193,13 +3189,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         q_icon_prefs = QIcon(":icons/preferences.svg"), _("Preferences"), self.settings_dialog
         sb.addPermanentWidget(StatusBarButton(*q_icon_prefs))
-        q_icon_seed = QIcon(":icons/seed.png"), _("Seed"), self.show_seed_dialog
+        
+        q_icon_seed = QIcon(":icons/seed.svg"), _("Seed"), self.show_seed_dialog
         self.seed_button = StatusBarButton(*q_icon_seed)
         sb.addPermanentWidget(self.seed_button)
+        
         weakSelf = Weak.ref(self)
         gui_object = self.gui_object
         self.status_button = StatusBarButton(QIcon(":icons/status_disconnected.svg"), _("Network"), lambda: gui_object.show_network_dialog(weakSelf()))
         sb.addPermanentWidget(self.status_button)
+        
         run_hook('create_status_bar', sb)
         self.setStatusBar(sb)
 
@@ -4258,7 +4257,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                             task, on_success, self.on_error, disable_escape_key=True,
                             auto_exec=False, auto_show=False, progress_bar=True, progress_min=0, progress_max=100)
         dlg.exec_()
-        # this will block heere in the WaitingDialog event loop... and set success to True if success
+        # this will block here in the WaitingDialog event loop... and set success to True if success
         return success
 
     def sweep_key_dialog(self):
@@ -5631,7 +5630,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if you want this function to present the user with a UI for choosing
         an address to register.'''
         if addr == 'pick':
-            addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo.png"))
+            addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo-original.svg"))
             if addr is None:
                 return  # user cancel
         addr = addr or self.receive_address or self.wallet.get_receiving_address(preferred=True)
@@ -5657,7 +5656,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                          '<p>After the registration transaction receives <i>1 confirmation</i>, you can use your new <b>Cash Account name</b> as if it were an address and give it out to other people (Electron Cash or another Cash Account enabled wallet is required).</p>'
                          '<p><span style="font-weight:100;">You will be offered the opportunity to review the generated transaction before broadcasting it to the blockchain.</span></p>') + \
                        '</span>'
-            qmark = ":icons/question-mark-dark.svg" if ColorScheme.dark_scheme else ":icons/question-mark-light.svg"
+            qmark = ":icons/question-mark.svg"
             help_but = HelpButton(help_msg, button_text='', fixed_size=False, icon=QIcon(qmark), custom_parent=self)
             le.addWidget(help_but)
             name = line_dialog(self.top_level_window(),
@@ -5669,7 +5668,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                _("Proceed to Send Tab"), default=name, linkActivated=on_link,
                                placeholder=placeholder, disallow_empty=True,
                                line_edit_widget = le,
-                               icon=QIcon(":icons/cashacct-logo.png"))
+                               icon=QIcon(":icons/cashacct-logo-original.svg"))
             if name is None:
                 # user cancel
                 return
@@ -5726,7 +5725,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
             res = self.msg_box(
                 # TODO: get SVG icon..
-                parent = self, icon=QIcon(":icons/cashacct-logo.png").pixmap(75, 75),
+                parent = self, icon=QIcon(":icons/cashacct-logo-original.svg").pixmap(75, 75),
                 title=_('Register A New Cash Account'), rich_text=True,
                 text = msg1, informative_text = msg2, detail_text = msg3,
                 checkbox_text=_("Never show this again"), checkbox_ischecked=False

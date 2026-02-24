@@ -910,7 +910,7 @@ class OverlayControlMixin:
         return button
 
     def addCopyButton(self) -> QAbstractButton:
-        return self.addButton(":icons/copy.png", self.on_copy, _("Copy to clipboard"))
+        return self.addButton(":icons/copy.svg", self.on_copy, _("Copy to clipboard"))
 
     def on_copy(self):
         QApplication.instance().clipboard().setText(self.text())
