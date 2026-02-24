@@ -852,7 +852,7 @@ class Network(util.DaemonThread):
                 self.print_error("bad server data in blockchain.relayfee:", result, "error:", repr(e))
         elif method == 'blockchain.block.headers':
             try:
-                self.on_block_headers(interface, request, response)
+                self.process_block_headers(interface, request, response)
             except Exception as e:
                 self.print_error(f"bad server response for {method}: {repr(e)} / {response}")
                 self.connection_down(interface.server)
@@ -1202,7 +1202,8 @@ class Network(util.DaemonThread):
         params = [base_height, count, checkpoint_height]
         return self.queue_request('blockchain.block.headers', params, interface) is not None
 
-    def on_block_headers(self, interface, request, response):
+    def process_block_headers(self, interface, request, response,
+            should_set_backward_mode=False):
         '''Handle receiving a chunk of block headers'''
         error = response.get('error')
         result = response.get('result')
@@ -1299,7 +1300,7 @@ class Network(util.DaemonThread):
             # Note that this will not give us the right blockchain, the
             # syncing does not work that way historically.  That might
             # wait until either a new block appears, or
-            if False:
+            if should_set_backward_mode:
                 interface.blockchain = None
                 interface.set_mode(Interface.MODE_BACKWARD)
                 interface.bad = request_base_height + actual_header_count - 1
