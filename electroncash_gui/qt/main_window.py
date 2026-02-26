@@ -2476,6 +2476,40 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     return False
         return True
 
+    def _warn_if_not_cashtoken_aware_address(self) -> bool:
+        """Show a warning if self.payto_e has non-CashToken-aware addresses, since the user
+        might be trying to send tokens to a wallet without token support. On False return the send action
+        should be aborted."""
+
+        if self.is_token_tx:
+            addr_str = self.payto_e.toPlainText().strip()
+            if address.Address.is_valid(addr_str):
+                if not address.Address.is_token(addr_str):
+                    red = ColorScheme.RED.get_html()
+                    msg = (
+                        _("You are about to send tokens to a non-CashToken-aware address.")
+                        + f"<br><br><font color={red}>"
+                        + _("Are you sure you want to proceed?")
+                        + "</font>"
+                    )
+                    res = self.msg_box(
+                        parent=self,
+                        icon=QMessageBox.Warning,
+                        buttons=(_('Send to non-CashToken_aware address'), _('Cancel')),
+                        defaultButton=_('Cancel'),
+                        escapeButton=_('Cancel'),
+                        title=_("Non-CashToken-aware Address Detected"),
+                        rich_text=True,
+                        text=msg,
+                    )
+                    if res == 0:
+                        # User was sure
+                        return True
+                    else:
+                        # User was Cancelled
+                        return False
+        return True
+
     def do_preview(self):
         self.do_send(preview = True)
 
@@ -2535,6 +2569,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if not r:
                 return
             addr, tx_desc, token_id, token_amount, send_satoshis = r
+
+            if not self._warn_if_not_cashtoken_aware_address():
+                return
 
             amount = send_satoshis
             spec = self.send_token_util.get_ft_send_spec(addr, token_id, token_amount, self.tokens, send_satoshis)
