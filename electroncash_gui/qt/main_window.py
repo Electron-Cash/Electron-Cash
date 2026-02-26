@@ -36,8 +36,8 @@ import traceback
 import weakref
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
-from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Set
+from collections import OrderedDict, defaultdict
+from typing import Any, Dict, List, Optional, Set, DefaultDict
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -56,10 +56,10 @@ from electroncash.util import (format_time, format_satoshis, PrintError,
                                print_error)
 import electroncash.web as web
 from electroncash import Transaction
-from electroncash import util, bitcoin, commands, cashacct, token
+from electroncash import util, bitcoin, commands, cashacct, token, address
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
-from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing
+from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing, TokensBurnedError
 from electroncash.contacts import Contact
 from electroncash import rpa
 try:
@@ -80,6 +80,7 @@ from . import cashacctqt
 from . import wallet_information
 from .util import *
 from .token_meta import TokenMetaQt
+from .token_send_tab_util import TokenSendUtil, TokenSendComboBox
 
 try:
     # pre-load QtMultimedia at app start, if possible
@@ -156,6 +157,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.payment_request = None
         self.checking_accounts = False
         self.qr_window = None
+        self.is_token_tx = False
         self.not_enough_funds = False
         self.op_return_toolong = False
         self.internalpluginsdialog = None
@@ -453,6 +455,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             pass
         elif event == 'new_transaction':
             self.check_and_reset_receive_address_if_needed()
+            self.update_sent_token_combobox()
         elif event in ('ca_verified_tx', 'ca_verification_failed'):
             pass
         elif event == 'verified2':
@@ -1602,6 +1605,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.receive_address = addr
             self.update_receive_address_widget()
 
+    def update_sent_token_combobox(self):
+        tokens, tokens_grouped = self.send_token_util.get_wallet_fungible_only_tokens()
+        self.tokens = tokens
+        self.tokens_grouped = tokens_grouped
+
+        self.token_c.fill_token_items(self.tokens, self.tokens_grouped, self.token_meta)
+
     def clear_receive_tab(self):
         self.expires_label.hide()
         self.expires_combo.show()
@@ -1717,11 +1727,99 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         description_label.setBuddy(self.message_e)
         grid.addWidget(self.message_e, 2, 1, 1, -1)
 
+        msg = _('Token Name and Token Symbol from BCMR metadata if available, or Token Category '
+                '(Also Known as Token ID)') + '\n\n'\
+              + _('To download BCMR metadata, refer to the \'CashTokens\' tab.')
+        token_label = HelpLabel(_('&Token'), msg)
+        grid.addWidget(token_label, 3, 0)
+        self.token_c = TokenSendComboBox()
+        self.token_c.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        token_label.setBuddy(self.token_c)
+        grid.addWidget(self.token_c, 3, 1, 1, -1)
+
+        self.send_token_util = TokenSendUtil(self.wallet, self.token_meta, self.config)
+        self.tokens: DefaultDict[List[Dict]] = defaultdict(list)
+        self.tokens_grouped: DefaultDict[DefaultDict[List[Dict]]] = defaultdict(lambda: defaultdict(list))
+
+        self.update_sent_token_combobox()
+
+        def on_token_selection_changed(index):
+            if index == 0:
+                self.token_amount_e.setText('')
+                self.token_amount_e.setDisabled(True)
+                self.token_max_button.setDisabled(True)
+                self.token_amount_max_label.setText('')
+
+                token_amount_label.setVisible(False)
+                self.token_amount_e.setVisible(False)
+                self.token_max_button.setVisible(False)
+                self.token_amount_max_label.setVisible(False)
+
+                self.update_fee()
+
+                self.message_opreturn_e.setDisabled(False)
+
+                self.is_token_tx = False
+            else:
+                self.token_amount_e.clear()
+                self.token_amount_e.setDisabled(False)
+                self.token_max_button.setDisabled(False)
+                max_token_amt = self.token_c.currentData(TokenSendComboBox.DataRoles.max_formated_token_amount_available)
+                self.token_amount_max_label.setText(f"{_('&Maximum Available Tokens')}: {max_token_amt}")
+
+                token_amount_label.setVisible(True)
+                self.token_amount_e.setVisible(True)
+                self.token_max_button.setVisible(True)
+                self.token_amount_max_label.setVisible(True)
+
+                self.update_fee()
+
+                self.message_opreturn_e.setDisabled(True)
+                self.message_opreturn_e.setText('')
+
+                self.is_token_tx = True
+
+        self.token_c.currentIndexChanged.connect(on_token_selection_changed)
+
+        self.token_amount_e = QLineEdit()
+        token_amount_validator = QDoubleValidator()
+        token_amount_validator.setNotation(QDoubleValidator.StandardNotation)
+        self.token_amount_e.setValidator(token_amount_validator)
+        self.token_amount_e.setFixedWidth(140)
+        msg = _('Token amount to be sent.') + '\n\n' \
+              + _('The amount will be displayed in red if you do not have enough funds in your wallet.') + ' ' \
+              + _('Note that if you have frozen some of your addresses, the available funds will be lower than your '
+                  'total balance.')
+
+        token_amount_label = HelpLabel(_('&Token Amount'), msg)
+        token_amount_label.setBuddy(self.token_amount_e)
+        grid.addWidget(token_amount_label, 4, 0)
+        grid.addWidget(self.token_amount_e, 4, 1)
+
+        self.token_max_button = EnterButton(_("&Max Tokens"), self.spend_max_tokens)
+        self.token_max_button.setFixedWidth(140)
+        self.token_max_button.setCheckable(True)
+        grid.addWidget(self.token_max_button, 4, 2)
+
+        self.token_amount_max_label = QLabel()
+        # self.token_amount_max_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.token_amount_max_label.setBuddy(self.token_amount_e)
+        grid.addWidget(self.token_amount_max_label, 4, 3, 1, -1)
+
+        self.token_amount_e.setDisabled(True)
+        self.token_max_button.setDisabled(True)
+
+        # Don't show token related fields when no token is selected.
+        token_amount_label.setVisible(False)
+        self.token_amount_e.setVisible(False)
+        self.token_max_button.setVisible(False)
+        self.token_amount_max_label.setVisible(False)
+
         msg_opreturn = ( _('OP_RETURN data (optional).') + '\n\n'
                         + _('Posts a PERMANENT note to the BCH blockchain as part of this transaction.')
                         + '\n\n' + _('If you specify OP_RETURN text, you may leave the \'Pay to\' field blank.') )
         self.opreturn_label = HelpLabel(_('&OP_RETURN'), msg_opreturn)
-        grid.addWidget(self.opreturn_label,  3, 0)
+        grid.addWidget(self.opreturn_label,  5, 0)
         self.message_opreturn_e = MyLineEdit()
         self.opreturn_label.setBuddy(self.message_opreturn_e)
         hbox = QHBoxLayout()
@@ -1729,7 +1827,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.opreturn_rawhex_cb = QCheckBox(_('&Raw hex script'))
         self.opreturn_rawhex_cb.setToolTip(_('If unchecked, the textbox contents are UTF8-encoded into a single-push script: <tt>OP_RETURN PUSH &lt;text&gt;</tt>. If checked, the text contents will be interpreted as a raw hexadecimal script to be appended after the OP_RETURN opcode: <tt>OP_RETURN &lt;script&gt;</tt>.'))
         hbox.addWidget(self.opreturn_rawhex_cb)
-        grid.addLayout(hbox,  3 , 1, 1, -1)
+        grid.addLayout(hbox,  5 , 1, 1, -1)
 
         self.send_tab_opreturn_widgets = [
             self.message_opreturn_e,
@@ -1738,12 +1836,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         ]
 
         self.from_label = QLabel(_('&From'))
-        grid.addWidget(self.from_label, 4, 0)
+        grid.addWidget(self.from_label,6, 0)
         self.from_list = MyTreeWidget(self, self.from_list_menu, ['',''])
         self.from_label.setBuddy(self.from_list)
         self.from_list.setHeaderHidden(True)
         self.from_list.setMaximumHeight(80)
-        grid.addWidget(self.from_list, 4, 1, 1, -1)
+        grid.addWidget(self.from_list, 6, 1, 1, -1)
         self.set_pay_from([])
 
         msg = _('Amount to be sent.') + '\n\n' \
@@ -1752,23 +1850,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
               + _('Keyboard shortcut: type "!" to send all your coins.')
         amount_label = HelpLabel(_('&Amount'), msg)
         amount_label.setBuddy(self.amount_e)
-        grid.addWidget(amount_label, 5, 0)
-        grid.addWidget(self.amount_e, 5, 1)
+        grid.addWidget(amount_label, 6, 0)
+        grid.addWidget(self.amount_e, 6, 1)
 
         self.fiat_send_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
             self.fiat_send_e.setVisible(False)
-        grid.addWidget(self.fiat_send_e, 5, 2)
+        grid.addWidget(self.fiat_send_e, 6, 2)
         self.amount_e.frozen.connect(
             lambda: self.fiat_send_e.setFrozen(self.amount_e.isReadOnly()))
 
         self.max_button = EnterButton(_("&Max"), self.spend_max)
         self.max_button.setFixedWidth(140)
         self.max_button.setCheckable(True)
-        grid.addWidget(self.max_button, 5, 3)
+        grid.addWidget(self.max_button, 6, 3)
         hbox = self.send_tab_extra_plugin_controls_hbox = QHBoxLayout()
         hbox.addStretch(1)
-        grid.addLayout(hbox, 5, 4, 1, -1)
+        grid.addLayout(hbox, 6, 4, 1, -1)
 
         msg = _('Bitcoin Cash transactions are in general not free. A transaction fee is paid by the sender of the funds.') + '\n\n'\
               + _('The amount of fee can be decided freely by the sender. However, transactions with low fees take more time to be processed.') + '\n\n'\
@@ -1803,10 +1901,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.fee_e.editingFinished.connect(self.update_fee)
         self.connect_fields(self, self.amount_e, self.fiat_send_e, self.fee_e)
 
-        grid.addWidget(self.fee_e_label, 6, 0)
-        grid.addWidget(self.fee_slider, 6, 1)
-        grid.addWidget(self.fee_custom_lbl, 6, 1)
-        grid.addWidget(self.fee_e, 6, 2)
+        grid.addWidget(self.fee_e_label, 7, 0)
+        grid.addWidget(self.fee_slider, 7, 1)
+        grid.addWidget(self.fee_custom_lbl, 7, 1)
+        grid.addWidget(self.fee_e, 7, 2)
 
         self.preview_button = EnterButton(_("&Preview"), self.do_preview)
         self.preview_button.setToolTip(_('Display the details of your transactions before signing it.'))
@@ -1817,7 +1915,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.clear_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.send_button)
-        grid.addLayout(buttons, 7, 1, 1, 3)
+        grid.addLayout(buttons, 8, 1, 1, 3)
 
         self.payto_e.textChanged.connect(self.update_buttons_on_seed)  # hide/unhide various buttons
 
@@ -1897,6 +1995,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.max_button.setChecked(True)
         self.do_update_fee()
 
+    def spend_max_tokens(self):
+        max_token_amt = self.token_c.currentData(TokenSendComboBox.DataRoles.max_formated_token_amount_available)
+        self.token_amount_e.setText(str(max_token_amt))
+
     def update_fee(self):
         self.require_fee_update = True
 
@@ -1961,7 +2063,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.fee_e.setAmount(fee)
 
             if self.max_button.isChecked():
-                amount = tx.output_value()
+                if self.is_token_tx:
+                    try:
+                        amount = self.send_token_util.estimate_max_bch_amount()
+                        self.not_enough_funds = False
+                    except NotEnoughFunds:
+                        self.not_enough_funds = True
+                        if not freeze_fee:
+                            self.fee_e.setAmount(None)
+                        return
+                    except BaseException:
+                        return
+                else:
+                    amount = tx.output_value()
+
                 self.amount_e.setAmount(amount)
             if fee is not None:
                 fee_rate = fee / tx.estimated_size()
@@ -2252,6 +2367,30 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             return outputs, fee, label, coins
 
+    # Process the token send action in a separate method to minimize potential side effects from using
+    # the new CashTokens code.
+    # It might be a good idea to combine this with read_send_tab() later.
+    def read_send_token_tab(self):
+        token_id = self.token_c.currentData(TokenSendComboBox.DataRoles.token_id)
+
+        recipient = self.payto_e.get_recipient()
+        if not recipient:
+            self.show_error(_('No outputs'))
+            return
+        addr_type, addr = recipient
+
+        tx_desc = self.message_e.text()
+
+        token_amount = self.token_amount_e.text()
+        if not token_amount:
+            self.show_error(_('Invalid Token Amount'))
+            return
+        amount = self.token_meta.parse_amount(token_id, token_amount)
+
+        send_satoshis = self.amount_e.get_amount() or 0
+
+        return addr, tx_desc, token_id, amount, send_satoshis
+
     def _chk_no_segwit_suspects(self):
         ''' Makes sure the payto_e has no addresses that might be BTC segwit
         in it and if it does, warn user. Intended to be called from do_send.
@@ -2354,40 +2493,65 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not self._warn_if_legacy_address():
             return
 
-        if not self.payto_e.is_paycode:
-            r = self.read_send_tab()
-            if not r:
-                return
-            outputs, fee, tx_desc, coins = r
-        else:
-            r = self.read_send_tab(get_raw=True)
-            if not r:
-                return
-            outputs, fee, tx_desc, coins, tx_raw = r
-
-        try:
-            if self.payto_e.is_paycode:
-                tx = self.tx_from_text(tx_raw)
+        # Process the token send action in a separate block to minimize potential side effects from using
+        # the new CashTokens code. It might be a good idea to combine the two blocks later.
+        if not self.is_token_tx:
+            if not self.payto_e.is_paycode:
+                r = self.read_send_tab()
+                if not r:
+                    return
+                outputs, fee, tx_desc, coins = r
             else:
-                tx = self.wallet.make_unsigned_transaction(
-                    coins, outputs, self.config, fee)
-        except NotEnoughFunds:
-            self.show_message(_("Insufficient funds"))
-            return
-        except ExcessiveFee:
-            self.show_message(_("Your fee is too high.  Max is 50 sat/byte."))
-            return
-        except BaseException as e:
-            traceback.print_exc(file=sys.stderr)
-            self.show_message(str(e))
-            return
+                r = self.read_send_tab(get_raw=True)
+                if not r:
+                    return
+                outputs, fee, tx_desc, coins, tx_raw = r
 
-        amount = tx.output_value() if self.max_button.isChecked() else sum(map(lambda x:x[2], outputs))
-        fee = tx.get_fee()
+            try:
+                if self.payto_e.is_paycode:
+                    tx = self.tx_from_text(tx_raw)
+                else:
+                    tx = self.wallet.make_unsigned_transaction(
+                        coins, outputs, self.config, fee)
+            except NotEnoughFunds:
+                self.show_message(_("Insufficient funds"))
+                return
+            except ExcessiveFee:
+                self.show_message(_("Your fee is too high.  Max is 50 sat/byte."))
+                return
+            except BaseException as e:
+                traceback.print_exc(file=sys.stderr)
+                self.show_message(str(e))
+                return
 
-        #if fee < self.wallet.relayfee() * tx.estimated_size() / 1000 and tx.requires_fee(self.wallet):
-            #self.show_error(_("This transaction requires a higher fee, or it will not be propagated by the network"))
-            #return
+            amount = tx.output_value() if self.max_button.isChecked() else sum(map(lambda x:x[2], outputs))
+            fee = tx.get_fee()
+
+            #if fee < self.wallet.relayfee() * tx.estimated_size() / 1000 and tx.requires_fee(self.wallet):
+                #self.show_error(_("This transaction requires a higher fee, or it will not be propagated by the network"))
+                #return
+        else:
+            r = self.read_send_token_tab()
+            if not r:
+                return
+            addr, tx_desc, token_id, token_amount, send_satoshis = r
+
+            amount = send_satoshis
+            spec = self.send_token_util.get_ft_send_spec(addr, token_id, token_amount, self.tokens, send_satoshis)
+
+            try:
+                tx = self.wallet.make_token_send_tx(self.config, spec)
+                if not tx:
+                    self.show_error("Unimplemented")
+                fee = tx.get_fee()
+            except NotEnoughFunds as e:
+                self.show_error(str(e) or _("Not enough funds"))
+            except ExcessiveFee as e:
+                self.show_error(str(e) or _("Excessive fee"))
+            except TokensBurnedError as e:
+                self.show_error(str(e) or _("Internal Error: Transaction generation yielded a transaction in which"
+                                            " some tokens are being burned;  refusing to proceed. Please report this"
+                                            " situation to the developers."))
 
         if preview:
             # NB: this ultimately takes a deepcopy of the tx in question
@@ -2407,6 +2571,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             _("Amount to be sent") + ": " + self.format_amount_and_units(amount),
             _("Mining fee") + ": " + self.format_amount_and_units(fee),
         ]
+        if self.is_token_tx:
+            formated_token_amount = self.token_meta.format_amount(token_id, token_amount)
+            msg.insert(1, _("Token amount to be sent") + ": " + formated_token_amount)
+            msg.insert(2, _("Token") + ": "+ (self.token_meta.get_token_display_name(token_id) or token_id))
 
         x_fee = run_hook('get_tx_extra_fee', self.wallet, tx)
         if x_fee:
@@ -2755,6 +2923,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             e.setFrozen(False)
         self.payto_e.setHidden(False)
         self.payto_label.setHidden(False)
+        self.amount_e.setText('')
+        self.token_c.setCurrentIndex(0)
         self.max_button.setDisabled(False)
         self.opreturn_rawhex_cb.setChecked(False)
         self.opreturn_rawhex_cb.setDisabled(False)
@@ -2772,12 +2942,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.utxo_list.update()
         self.token_list.update()
         self.update_fee()
+        self.update_sent_token_combobox()
 
     def set_frozen_coin_state(self, utxos, freeze):
         self.wallet.set_frozen_coin_state(utxos, freeze)
         self.utxo_list.update()
         self.token_list.update()
         self.update_fee()
+        self.update_sent_token_combobox()
 
     def create_converter_tab(self):
 
