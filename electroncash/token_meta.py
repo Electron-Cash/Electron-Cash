@@ -433,8 +433,8 @@ class DownloadedMetaData:
             pass
         self.decimals = min(max(0, self.decimals), 19) if isinstance(self.decimals, int) else 0
         self.name = self.name[:30] if isinstance(self.name, str) else ""
-        self.description = self.description[:80] if isinstance(self.description, str) else ""
-        self.symbol = self.symbol[:4] if isinstance(self.symbol, str) else ""
+        self.description = self.description[:160] if isinstance(self.description, str) else ""
+        self.symbol = self.symbol[:8] if isinstance(self.symbol, str) else ""
 
 
 def _rewrite_if_ipfs(u: str) -> str:
