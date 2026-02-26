@@ -84,6 +84,8 @@ def do_update_token_meta(window, token_id_hex: str, nft_hex: Optional[str] = Non
                 meta.set_token_display_name(token_id_hex, parent.name)
             if parent.symbol:
                 meta.set_token_ticker_symbol(token_id_hex, parent.symbol)
+            if parent.description:
+                meta.set_token_description(token_id_hex, parent.description)
             item_text = meta.format_token_display_name(token_id_hex)
             if parent.icon:
                 meta.set_icon(token_id_hex, meta.convert_downloaded_icon(parent.icon, parent.icon_ext))
