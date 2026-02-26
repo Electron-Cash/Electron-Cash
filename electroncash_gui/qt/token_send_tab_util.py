@@ -235,3 +235,39 @@ class TokenSendUtil(PrintError):
             self.show_error(str(e) or _("Internal Error: Transaction generation yielded a transaction in which"
                                         " some tokens are being burned;  refusing to proceed. Please report this"
                                         " situation to the developers."))
+
+
+class TokenSendComboBox(QComboBox):
+
+    class DataRoles(IntEnum):
+        token_id = QtCore.Qt.UserRole
+        max_formated_token_amount_available = QtCore.Qt.UserRole + 1
+
+    def __init__(self):
+        QComboBox.__init__(self)
+
+        self.add_empty_item()
+
+    def add_empty_item(self):
+        cashTokensIcon = QIcon(':icons/tab_token.svg')
+        self.addItem(cashTokensIcon, _("None"), None)
+
+    def fill_token_items(self, tokens: DefaultDict[str, List[Dict]],
+                        tokens_grouped: DefaultDict[str, DefaultDict[str, List[Dict]]], token_meta):
+
+        self.clear()
+
+        self.add_empty_item()
+
+        for token_id in tokens.keys():
+            token_icon = token_meta.get_icon(token_id)
+            token_display_name = token_meta.get_token_display_name(token_id) or token_id
+            self.addItem(token_icon, token_display_name)
+
+            max_token_amt = TokenSendUtil.get_max_ft_token_amount_available(tokens, token_id)
+            max_token_amt_formated = token_meta.format_amount(token_id, max_token_amt)
+
+            # Add item data
+            index = self.count() - 1
+            self.setItemData(index, token_id, self.DataRoles.token_id)
+            self.setItemData(index, max_token_amt_formated, self.DataRoles.max_formated_token_amount_available)
