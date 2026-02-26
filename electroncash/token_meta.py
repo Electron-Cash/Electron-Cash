@@ -177,6 +177,11 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         if isinstance(ret, str):
             return ret
 
+    def get_token_description(self, token_id_hex: str) -> Optional[str]:
+        ret = self.d.get("descriptions", {}).get(token_id_hex)
+        if isinstance(ret, str):
+            return ret
+
     def get_token_decimals(self, token_id_hex: str) -> Optional[int]:
         """Returns None if unknown or undefined decimals for token"""
         ret = self.d.get("decimals", {}).get(token_id_hex)
@@ -189,6 +194,7 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
                     or self.get_icon(token_id_hex, nft_hex=nft_hex, autogen_if_missing=False) is not None)
         return (self.get_token_display_name(token_id_hex) is not None
                 or self.get_token_ticker_symbol(token_id_hex) is not None
+                or self.get_token_description(token_id_hex) is not None
                 or self.get_token_decimals(token_id_hex) is not None
                 or self.get_icon(token_id_hex, autogen_if_missing=False) is not None)
 
@@ -220,6 +226,17 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
             dd[token_id_hex] = str(ticker)
             if was_empty:
                 self.d["tickers"] = dd
+        self.dirty = True
+
+    def set_token_description(self, token_id_hex: str, description: Optional[str]):
+        dd = self.d.get("descriptions", {})
+        if description is None:
+            dd.pop(token_id_hex, None)
+        elif isinstance(description, str):
+            was_empty = not dd
+            dd[token_id_hex] = str(description)
+            if was_empty:
+                self.d["descriptions"] = dd
         self.dirty = True
 
     def set_token_decimals(self, token_id_hex: str, decimals: Optional[int]):
@@ -416,8 +433,8 @@ class DownloadedMetaData:
             pass
         self.decimals = min(max(0, self.decimals), 19) if isinstance(self.decimals, int) else 0
         self.name = self.name[:30] if isinstance(self.name, str) else ""
-        self.description = self.description[:80] if isinstance(self.description, str) else ""
-        self.symbol = self.symbol[:4] if isinstance(self.symbol, str) else ""
+        self.description = self.description[:160] if isinstance(self.description, str) else ""
+        self.symbol = self.symbol[:8] if isinstance(self.symbol, str) else ""
 
 
 def _rewrite_if_ipfs(u: str) -> str:
