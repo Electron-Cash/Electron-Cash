@@ -119,8 +119,14 @@ class TokenSendUtil(PrintError):
         else:
             spec.payto_addr = addr
 
-        spec.change_addr = (self.wallet.get_unused_address(for_change=True, frozen_ok=False)
+        if self.wallet.use_change:
+            change_addr = (self.wallet.get_unused_address(for_change=True, frozen_ok=False)
                             or self.wallet.dummy_address())
+        else:
+            change_addr = self.wallet.dummy_address()
+
+        spec.change_addr = change_addr
+
         spec.feerate = feerate
         if dummy:
             spec.send_satoshis = wallet.dust_threshold(self.wallet.network)
