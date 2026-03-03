@@ -198,7 +198,7 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
 class TokenSendSpec:
     """Class used by Abstract_Wallet.make_token_send_tx to communicate to it what is required."""
     __slots__ = ('payto_addr', 'change_addr', 'feerate', 'non_token_utxos', 'token_utxos',
-                 'send_satoshis', 'send_fungible_amounts', 'send_nfts', 'edit_nfts', 'mint_nfts')
+                 'send_satoshis', 'send_fungible_amounts', 'send_nfts', 'edit_nfts', 'mint_nfts', 'opreturn_output')
     # The payee -- they will receive all fungibles specified as well as nfts marked for sending. Can be a local wallet
     # addresss in the case of minting or editing NFTs.
     payto_addr: Address
@@ -233,10 +233,14 @@ class TokenSendSpec:
     # the specified Capability and commitment (commitment can be zero-length bytes).
     mint_nfts: Dict[str, List[Tuple[token.Capability, bytes]]]  # Can be empty
 
+    # OPReturn message output
+    opreturn_output: Any # Can be None
+
     def __init__(self):
         (self.non_token_utxos, self.token_utxos, self.send_fungible_amounts, self.send_nfts, self.edit_nfts,
          self.mint_nfts) = dict(), dict(), dict(), set(), dict(), dict()
         self.feerate, self.send_satoshis = 0, 0
+        self.opreturn_output = None
 
     def get_utxo(self, utxoname: str) -> Optional[Dict[str, Any]]:
         return self.token_utxos.get(utxoname) or self.non_token_utxos.get(utxoname)
@@ -2925,13 +2929,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             tds_satoshis += [None]  # Non-token output for pure BCH
         outputs += [(TYPE_ADDRESS, spec.change_addr, token_dust)] * len(tds_change_out)
 
+        if spec.opreturn_output:
+            outputs.append(spec.opreturn_output)
+
         token_datas = tds_out + tds_satoshis + tds_change_out
 
         # Add change output
         i_change = len(outputs)
         outputs.append((TYPE_ADDRESS, spec.change_addr, '!'))
         token_datas.append(None)
-        assert len(outputs) == len(token_datas)
+        assert len(outputs) == len(token_datas) if not spec.opreturn_output else len(token_datas) + 1
 
         sign_schnorr = self.is_schnorr_enabled() if sign_schnorr is None else sign_schnorr
         addrs_seen: Set[Address] = {spec.change_addr, spec.payto_addr}
