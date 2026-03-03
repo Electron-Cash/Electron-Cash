@@ -1865,23 +1865,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
               + _('Keyboard shortcut: type "!" to send all your coins.')
         amount_label = HelpLabel(_('&Amount'), msg)
         amount_label.setBuddy(self.amount_e)
-        grid.addWidget(amount_label, 6, 0)
-        grid.addWidget(self.amount_e, 6, 1)
+        grid.addWidget(amount_label, 7, 0)
+        grid.addWidget(self.amount_e, 7, 1)
 
         self.fiat_send_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
             self.fiat_send_e.setVisible(False)
-        grid.addWidget(self.fiat_send_e, 6, 2)
+        grid.addWidget(self.fiat_send_e, 7, 2)
         self.amount_e.frozen.connect(
             lambda: self.fiat_send_e.setFrozen(self.amount_e.isReadOnly()))
 
         self.max_button = EnterButton(_("&Max"), self.spend_max)
         self.max_button.setFixedWidth(140)
         self.max_button.setCheckable(True)
-        grid.addWidget(self.max_button, 6, 3)
+        grid.addWidget(self.max_button, 7, 3)
         hbox = self.send_tab_extra_plugin_controls_hbox = QHBoxLayout()
         hbox.addStretch(1)
-        grid.addLayout(hbox, 6, 4, 1, -1)
+        grid.addLayout(hbox, 7, 4, 1, -1)
 
         msg = _('Bitcoin Cash transactions are in general not free. A transaction fee is paid by the sender of the funds.') + '\n\n'\
               + _('The amount of fee can be decided freely by the sender. However, transactions with low fees take more time to be processed.') + '\n\n'\
@@ -1916,10 +1916,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.fee_e.editingFinished.connect(self.update_fee)
         self.connect_fields(self, self.amount_e, self.fiat_send_e, self.fee_e)
 
-        grid.addWidget(self.fee_e_label, 7, 0)
-        grid.addWidget(self.fee_slider, 7, 1)
-        grid.addWidget(self.fee_custom_lbl, 7, 1)
-        grid.addWidget(self.fee_e, 7, 2)
+        grid.addWidget(self.fee_e_label, 8, 0)
+        grid.addWidget(self.fee_slider, 8, 1)
+        grid.addWidget(self.fee_custom_lbl, 8, 1)
+        grid.addWidget(self.fee_e, 8, 2)
 
         self.preview_button = EnterButton(_("&Preview"), self.do_preview)
         self.preview_button.setToolTip(_('Display the details of your transactions before signing it.'))
@@ -1930,7 +1930,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.clear_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.send_button)
-        grid.addLayout(buttons, 8, 1, 1, 3)
+        grid.addLayout(buttons, 9, 1, 1, 3)
 
         self.payto_e.textChanged.connect(self.update_buttons_on_seed)  # hide/unhide various buttons
 
