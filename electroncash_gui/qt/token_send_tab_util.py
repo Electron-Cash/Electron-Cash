@@ -90,7 +90,7 @@ class TokenSendUtil(PrintError):
             total_amount += utxo['token_data'].amount
         return total_amount
 
-    def get_ft_send_spec(self, addr, category_id, amount, tokens, send_satoshis=0, dummy=False):
+    def get_ft_send_spec(self, addr, category_id, amount, tokens, send_satoshis=0, opreturn_output=None, dummy=False):
         token_utxos = tokens[category_id]
         feerate = self.config.fee_per_kb()
 
@@ -136,6 +136,8 @@ class TokenSendUtil(PrintError):
         spec.non_token_utxos = {self.get_outpoint_longname(x): x
                                 for x in self.wallet.get_spendable_coins(None, self.config)}
         spec.send_fungible_amounts = {category_id: amount}
+
+        spec.opreturn_output = opreturn_output
 
         # No NFTs!
         # Gather tx inputs

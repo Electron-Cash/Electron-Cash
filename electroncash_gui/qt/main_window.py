@@ -1775,8 +1775,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
                 self.update_fee()
 
-                self.message_opreturn_e.setDisabled(False)
-
                 self.is_token_tx = False
             else:
                 self.token_amount_e.clear()
@@ -1792,7 +1790,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
                 self.update_fee()
 
-                self.message_opreturn_e.setDisabled(True)
                 self.message_opreturn_e.setText('')
 
                 self.is_token_tx = True
@@ -2407,7 +2404,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         send_satoshis = self.amount_e.get_amount() or 0
 
-        return addr, tx_desc, token_id, amount, send_satoshis
+        opreturn_output = None
+        try:
+            # handle op_return if specified and enabled
+            opreturn_message = self.message_opreturn_e.text()
+            if opreturn_message:
+                if self.opreturn_rawhex_cb.isChecked():
+                    opreturn_output = OPReturn.output_for_rawhex(opreturn_message)
+                else:
+                    opreturn_output = OPReturn.output_for_stringdata(opreturn_message)
+        except OPReturn.TooLarge as e:
+            self.show_error(str(e))
+            return
+        except OPReturn.Error as e:
+            self.show_error(str(e))
+            return
+
+        return addr, tx_desc, token_id, amount, send_satoshis, opreturn_output
 
     def _chk_no_segwit_suspects(self):
         ''' Makes sure the payto_e has no addresses that might be BTC segwit
@@ -2586,13 +2599,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             r = self.read_send_token_tab()
             if not r:
                 return
-            addr, tx_desc, token_id, token_amount, send_satoshis = r
+            addr, tx_desc, token_id, token_amount, send_satoshis, opreturn_output = r
 
             if not self._warn_if_not_cashtoken_aware_address():
                 return
 
             amount = send_satoshis
-            spec = self.send_token_util.get_ft_send_spec(addr, token_id, token_amount, self.tokens, send_satoshis)
+            spec = self.send_token_util.get_ft_send_spec(
+                addr, token_id, token_amount, self.tokens, send_satoshis, opreturn_output)
 
             try:
                 tx = self.wallet.make_token_send_tx(self.config, spec)
