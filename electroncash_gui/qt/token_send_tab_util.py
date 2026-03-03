@@ -59,7 +59,9 @@ class TokenSendUtil(PrintError):
         # Setup data source; iterate over a sorted list of utxos
         def sort_func(u):
             td: token.OutputData = u['token_data']
-            return td.id, td.commitment, td.bitfield & 0x0f, self.get_outpoint_longname(u)
+            token_display_name = self.token_meta.get_token_display_name(td.id_hex) or ''
+            return (token_display_name == '', token_display_name, td.id,
+                    td.commitment, td.bitfield & 0x0f, self.get_outpoint_longname(u))
         sorted_utxos = sorted(token_utxos, key=sort_func)
 
         for utxo in sorted_utxos:
@@ -97,7 +99,9 @@ class TokenSendUtil(PrintError):
         # Setup data source; iterate over a sorted list of utxos
         def sort_func(u):
             td: token.OutputData = u['token_data']
-            return td.id, td.commitment, td.bitfield & 0x0f, self.get_outpoint_longname(u)
+            token_display_name = self.token_meta.get_token_display_name(td.id_hex) or ''
+            return (token_display_name == '', token_display_name, td.id,
+                    td.commitment, td.bitfield & 0x0f, self.get_outpoint_longname(u))
 
         sorted_utxos = sorted(token_utxos, key=sort_func)
 
