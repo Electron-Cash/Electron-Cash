@@ -1412,8 +1412,26 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             but.clicked.connect(on_copy_uri)
             but.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             but.setToolTip(_('Click to copy the receive request URI to the clipboard'))
+
+            qr_addr_format_toggle = QPushButton(_('Show tokens address'))
+            qr_addr_format_toggle.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            qr_addr_format_toggle.setToolTip(_('Click to switch between cash and token address formats'))
+            self.qr_use_token_address = False
+            def toggle_qr_code_address_format():
+                if not self.qr_use_token_address:
+                    self.qr_use_token_address = True
+                    qr_addr_format_toggle.setText(_('Show cash address'))
+                else:
+                    self.qr_use_token_address = False
+                    qr_addr_format_toggle.setText(_('Show token address'))
+                self.update_receive_qr()
+
+            qr_addr_format_toggle.clicked.connect(toggle_qr_code_address_format)
+
             vbox2.addWidget(but)
+            vbox2.addWidget(qr_addr_format_toggle)
             vbox2.setAlignment(but, Qt.AlignHCenter | Qt.AlignVCenter)
+            vbox2.setAlignment(qr_addr_format_toggle, Qt.AlignHCenter | Qt.AlignVCenter)
             hbox.addLayout(vbox2)
 
 
@@ -1670,7 +1688,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             uri = self.receive_address.to_ui_string()
         else:
             # Otherwise proceed as normal, prepending bitcoincash: to URI
-            uri = web.create_URI(self.receive_address, amount, message, **kwargs)
+            uri = web.create_URI(self.receive_address, amount, message, token=self.qr_use_token_address, **kwargs)
 
         self.receive_qr.setData(uri)
         if self.qr_window:
