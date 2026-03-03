@@ -65,7 +65,9 @@ def do_update_token_meta(window, token_id_hex: str, nft_hex: Optional[str] = Non
         return False
     dlg = None  # this will be set at the bottom of this function
 
-    update_item = _("token category") if not nft_hex else _("token category + NFT")
+    update_item = f'{_("token category")} : {token_id_hex}'
+    if nft_hex:
+        update_item += f' + {_("NFT")}: {nft_hex}'
     item_text = _("this item")
 
     def task():

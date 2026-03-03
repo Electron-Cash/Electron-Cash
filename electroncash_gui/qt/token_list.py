@@ -472,7 +472,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         frozen_utxos = []
         frozen_addresses = set()
         unique_token_ids_selected_that_may_be_frozen_or_unfrozen = set()
-        unique_commitments_selected_that_may_be_frozen_or_unfrozen = set()
+        unique_commitments_selected_that_may_be_frozen_or_unfrozen = defaultdict(set)
         fungible_ct = 0
 
         def recurse_find_non_frozen_leaves(item):
@@ -486,7 +486,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                     if td:
                         unique_token_ids_selected_that_may_be_frozen_or_unfrozen.add(td.id_hex)
                         if td.has_nft():
-                            unique_commitments_selected_that_may_be_frozen_or_unfrozen.add(td.commitment.hex())
+                            unique_commitments_selected_that_may_be_frozen_or_unfrozen[td.id_hex].add(td.commitment.hex())
                         else:
                             fungible_ct += 1
                     flags = item.data(0, self.DataRoles.frozen_flags)
@@ -534,7 +534,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
                 if len(unique_commitments_selected_that_may_be_frozen_or_unfrozen) == 1 and not fungible_ct:
                     # Has 1 or more selected, but it's all the same NFT commitment, so show NFT-level fetch action
-                    nft_hex = list(unique_commitments_selected_that_may_be_frozen_or_unfrozen)[0]
+                    nft_hex = list(unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex])[0]
                     if self.parent.network and nft_hex:
                         menu.addAction(_("Fetch NFT Metadata"),
                                        lambda: do_update_token_meta(self.parent, token_id_hex, nft_hex=nft_hex))
@@ -546,6 +546,21 @@ class TokenList(MyTreeWidget, util.PrintError):
                     if self.parent.network:
                         menu.addAction(_("Fetch Category Metadata"),
                                        lambda: do_update_token_meta(self.parent, token_id_hex))
+            else:
+                def fetch_metadata_batch():
+                    for token_id_hex in unique_token_ids_selected_that_may_be_frozen_or_unfrozen:
+                        if list(unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex]):
+                            for nft_hex in unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex]:
+                                do_update_token_meta(self.parent, token_id_hex, nft_hex=nft_hex)
+                        else:
+                            do_update_token_meta(self.parent, token_id_hex)
+
+                batch_length = (len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)
+                          + len(unique_commitments_selected_that_may_be_frozen_or_unfrozen)
+                          - len(unique_commitments_selected_that_may_be_frozen_or_unfrozen.keys()))
+
+                menu.addAction(_("Fetch Metadata") + f' ({batch_length})',
+                               lambda: fetch_metadata_batch())
 
             if num_selected == 1:
                 # Single selection
