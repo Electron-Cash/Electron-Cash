@@ -547,20 +547,21 @@ class TokenList(MyTreeWidget, util.PrintError):
                         menu.addAction(_("Fetch Category Metadata"),
                                        lambda: do_update_token_meta(self.parent, token_id_hex))
             else:
-                def fetch_metadata_batch():
-                    for token_id_hex in unique_token_ids_selected_that_may_be_frozen_or_unfrozen:
-                        if list(unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex]):
-                            for nft_hex in unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex]:
-                                do_update_token_meta(self.parent, token_id_hex, nft_hex=nft_hex)
-                        else:
-                            do_update_token_meta(self.parent, token_id_hex)
+                if self.parent.network:
+                    def fetch_metadata_batch():
+                        for token_id_hex in unique_token_ids_selected_that_may_be_frozen_or_unfrozen:
+                            if list(unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex]):
+                                for nft_hex in unique_commitments_selected_that_may_be_frozen_or_unfrozen[token_id_hex]:
+                                    do_update_token_meta(self.parent, token_id_hex, nft_hex=nft_hex)
+                            else:
+                                do_update_token_meta(self.parent, token_id_hex)
 
-                batch_length = (len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)
-                          + len(unique_commitments_selected_that_may_be_frozen_or_unfrozen)
-                          - len(unique_commitments_selected_that_may_be_frozen_or_unfrozen.keys()))
+                    batch_length = (len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)
+                                    + len(unique_commitments_selected_that_may_be_frozen_or_unfrozen)
+                                    - len(unique_commitments_selected_that_may_be_frozen_or_unfrozen.keys()))
 
-                menu.addAction(_("Fetch Metadata") + f' ({batch_length})',
-                               lambda: fetch_metadata_batch())
+                    menu.addAction(_("Fetch Metadata") + f' ({batch_length})',
+                                   lambda: fetch_metadata_batch())
 
             if num_selected == 1:
                 # Single selection
