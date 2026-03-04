@@ -2615,15 +2615,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 tx = self.wallet.make_token_send_tx(self.config, spec)
                 if not tx:
                     self.show_error("Unimplemented")
+                    return
                 fee = tx.get_fee()
             except NotEnoughFunds as e:
                 self.show_error(str(e) or _("Not enough funds"))
+                return
             except ExcessiveFee as e:
                 self.show_error(str(e) or _("Excessive fee"))
+                return
             except TokensBurnedError as e:
                 self.show_error(str(e) or _("Internal Error: Transaction generation yielded a transaction in which"
                                             " some tokens are being burned;  refusing to proceed. Please report this"
                                             " situation to the developers."))
+                return
 
         if preview:
             # NB: this ultimately takes a deepcopy of the tx in question
