@@ -2007,11 +2007,22 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_token_c_active_state(self):
         coin_list_is_hidden = len(self.pay_from) == 0
-        if not coin_list_is_hidden or self.payto_e.is_multiline():
+        # We only support sending tokens in the "single payee mode" where no commas ',' appear, and where
+        # the destination is an address and not a ScriptOutput
+        payee = self.payto_e.get_recipient()
+        try:
+            payee = payee and isinstance(payee[1], Address) and payee[1]
+        except:
+            payee = None
+        # And also there must be no parse errors either
+        is_valid_payee_no_errors = payee and not self.payto_e.get_errors()
+        if coin_list_is_hidden and is_valid_payee_no_errors:
+            # Enabled: No coin control and has 1 valid payee
+            self.token_c.setDisabled(False)
+        else:
+            # Disable token mode
             self.token_c.setDisabled(True)
             self.token_c.setCurrentIndex(0)
-        else:
-            self.token_c.setDisabled(False)
 
     def spend_max(self):
         self.max_button.setChecked(True)
