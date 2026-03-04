@@ -2140,8 +2140,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         (Added for CashShuffle 02/23/2019) '''
         sel = self.from_list.currentItem() and self.from_list.currentItem().data(0, Qt.UserRole)
         self.from_list.clear()
-        self.from_label.setHidden(len(self.pay_from) == 0)
-        self.from_list.setHidden(len(self.pay_from) == 0)
+        hide_coin_list = len(self.pay_from) == 0
+        self.from_label.setHidden(hide_coin_list)
+        self.from_list.setHidden(hide_coin_list)
+
+        self.token_c.setDisabled(not hide_coin_list)
+        if not hide_coin_list:
+            self.token_c.setCurrentIndex(0) # Select 'None' from the token ComboBox
 
         def name(x):
             return "{}:{}".format(x['prevout_hash'], x['prevout_n'])
