@@ -240,7 +240,7 @@ class TokenSendSpec:
         (self.non_token_utxos, self.token_utxos, self.send_fungible_amounts, self.send_nfts, self.edit_nfts,
          self.mint_nfts) = dict(), dict(), dict(), set(), dict(), dict()
         self.feerate, self.send_satoshis = 0, 0
-        self.opreturn_msg= None
+        self.opreturn_msg = None
 
     def get_utxo(self, utxoname: str) -> Optional[Dict[str, Any]]:
         return self.token_utxos.get(utxoname) or self.non_token_utxos.get(utxoname)
