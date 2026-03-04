@@ -78,7 +78,7 @@ class TokenSendUtil(PrintError):
     def get_wallet_fungible_only_tokens(self, exclude_frozen=True):
         tokens, tokens_grouped = self.get_wallet_tokens(exclude_frozen)
 
-        for token_id in copy.deepcopy(tokens):
+        for token_id in copy.copy(tokens):
             if self.get_max_ft_token_amount_available(tokens, token_id) == 0:
                 del tokens[token_id]
                 del tokens_grouped[token_id]
@@ -120,17 +120,13 @@ class TokenSendUtil(PrintError):
         spec = wallet.TokenSendSpec()
         if dummy:
             spec.payto_addr = self.wallet.dummy_address()
-        else:
-            spec.payto_addr = addr
-
-        if dummy:
             spec.change_addr = self.wallet.dummy_address()
-
-        spec.feerate = feerate
-        if dummy:
             spec.send_satoshis = wallet.dust_threshold(self.wallet.network)
         else:
+            spec.payto_addr = addr
             spec.send_satoshis = send_satoshis
+
+        spec.feerate = feerate
         spec.token_utxos = copy.deepcopy(utxos_by_name)
         spec.non_token_utxos = {self.get_outpoint_longname(x): x
                                 for x in self.wallet.get_spendable_coins(None, self.config)}

@@ -1790,8 +1790,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
                 self.update_fee()
 
-                self.message_opreturn_e.setText('')
-
                 self.is_token_tx = True
 
         self.token_c.currentIndexChanged.connect(on_token_selection_changed)
@@ -2526,7 +2524,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     res = self.msg_box(
                         parent=self,
                         icon=QMessageBox.Warning,
-                        buttons=(_('Send to non-CashToken_aware address'), _('Cancel')),
+                        buttons=(_('Send to non-CashToken-aware address'), _('Cancel')),
                         defaultButton=_('Cancel'),
                         escapeButton=_('Cancel'),
                         title=_("Non-CashToken-aware Address Detected"),

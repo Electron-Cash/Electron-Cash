@@ -1018,11 +1018,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         spec = wallet.TokenSendSpec()
         if dummy:
             spec.payto_addr = self.wallet.dummy_address()
+            spec.change_addr = self.wallet.dummy_address()
         else:
             spec.payto_addr = address.Address.from_string(self.te_payto.text().strip())
-
-            if dummy:
-                spec.change_addr = self.wallet.dummy_address()
 
         spec.feerate = self.fee_rate
         if dummy:
