@@ -2402,15 +2402,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         send_satoshis = self.amount_e.get_amount() or 0
 
-        opreturn_output = None
+        opreturn_msg = None
         try:
             # handle op_return if specified and enabled
             opreturn_message = self.message_opreturn_e.text()
             if opreturn_message:
                 if self.opreturn_rawhex_cb.isChecked():
-                    opreturn_output = OPReturn.output_for_rawhex(opreturn_message)
+                    opreturn_msg = OPReturn.output_for_rawhex(opreturn_message)[1].script
                 else:
-                    opreturn_output = OPReturn.output_for_stringdata(opreturn_message)
+                    opreturn_msg = OPReturn.output_for_stringdata(opreturn_message)[1].script
         except OPReturn.TooLarge as e:
             self.show_error(str(e))
             return
@@ -2418,7 +2418,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.show_error(str(e))
             return
 
-        return addr, tx_desc, token_id, amount, send_satoshis, opreturn_output
+        return addr, tx_desc, token_id, amount, send_satoshis, opreturn_msg
 
     def _chk_no_segwit_suspects(self):
         ''' Makes sure the payto_e has no addresses that might be BTC segwit
@@ -2597,14 +2597,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             r = self.read_send_token_tab()
             if not r:
                 return
-            addr, tx_desc, token_id, token_amount, send_satoshis, opreturn_output = r
+            addr, tx_desc, token_id, token_amount, send_satoshis, opreturn_msg = r
 
             if not self._warn_if_not_cashtoken_aware_address():
                 return
 
             amount = send_satoshis
             spec = self.send_token_util.get_ft_send_spec(
-                addr, token_id, token_amount, self.tokens, send_satoshis, opreturn_output)
+                addr, token_id, token_amount, self.tokens, send_satoshis, opreturn_msg)
 
             try:
                 tx = self.wallet.make_token_send_tx(self.config, spec)
