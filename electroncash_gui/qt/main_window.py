@@ -1934,6 +1934,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         self.amount_e.shortcut.connect(self.spend_max)
         self.payto_e.textChanged.connect(self.update_fee)
+        self.payto_e.textChanged.connect(self.update_token_c_active_state)
         self.amount_e.textEdited.connect(self.update_fee)
         self.message_opreturn_e.textEdited.connect(self.update_fee)
         self.message_opreturn_e.textChanged.connect(self.update_fee)
@@ -2003,6 +2004,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         w.searchable_list = self.invoice_list
         run_hook('create_send_tab', grid)
         return w
+
+    def update_token_c_active_state(self):
+        coin_list_is_hidden = len(self.pay_from) == 0
+        if not coin_list_is_hidden or self.payto_e.is_multiline():
+            self.token_c.setDisabled(True)
+            self.token_c.setCurrentIndex(0)
+        else:
+            self.token_c.setDisabled(False)
 
     def spend_max(self):
         self.max_button.setChecked(True)
@@ -2140,13 +2149,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         (Added for CashShuffle 02/23/2019) '''
         sel = self.from_list.currentItem() and self.from_list.currentItem().data(0, Qt.UserRole)
         self.from_list.clear()
-        hide_coin_list = len(self.pay_from) == 0
-        self.from_label.setHidden(hide_coin_list)
-        self.from_list.setHidden(hide_coin_list)
+        self.from_label.setHidden(len(self.pay_from) == 0)
+        self.from_list.setHidden(len(self.pay_from) == 0)
 
-        self.token_c.setDisabled(not hide_coin_list)
-        if not hide_coin_list:
-            self.token_c.setCurrentIndex(0) # Select 'None' from the token ComboBox
+        self.update_token_c_active_state()
 
         def name(x):
             return "{}:{}".format(x['prevout_hash'], x['prevout_n'])
@@ -3001,6 +3007,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.payto_label.setHidden(False)
         self.amount_e.setText('')
         self.token_c.setCurrentIndex(0)
+        self.update_token_c_active_state()
         self.max_button.setDisabled(False)
         self.opreturn_rawhex_cb.setChecked(False)
         self.opreturn_rawhex_cb.setDisabled(False)
