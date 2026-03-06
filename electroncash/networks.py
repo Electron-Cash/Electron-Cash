@@ -80,8 +80,8 @@ class MainNet(AbstractNet):
     #    network.synchronous_get(("blockchain.block.header", [height, height]))
     #
     # Consult the ElectrumX documentation for more details.
-    VERIFICATION_BLOCK_MERKLE_ROOT = "dd76cdcccc25809c0898d35306947d4baebf1c3b704605026745b79cc2deb774"
-    VERIFICATION_BLOCK_HEIGHT = 875258
+    VERIFICATION_BLOCK_MERKLE_ROOT = "04f59a854072d89cc4d5f797e782128733db508ac41496f9db65af930c4794a2"
+    VERIFICATION_BLOCK_HEIGHT = 940863
     asert_daa = ASERTDaa(is_testnet=False)
     # Note: We *must* specify the anchor if the checkpoint is after the anchor, due to the way
     # blockchain.py skips headers after the checkpoint.  So all instances that have a checkpoint
@@ -121,8 +121,8 @@ class TestNet(AbstractNet):
     BITCOIN_CASH_FORK_BLOCK_HEIGHT = 1155876
     BITCOIN_CASH_FORK_BLOCK_HASH = "00000000000e38fef93ed9582a7df43815d5c2ba9fd37ef70c9a0ea4a285b8f5"
 
-    VERIFICATION_BLOCK_MERKLE_ROOT = "19259e654e686dd00be9201d7722b2cc7580136ac15c8341976b27d8145d7862"
-    VERIFICATION_BLOCK_HEIGHT = 1632800
+    VERIFICATION_BLOCK_MERKLE_ROOT = "596824253e8dbbcb865c0c2a33ff0070e65ab8ad06d460fc45168cb6d45c9b18"
+    VERIFICATION_BLOCK_HEIGHT = 1698262
     asert_daa = ASERTDaa(is_testnet=True)
     asert_daa.anchor = Anchor(height=1421481, bits=486604799, prev_time=1605445400)
 
@@ -152,8 +152,8 @@ class TestNet4(TestNet):
     # Nov 13. 2017 HF to CW144 DAA height (height of last block mined on old DAA)
     CW144_HEIGHT = 3000
 
-    VERIFICATION_BLOCK_MERKLE_ROOT = "7395c4304ea67e1247379277995bf90c9dadcea218410810711f3420991b1e4d"
-    VERIFICATION_BLOCK_HEIGHT = 229161
+    VERIFICATION_BLOCK_MERKLE_ROOT = "cb7b2f6b4f572226624ea881303bb31628b3f49c05186559216d834664d5ee8d"
+    VERIFICATION_BLOCK_HEIGHT = 283039
     asert_daa = ASERTDaa(is_testnet=True)  # Redeclare to get instance for this subclass
     asert_daa.anchor = Anchor(height=16844, bits=486604799, prev_time=1605451779)
 
@@ -164,8 +164,8 @@ class ChipNet(TestNet4):
     HEADERS_URL = "http://bitcoincash.com/files/chipnet_headers"  # Unused
     DEFAULT_SERVERS = _read_json_dict('servers_chipnet.json')  # DO NOT MODIFY IN CLIENT CODE
     DEFAULT_PORTS = {'t': '64001', 's': '64002'}
-    VERIFICATION_BLOCK_MERKLE_ROOT = "e40ac4cd516bb04a64d31961a0d87628f47d6491d8115792ab31103962e23658"
-    VERIFICATION_BLOCK_HEIGHT = 229000
+    VERIFICATION_BLOCK_MERKLE_ROOT = "dd2cd95b266e3d9aec62b1188158c8bfd207b5ce2babd9b1f43f55a185c9c9e6"
+    VERIFICATION_BLOCK_HEIGHT = 293505
 
 
 class ScaleNet(TestNet):

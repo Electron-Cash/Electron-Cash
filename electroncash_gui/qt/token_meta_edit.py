@@ -69,10 +69,11 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.setWindowIcon(self.token_meta.get_icon(self.token_id))
 
         # Remember what the state of things was when this form was created
-        RV = namedtuple("reset", "name, ticker, decimals, icon")
+        RV = namedtuple("reset", "name, ticker, description, decimals, icon")
         self.reset_vals = RV(
             name=self.token_meta.get_token_display_name(self.token_id) or "",
             ticker=self.token_meta.get_token_ticker_symbol(self.token_id) or "",
+            description=self.token_meta.get_token_description(self.token_id) or "",
             decimals=self.token_meta.get_token_decimals(self.token_id) or 0,
             icon=self.token_meta.get_icon(self.token_id) or QtGui.QIcon(),
         )
@@ -162,6 +163,16 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.le_token_sym.setPlaceholderText(_("ST"))
         layout.addRow(l, self.le_token_sym)
 
+        help_text = _("The token description is a brief overview of the token."
+                      "  This field is local to this installation of Electron Cash and is for UI convenience only.")
+        tt = _("Token description used for UI display within Electron Cash")
+        l = HelpLabel(_("Token Description") + ":", help_text)
+        l.setToolTip(tt)
+        self.le_token_desc = QtWidgets.QLineEdit()
+        self.le_token_desc.setToolTip(tt)
+        self.le_token_desc.setPlaceholderText(_("Description"))
+        layout.addRow(l, self.le_token_desc)
+
         help_text = (_("The token decimals is an integer from 0 to {max}.  It controls how the token's fungible amount"
                        " is formatted within Electron Cash."
                        "  This field is local to this installation of Electron Cash and is for UI convenience only.")
@@ -226,6 +237,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
             self.lbl_category_id.setFocus()
             self.le_token_name.setText(self.bcmr_downloaded.name)
             self.le_token_sym.setText(self.bcmr_downloaded.symbol)
+            self.le_token_desc.setText(self.bcmr_downloaded.description)
             self.sb_token_dec.setValue(min(self.sb_token_dec.maximum(),
                                            max(self.sb_token_dec.minimum(), self.bcmr_downloaded.decimals)))
             if self.bcmr_downloaded.icon:
@@ -269,6 +281,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.token_meta.set_icon(tid, self.selected_icon if not self.selected_icon.isNull() else None)
         self.token_meta.set_token_display_name(tid, self.le_token_name.text().strip() or None)
         self.token_meta.set_token_ticker_symbol(tid, self.le_token_sym.text().strip() or None)
+        self.token_meta.set_token_description(tid, self.le_token_desc.text().strip() or None)
         self.token_meta.set_token_decimals(tid, self.sb_token_dec.value() or None)
         self.token_meta.save()
         self.close()
@@ -314,6 +327,8 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         rv = self.reset_vals
         self.le_token_sym.setText(rv.ticker)
         self.le_token_sym.setModified(len(self.le_token_sym.text().strip()) > 0)
+        self.le_token_desc.setText(rv.description)
+        self.le_token_desc.setModified(len(self.le_token_desc.text().strip()) > 0)
         self.le_token_name.setText(rv.name)
         self.sb_token_dec.setValue(rv.decimals)
         self.selected_icon = rv.icon

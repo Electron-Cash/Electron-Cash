@@ -77,8 +77,11 @@ FRESH_CLONE_DIR="$FRESH_CLONE/$GIT_DIR_NAME"
         git checkout $REV
 ) || fail "Could not create a fresh clone from git"
 
+
+#TO_BUILD="x86_64-w64-mingw32 i686-w64-mingw32"  # Build 32-bit & 64-bit versions
+TO_BUILD="x86_64-w64-mingw32"  # Build only the 64-bit version
 (
-    for triplet in x86_64-w64-mingw32 i686-w64-mingw32; do
+    for triplet in ${TO_BUILD}; do
         pushd "$FRESH_CLONE_DIR"
         git reset --hard || fail "Failed to reset git repository"
         git clean -dfxq || fail "Failed to clean git repository"
