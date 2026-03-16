@@ -1,0 +1,51 @@
+name: Update AppStream Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-appstream:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update appdata.xml
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+          DATE: ${{ github.event.release.published_at }}
+        run: |
+          # Strip 'v' prefix from version
+          VERSION=${VERSION#v}
+          DATE=${DATE:0:10}  # Extract YYYY-MM-DD from ISO timestamp
+          FILE="org.electroncash.ElectronCash.appdata.xml"
+          
+          # Skip if version already exists
+          if grep -q "version=\"$VERSION\"" "$FILE"; then
+            echo "✓ Release $VERSION already in appdata.xml"
+            exit 0
+          fi
+          
+          # Insert new release after <releases> tag
+          sed -i "s|<releases>|<releases>\n\t\t<release version=\"$VERSION\" date=\"$DATE\"/>|" "$FILE"
+          
+          echo "✓ Added release $VERSION ($DATE) to appdata.xml"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "docs: Add release ${{ github.event.release.tag_name }} to AppStream metadata"
+          branch: appstream-${{ github.event.release.tag_name }}
+          delete-branch: true
+          title: "docs: Update AppStream metadata for ${{ github.event.release.tag_name }}"
+          body: |
+            Auto-generated release entry for **${{ github.event.release.tag_name }}**.
+            
+            ---
+            *Created by GitHub Actions*
+          labels: automated pr
