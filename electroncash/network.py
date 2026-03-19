@@ -1775,6 +1775,12 @@ class Network(util.DaemonThread):
         header_hash = Hash(bfh(header))
         byte_branches = [bfh(v)[::-1] for v in merkle_branch]
         proven_merkle_root = blockchain.root_from_proof(header_hash, byte_branches, header_height)
+
+        if proven_merkle_root is None:
+            interface.print_error("CVE-2012-2459 attack detected in checkpoint proof for height {}"
+                                  .format(header_height))
+            return False
+
         if proven_merkle_root != expected_merkle_root:
             interface.print_error("Sent incorrect merkle branch, expected: {}, proved: {}"
                                   .format(networks.net.VERIFICATION_BLOCK_MERKLE_ROOT, proven_merkle_root[::-1].hex()))

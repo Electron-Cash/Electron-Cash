@@ -201,15 +201,47 @@ def verify_proven_chunk(chunk_base_height, chunk_data):
                 raise VerifyError("prev hash mismatch: %s vs %s" % (prev_header_hash, header.get('prev_block_hash')))
         prev_header_hash = this_header_hash
 
-# Copied from electrumx
 def root_from_proof(hash, branch, index):
+    """
+    Compute merkle root from inclusion proof.
+
+    CVE-2012-2459 protection: rejects proofs where a left sibling
+    equals the current hash, which only occurs in forged proofs.
+    Legitimate duplicates from odd-sized tree levels appear as
+    right siblings.
+
+    Args:
+        hash: Leaf hash (bytes)
+        branch: Sibling hashes from leaf to root (list of bytes)
+        index: Zero-based leaf position
+
+    Returns:
+        Computed root (bytes), or None if invalid proof detected.
+
+    Raises:
+        ValueError: If index out of range for branch.
+    """
     hash_func = Hash
     for elt in branch:
-        if index & 1:
+        is_right_child = index & 1
+
+        # CVE-2012-2459 protection: reject left-sibling duplicates.
+        # The duplicate subtree attack exploits merkle tree construction
+        # ambiguity where odd-sized levels duplicate the last node.
+        # An attacker can craft proofs for non-existent leaves by providing
+        # a sibling equal to the current hash. However, legitimate duplicates
+        # only ever appear as right siblings (the last node duplicated to
+        # create a right child). Thus, a left sibling matching the current
+        # hash indicates a forged proof.
+        if is_right_child and elt == hash:
+            return None
+
+        if is_right_child:
             hash = hash_func(elt + hash)
         else:
             hash = hash_func(hash + elt)
         index >>= 1
+
     if index:
         raise ValueError('index out of range for branch')
     return hash
