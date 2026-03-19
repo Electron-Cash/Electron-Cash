@@ -362,8 +362,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # use get_unverified_tx to get a thread-safe copy of this dict.
         self.unverified_tx = defaultdict(int)
 
-        # Verified transactions.  Each value is a (height, timestamp, block_pos) tuple.  Access with self.lock.
-        self.verified_tx = storage.get('verified_tx3', {})
+        # Verified transactions.  Each value is a (height, timestamp, block_pos, block_hash) tuple.  Access with self.lock.
+        self.verified_tx = self._load_verified_tx()
 
         # save wallet type the first time
         if self.storage.get('wallet_type') is None:
@@ -393,6 +393,24 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         # Print debug message on finalization
         finalization_print_error(self, "[{}/{}] finalized".format(type(self).__name__, self.diagnostic_name()))
+
+    def _load_verified_tx(self):
+        """Load verified_tx with migration from old format."""
+        # Try new format first
+        verified = self.storage.get('verified_tx4', {})
+        if verified:
+            return verified
+        # Migrate from old format
+        old = self.storage.get('verified_tx3', {})
+        migrated = {}
+        for tx_hash, item in old.items():
+            if isinstance(item, (list, tuple)):
+                if len(item) == 3:
+                    height, timestamp, pos = item
+                    migrated[tx_hash] = (height, timestamp, pos, None)
+                elif len(item) >= 4:
+                    migrated[tx_hash] = tuple(item[:4])
+        return migrated
 
     @classmethod
     def to_Address_dict(cls, d):
@@ -732,7 +750,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def save_verified_tx(self, write=False):
         with self.lock:
-            self.storage.put('verified_tx3', self.verified_tx)
+            self.storage.put('verified_tx4', self.verified_tx)
             self.cashacct.save()
             if write:
                 self.storage.write()
@@ -954,7 +972,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # Remove from the unverified map and add to the verified map and
         with self.lock:
             self.unverified_tx.pop(tx_hash, None)
-            self.verified_tx[tx_hash] = info  # (tx_height, timestamp, pos)
+            self.verified_tx[tx_hash] = info  # (tx_height, timestamp, pos, block_hash)
             height, conf, timestamp = self.get_tx_height(tx_hash)
             self.cashacct.add_verified_tx_hook(tx_hash, info, header)
         self.network.trigger_callback('verified2', self, tx_hash, height, conf, timestamp)
@@ -981,11 +999,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         txs = set()
         with self.lock:
             for tx_hash, item in list(self.verified_tx.items()):
-                tx_height, timestamp, pos = item
+                tx_height, timestamp, pos, block_hash = item
                 if tx_height >= height:
-                    header = blockchain.read_header(tx_height)
-                    # fixme: use block hash, not timestamp
-                    if not header or header.get('timestamp') != timestamp:
+                    if block_hash is None:
+                        # Migrated tx without block_hash - must re-verify
+                        self.verified_tx.pop(tx_hash, None)
+                        txs.add(tx_hash)
+                    elif blockchain.get_hash(tx_height) != block_hash:
                         self.verified_tx.pop(tx_hash, None)
                         txs.add(tx_hash)
             if txs: self.cashacct.undo_verifications_hook(txs)
@@ -1003,7 +1023,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         """ return the height and timestamp of a verified transaction. """
         with self.lock:
             if tx_hash in self.verified_tx:
-                height, timestamp, pos = self.verified_tx[tx_hash]
+                height, timestamp, pos, _block_hash = self.verified_tx[tx_hash]
                 conf = max(self.get_local_height() - height + 1, 0)
                 return height, conf, timestamp
             elif tx_hash in self.unverified_tx:
@@ -1035,7 +1055,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         "return position, even if the tx is unverified"
         with self.lock:
             if tx_hash in self.verified_tx:
-                height, timestamp, pos = self.verified_tx[tx_hash]
+                height, timestamp, pos, _block_hash = self.verified_tx[tx_hash]
                 return height, pos
             elif tx_hash in self.unverified_tx:
                 height = self.unverified_tx[tx_hash]
@@ -3533,7 +3553,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             txid, n = txo.split(':')
             info = self.verified_tx.get(txid)
             if info:
-                tx_height, timestamp, pos = info
+                tx_height, timestamp, pos, _block_hash = info
                 conf = max(local_height - tx_height + 1, 0)
             else:
                 conf = 0
@@ -4044,8 +4064,7 @@ class ImportedWalletBase(Simple_Wallet):
                             to_pop.append(key)
                     for key in to_pop:
                         self.pruned_txo.pop(key, None)
-
-            self.storage.put('verified_tx3', self.verified_tx)
+            self.storage.put('verified_tx4', self.verified_tx)
 
         self.save_transactions()
 

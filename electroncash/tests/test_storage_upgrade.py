@@ -297,3 +297,132 @@ class TestStorageUpgrade(WalletTestCase):
             f.write(wallet_json)
         storage = WalletStorage(self.wallet_path, manual_upgrades=manual_upgrades)
         return storage
+
+    # 4-tuple tests
+    """Tests for verified_tx3 -> verified_tx4 migration (adding block_hash)"""
+
+    def test_migrate_verified_tx3_to_verified_tx4(self):
+        """Test that verified_tx3 format (height, timestamp, pos) migrates to verified_tx4 (height, timestamp, pos, block_hash=None)"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx3":{"abcd1234":[500000,1600000000,5],"efgh5678":[499999,1599999000,10]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        # Check migration happened
+        self.assertIn("abcd1234", w.verified_tx)
+        self.assertIn("efgh5678", w.verified_tx)
+
+        # Check format is now 4-tuple with None for block_hash
+        height, timestamp, pos, block_hash = w.verified_tx["abcd1234"]
+        self.assertEqual(height, 500000)
+        self.assertEqual(timestamp, 1600000000)
+        self.assertEqual(pos, 5)
+        self.assertIsNone(block_hash)
+
+        height, timestamp, pos, block_hash = w.verified_tx["efgh5678"]
+        self.assertEqual(height, 499999)
+        self.assertEqual(timestamp, 1599999000)
+        self.assertEqual(pos, 10)
+        self.assertIsNone(block_hash)
+
+    def test_load_verified_tx4_format(self):
+        """Test that verified_tx4 format loads correctly"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx4":{"abcd1234":[500000,1600000000,5,"000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732"],"efgh5678":[499999,1599999000,10,null]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        # Check loaded correctly
+        height, timestamp, pos, block_hash = w.verified_tx["abcd1234"]
+        self.assertEqual(height, 500000)
+        self.assertEqual(timestamp, 1600000000)
+        self.assertEqual(pos, 5)
+        self.assertEqual(block_hash, "000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732")
+
+        # Check None block_hash preserved
+        height, timestamp, pos, block_hash = w.verified_tx["efgh5678"]
+        self.assertIsNone(block_hash)
+
+    def test_verified_tx4_preferred_over_verified_tx3(self):
+        """Test that verified_tx4 is used when both formats exist"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx3":{"old_tx":[100000,1500000000,1]},"verified_tx4":{"new_tx":[500000,1600000000,5,"000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732"]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        # verified_tx4 should be used, not verified_tx3
+        self.assertIn("new_tx", w.verified_tx)
+        self.assertNotIn("old_tx", w.verified_tx)
+
+    def test_empty_verified_tx_migration(self):
+        """Test migration when verified_tx3 is empty"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx3":{},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        self.assertEqual(len(w.verified_tx), 0)
+
+    def test_get_tx_height_with_new_format(self):
+        """Test get_tx_height works with 4-tuple format"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500100,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx4":{"test_tx":[500000,1600000000,5,"000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732"]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        height, conf, timestamp = w.get_tx_height("test_tx")
+        self.assertEqual(height, 500000)
+        self.assertEqual(timestamp, 1600000000)
+        # conf depends on stored_height - tx_height + 1
+        self.assertEqual(conf, 101)  # 500100 - 500000 + 1
+
+    def test_get_txpos_with_new_format(self):
+        """Test get_txpos works with 4-tuple format"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx4":{"test_tx":[500000,1600000000,42,"000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732"]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        height, pos = w.get_txpos("test_tx")
+        self.assertEqual(height, 500000)
+        self.assertEqual(pos, 42)
+
+    def test_save_verified_tx4_format(self):
+        """Test that wallet saves verified_tx in verified_tx4 format"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx4":{"test_tx":[500000,1600000000,5,"000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732"]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        # Save the wallet
+        w.save_verified_tx(write=True)
+
+        # Reload storage and check raw data
+        storage2 = WalletStorage(self.wallet_path, manual_upgrades=False)
+
+        # Should have verified_tx4, not verified_tx3
+        self.assertIsNotNone(storage2.get('verified_tx4'))
+        self.assertIsNone(storage2.get('verified_tx3'))
+
+        # Check the saved format
+        saved_data = storage2.get('verified_tx4')
+        self.assertIn("test_tx", saved_data)
+        self.assertEqual(len(saved_data["test_tx"]), 4)
+        self.assertEqual(saved_data["test_tx"][3], "000000000000000000076c036ff5119e5a5a74df77abf64203473364509f7732")
+
+    def test_migrated_wallet_saves_as_verified_tx4(self):
+        """Test that a migrated wallet (from verified_tx3) saves as verified_tx4"""
+        wallet_str = '''{"addr_history":{},"addresses":{"change":[],"receiving":["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"L2sED74axVXC4H8szBJ4rQJrkfem7UMc6usLCPUoEWxDCFGUaGUM"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":500000,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx3":{"old_tx":[499000,1599000000,3]},"wallet_type":"standard"}'''
+        storage = self._load_storage_from_json_string(wallet_str, manual_upgrades=False)
+        w = Wallet(storage)
+
+        # Save the wallet
+        w.save_verified_tx(write=True)
+
+        # Reload storage and check
+        storage2 = WalletStorage(self.wallet_path, manual_upgrades=False)
+
+        # Should now be verified_tx4
+        self.assertIsNotNone(storage2.get('verified_tx4'))
+
+        # Check migrated tx has None for block_hash
+        saved_data = storage2.get('verified_tx4')
+        self.assertIn("old_tx", saved_data)
+        height, timestamp, pos, block_hash = saved_data["old_tx"]
+        self.assertEqual(height, 499000)
+        self.assertEqual(timestamp, 1599000000)
+        self.assertEqual(pos, 3)
+        self.assertIsNone(block_hash)
