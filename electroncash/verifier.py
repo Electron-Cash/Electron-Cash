@@ -23,6 +23,7 @@
 from abc import ABC, abstractmethod
 from .util import ThreadJob, bh2u
 from .bitcoin import Hash, hash_decode, hash_encode
+from .blockchain import hash_header
 from . import networks
 from .transaction import Transaction
 
@@ -238,7 +239,8 @@ class SPV(ThreadJob):
         # this proof again in case of verification failure from the same server
         self.requested_merkle.discard(tx_hash)
         self.print_error("verified %s" % tx_hash)
-        self.wallet.add_verified_tx(tx_hash, (tx_height, header.get('timestamp'), pos), header)
+        block_hash = hash_header(header)
+        self.wallet.add_verified_tx(tx_hash, (tx_height, header.get('timestamp'), pos, block_hash), header)
         if self.is_up_to_date() and self.wallet.is_up_to_date() and not self.qbusy:
             self.wallet.save_verified_tx(write=True)
             self.network.trigger_callback('wallet_updated', self.wallet)  # This callback will happen very rarely.. mostly right as the last tx is verified. It's to ensure GUI is updated fully.
