@@ -1001,11 +1001,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             for tx_hash, item in list(self.verified_tx.items()):
                 tx_height, timestamp, pos, block_hash = item
                 if tx_height >= height:
-                    if block_hash is None:
-                        # Migrated tx without block_hash - must re-verify
-                        self.verified_tx.pop(tx_hash, None)
-                        txs.add(tx_hash)
-                    elif blockchain.get_hash(tx_height) != block_hash:
+                    if (block_hash is None  # Migrated tx without block_hash - must re-verify
+                        or blockchain.get_hash(tx_height) != block_hash):
                         self.verified_tx.pop(tx_hash, None)
                         txs.add(tx_hash)
             if txs: self.cashacct.undo_verifications_hook(txs)
