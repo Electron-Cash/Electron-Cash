@@ -206,6 +206,11 @@ class SPV(ThreadJob):
             tx_height = merkle['block_height']
             pos = merkle['pos']
             merkle_root = self.hash_merkle_root(merkle['merkle'], tx_hash, pos)
+            if merkle_root is None:
+                self.print_error(f"CVE-2012-2459 attack detected for tx {tx_hash}")
+                self.wallet.verification_failed(tx_hash, self.failure_reasons[4])
+                return
+
         except Exception as e:
             self.print_error(f"exception while verifying tx {tx_hash}: {repr(e)}")
             self.wallet.verification_failed(tx_hash, self.failure_reasons[4])
@@ -240,30 +245,51 @@ class SPV(ThreadJob):
 
     @classmethod
     def hash_merkle_root(cls, merkle_s, target_hash, pos):
+        """
+        Compute merkle root from transaction inclusion proof.
+
+        Security notes:
+
+        CVE-2012-2459 (duplicate subtree attack): Protected by rejecting
+        proofs where a left sibling equals the current hash. Legitimate
+        duplicates from odd-sized tree levels only appear as right siblings.
+
+        CVE-2017-12842 (leaf-node weakness / inner node spoofing): This attack
+        allowed SPV clients to be tricked by crafting a valid 64-byte
+        transaction that could be interpreted as an inner merkle node.
+        Bitcoin Cash is protected against this attack at the protocol level
+        since the November 2018 upgrade enforces minimum 100-byte transaction
+        size, later reduced to 65 bytes in May 2023. Both limits prevent
+        confusion with 64-byte inner merkle nodes.
+        See: https://upgradespecs.bitcoincashnode.org/2018-nov-upgrade/
+             https://upgradespecs.bitcoincashnode.org/2023-05-15-upgrade/
+
+        Args:
+            merkle_s: Sibling hashes as hex strings
+            target_hash: Transaction hash (hex string)
+            pos: Transaction position in block
+
+        Returns:
+            Computed root as hex string, or None if CVE-2012-2459 attack detected.
+
+        Raises:
+            ValueError: If pos out of range for branch.
+        """
         h = hash_decode(target_hash)
+
         for i, item in enumerate(merkle_s):
-            h = Hash(hash_decode(item) + h) if ((pos >> i) & 1) else Hash(h + hash_decode(item))
-            # An attack was once upon a time possible for SPV, before Nov. 2018
-            # which is described here:
-            #
-            # https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2018-June/016105.html
-            # https://lists.linuxfoundation.org/pipermail/bitcoin-dev/attachments/20180609/9f4f5b1f/attachment-0001.pdf
-            # https://bitcoin.stackexchange.com/questions/76121/how-is-the-leaf-node-weakness-in-merkle-trees-exploitable/76122#76122
-            #
-            # As such, at this point we used to verify the inner node didn't
-            # "look" like a tx using some heuristics (which had a very small
-            # chance of returning false positives, about 1 in quadrillion).
-            #
-            # We no longer need do the "inner node looks like tx" check here,
-            # however, since no such attack has occurred on the BTC or BCH chain
-            # before Nov. 2018. After Nov. 2018 the tx size is now required to
-            # be >= 100 bytes which is larger than the 64 byte size of inner
-            # nodes.  Thus, the check is rendered superfluous as the attack
-            # itself is now no longer even possible after Nov. 2018's hard fork,
-            # and so was removed.
-            #
-            # TL;DR: There used to be some strange check here. It's gone now.
-            # Check git history if you're really curious. :)
+            is_right_child = (pos >> i) & 1
+            sibling = hash_decode(item)
+
+            # CVE-2012-2459 protection: reject left-sibling duplicates
+            if is_right_child and sibling == h:
+                return None
+
+            h = Hash(sibling + h) if is_right_child else Hash(h + sibling)
+
+        if pos >> len(merkle_s):
+            raise ValueError('pos out of range for branch')
+
         return hash_encode(h)
 
     def undo_verifications(self):
