@@ -22,6 +22,8 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from __future__ import annotations
+
 import time
 import queue
 import os
@@ -34,7 +36,7 @@ from collections import defaultdict
 import threading
 import socket
 import json
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Tuple, Optional
 
 import socks
 from . import util
@@ -1202,132 +1204,580 @@ class Network(util.DaemonThread):
         params = [base_height, count, checkpoint_height]
         return self.queue_request('blockchain.block.headers', params, interface) is not None
 
-    def on_block_headers(self, interface, request, response):
-        '''Handle receiving a chunk of block headers'''
+    # region on_block_headers
+
+    # =========================================================================
+    # Block Headers Response Handling
+    # =========================================================================
+    #
+    # Refactored from monolithic on_block_headers method.
+    #
+    # Behavioral changes from original:
+    # - Catch-up completion now calls switch_lagging_interface() and
+    #   notify('interfaces'), aligning with single-header catch-up path
+    # - Adds validation for empty chunks, response types, proof formats
+    # - Supports protocol 1.6 'headers' array format
+    # - Unsolicited response handling now releases chunk tracking
+
+    # =========================================================================
+    # Data Classes
+    # =========================================================================
+
+    class HeadersResponseData:
+        """Parsed and validated headers response data."""
+        __slots__ = (
+            'request_base_height', 'expected_count', 'actual_count',
+            'chunk_data', 'chunk_index',
+            'has_proof', 'proof_root', 'proof_branch',
+            'top_height', 'was_verification_request',
+            'checkpoint_height'
+        )
+
+        def __init__(self):
+            self.request_base_height = 0
+            self.expected_count = 0
+            self.actual_count = 0
+            self.chunk_data = b''
+            self.chunk_index = 0
+            self.has_proof = False
+            self.proof_root = None
+            self.proof_branch = None
+            self.top_height = 0
+            self.was_verification_request = False
+            self.checkpoint_height = 0
+
+    class ProofVerificationResult:
+        """Result of checkpoint proof verification."""
+        __slots__ = ('proof_was_provided',)
+
+        def __init__(self, provided: bool = False):
+            self.proof_was_provided = provided
+
+    # =========================================================================
+    # Main Entry Point
+    # =========================================================================
+
+    def on_block_headers(
+        self,
+        interface: Interface,
+        request: Optional[Tuple],
+        response: dict,
+    ) -> None:
+        """Handle receiving a chunk of block headers.
+
+        Delegates to specific handlers based on interface mode and response content.
+
+        The request tuple structure is (method, params, message_id)
+        where params is [base_height, count] or [base_height, count, checkpoint_height]
+        """
+        # Step 1: Parse and validate the response
+        parsed = self._parse_headers_response(interface, request, response)
+        if parsed is None:
+            return
+
+        # Step 2: Verify checkpoint proof if present or required
+        verification = self._verify_headers_proof(interface, parsed)
+        if verification is None:
+            return  # Verification failed, connection already handled
+
+        # Step 3: Handle based on interface mode
+        if interface.mode == Interface.MODE_VERIFICATION:
+            self._handle_verification_mode_headers(interface, parsed, verification)
+        else:
+            self._handle_normal_mode_headers(interface, parsed, verification)
+
+    # =========================================================================
+    # Response Parsing
+    # =========================================================================
+
+    def _parse_headers_response(
+        self,
+        interface: Interface,
+        request: Optional[Tuple],
+        response: dict,
+    ) -> Optional[HeadersResponseData]:
+        """Parse and validate a block.headers response.
+
+        Validates the response structure, extracts header data, and checks
+        that the response matches the original request.
+
+        Supports both protocol versions:
+        - < 1.6: 'hex' field contains concatenated header hex strings
+        - >= 1.6: 'headers' field contains list of header hex strings
+
+        Returns:
+            HeadersResponseData on success, None on failure (logged internally).
+        """
         error = response.get('error')
         result = response.get('result')
         params = response.get('params')
+
+        # Basic validation
         if not request or result is None or params is None or error is not None:
             interface.print_error(error or 'bad response')
-            # Ensure the chunk can be rerequested, but only if the request originated from us.
-            if request and request[1][0] // 2016 in self.requested_chunks:
-                self.requested_chunks.remove(request[1][0] // 2016)
-            return
+            self._release_chunk_request(request)
+            return None
 
-        # Ignore unsolicited chunks
+        # blockchain.block.headers always returns a dict per protocol spec
+        if not isinstance(result, dict):
+            interface.print_error(f'expected dict response, got {type(result).__name__}')
+            self._release_chunk_request(request)
+            return None
+
+        # Verify response matches our request
         request_params = request[1]
-        request_base_height = request_params[0]
-        expected_header_count = request_params[1]
-        index = request_base_height // 2016
         if request_params != params:
-            interface.print_error("unsolicited chunk base_height={} count={}".format(request_base_height, expected_header_count))
-            return
-        if index in self.requested_chunks:
-            self.requested_chunks.remove(index)
+            interface.print_error(
+                f"unsolicited chunk base_height={request_params[0]} "
+                f"count={request_params[1]}"
+            )
+            self._release_chunk_request(request)
+            return None
 
+        # Release chunk tracking early - all subsequent failures need not release
+        chunk_index = request_params[0] // 2016
+        if chunk_index in self.requested_chunks:
+            self.requested_chunks.remove(chunk_index)
+
+        # Build parsed data structure
+        data = self.HeadersResponseData()
+        data.request_base_height = request_params[0]
+        data.expected_count = request_params[1]
+        data.checkpoint_height = request_params[2] if len(request_params) >= 3 else 0
+        data.chunk_index = chunk_index
+
+        # Extract header data - handle both protocol versions
+        hexdata = self._extract_headers_hex(interface, result)
+        if hexdata is None:
+            return None
+
+        # Validate header count before converting to bytes
         header_hexsize = blockchain.HEADER_SIZE * 2
-        hexdata = result['hex']
-        actual_header_count = len(hexdata) // header_hexsize
-        # We accept less headers than we asked for, to cover the case where the distance to the tip was unknown.
-        if actual_header_count > expected_header_count:
-            interface.print_error("chunk data size incorrect expected_size={} actual_size={}".format(expected_header_count * header_hexsize, len(hexdata)))
-            return
+        actual_count = len(hexdata) // header_hexsize
 
-        proof_was_provided = False
+        if actual_count > data.expected_count:
+            interface.print_error(
+                f"chunk data size incorrect expected_size={data.expected_count * header_hexsize} "
+                f"actual_size={len(hexdata)}"
+            )
+            return None
+
+        if actual_count == 0:
+            interface.print_error("received empty headers response")
+            return None
+
+        data.actual_count = actual_count
+        data.chunk_data = bfh(hexdata)
+        data.top_height = data.request_base_height + data.actual_count - 1
+
+        # Extract and validate proof if present
         if 'root' in result and 'branch' in result:
-            header_height = request_base_height + actual_header_count - 1
-            header_offset = (actual_header_count - 1) * header_hexsize
-            header = hexdata[header_offset : header_offset + header_hexsize]
-            if not self.validate_checkpoint_result(interface, result["root"], result["branch"], header, header_height):
-                # Got checkpoint validation data, server failed to provide proof.
-                interface.print_error("disconnecting server for incorrect checkpoint proof")
-                self.connection_down(interface.server, blacklist=True)
-                return
+            root = result['root']
+            branch = result['branch']
+            if not isinstance(root, str) or not isinstance(branch, list):
+                interface.print_error(
+                    f'invalid proof format: root={type(root).__name__}, '
+                    f'branch={type(branch).__name__}'
+                )
+                return None
+            data.has_proof = True
+            data.proof_root = root
+            data.proof_branch = branch
 
-            data = bfh(hexdata)
-            try:
-                blockchain.verify_proven_chunk(request_base_height, data)
-            except blockchain.VerifyError as e:
-                interface.print_error('disconnecting server for failed verify_proven_chunk: {}'.format(e))
-                self.connection_down(interface.server, blacklist=True)
-                return
+        # Determine if this was a verification request
+        data.was_verification_request = self._is_verification_request(
+            interface, data.request_base_height, data.actual_count
+        )
 
-            proof_was_provided = True
-        elif len(request_params) == 3 and request_params[2] != 0:
-            # Expected checkpoint validation data, did not receive it.
+        return data
+
+    def _extract_headers_hex(
+        self,
+        interface: Interface,
+        result: dict,
+    ) -> Optional[str]:
+        """Extract header hex data from response result.
+
+        Supports both protocol versions:
+        - < 1.6: 'hex' field contains concatenated header hex string
+        - >= 1.6: 'headers' field contains list of header hex strings
+
+        Returns:
+            Concatenated hex string on success, None on failure.
+        """
+        header_hexsize = blockchain.HEADER_SIZE * 2
+
+        if 'headers' in result:
+            # Protocol >= 1.6: list of header hex strings
+            headers_list = result['headers']
+            if not isinstance(headers_list, list):
+                interface.print_error(
+                    f'"headers" field is not a list: {type(headers_list).__name__}'
+                )
+                return None
+            for i, h in enumerate(headers_list):
+                if not isinstance(h, str):
+                    interface.print_error(
+                        f'"headers" element {i} is not a string: {type(h).__name__}'
+                    )
+                    return None
+                if len(h) != header_hexsize:
+                    interface.print_error(
+                        f'"headers" element {i} has invalid length: '
+                        f'expected {header_hexsize}, got {len(h)}'
+                    )
+                    return None
+            return ''.join(headers_list)
+
+        if 'hex' in result:
+            # Protocol < 1.6: concatenated header hex string
+            hexdata = result['hex']
+            if not isinstance(hexdata, str):
+                interface.print_error(
+                    f'"hex" field is not a string: {type(hexdata).__name__}'
+                )
+                return None
+            if len(hexdata) % header_hexsize != 0:
+                interface.print_error(
+                    f'hex data length {len(hexdata)} not a multiple of header size'
+                )
+                return None
+            return hexdata
+
+        interface.print_error('response missing both "headers" and "hex" fields')
+        return None
+
+    def _release_chunk_request(self, request: Optional[Tuple]) -> None:
+        """Release a chunk index from requested_chunks if applicable."""
+        if not request:
+            return
+        try:
+            chunk_index = request[1][0] // 2016
+        except (IndexError, TypeError) as e:
+            if self.debug:
+                self.print_error(f"_release_chunk_request: malformed request: {e}")
+            return
+        self.requested_chunks.discard(chunk_index)  # discard is idempotent
+
+    def _is_verification_request(
+        self,
+        interface: Interface,
+        base_height: int,
+        count: int,
+    ) -> bool:
+        """Check if this request was the initial verification request.
+
+        The verification request fetches headers needed for DAA calculation
+        leading up to the checkpoint height.
+        """
+        verification_info = self.checkpoint_servers_verified.get(interface.server, {})
+        verification_top_height = verification_info.get('height')
+
+        if verification_top_height is None:
+            return False
+
+        if networks.net.REGTEST:
+            expected_base = verification_top_height - 50 + 1
+            expected_count = 50
+        else:
+            expected_base = verification_top_height - 147 + 1
+            expected_count = 147
+
+        return base_height == expected_base and count == expected_count
+
+    # =========================================================================
+    # Proof Verification
+    # =========================================================================
+
+    def _verify_headers_proof(
+        self,
+        interface: Interface,
+        data: HeadersResponseData,
+    ) -> Optional[ProofVerificationResult]:
+        """Verify checkpoint proof if present or required.
+
+        If a checkpoint height was specified in the request, a proof is required.
+        If a proof is provided, it must validate correctly.
+
+        Returns:
+            ProofVerificationResult on success, None on failure (connection handled).
+        """
+        if data.has_proof:
+            if not self._validate_and_verify_proof(interface, data):
+                return None  # Failed, connection already handled
+            return self.ProofVerificationResult(provided=True)
+
+        # Check if proof was required but not provided
+        if data.checkpoint_height != 0:
+            interface.print_error(
+                f"expected checkpoint proof for height {data.checkpoint_height} "
+                "but none provided"
+            )
+            self.connection_down(interface.server)
+            return None
+
+        return self.ProofVerificationResult(provided=False)
+
+    def _validate_and_verify_proof(
+        self,
+        interface: Interface,
+        data: HeadersResponseData,
+    ) -> bool:
+        """Validate checkpoint proof and verify the proven chunk.
+
+        Verifies:
+        1. The merkle proof against the checkpoint root
+        2. Internal consistency of the header chain in the chunk
+
+        Returns:
+            True on success, False on failure (blacklists server).
+        """
+        # Extract the last header for proof verification
+        last_header_bytes = data.chunk_data[-blockchain.HEADER_SIZE:]
+        header_hex = last_header_bytes.hex()
+
+        # Verify the merkle proof against checkpoint
+        if not self.validate_checkpoint_result(
+            interface, data.proof_root, data.proof_branch,
+            header_hex, data.top_height
+        ):
+            interface.print_error("disconnecting server for incorrect checkpoint proof")
+            self.connection_down(interface.server, blacklist=True)
+            return False
+
+        # Verify internal consistency of the proven chunk
+        try:
+            blockchain.verify_proven_chunk(data.request_base_height, data.chunk_data)
+        except blockchain.VerifyError as e:
+            interface.print_error(
+                f'disconnecting server for failed verify_proven_chunk: {e}'
+            )
+            self.connection_down(interface.server, blacklist=True)
+            return False
+
+        return True
+
+    # =========================================================================
+    # Verification Mode Handling
+    # =========================================================================
+
+    def _handle_verification_mode_headers(
+        self,
+        interface: Interface,
+        data: HeadersResponseData,
+        verification: ProofVerificationResult,
+    ) -> None:
+        """Handle headers received while in MODE_VERIFICATION.
+
+        This is the initial sync phase where we're verifying the server
+        against the checkpoint. The server must send the verification chunk
+        with a valid checkpoint proof.
+
+        After successful verification:
+        1. The interface transitions to MODE_DEFAULT
+        2. The chunk is connected to the main chain
+        3. Normal sync begins via _process_latest_tip
+        """
+        # Verification mode requires this to be the verification request
+        if not data.was_verification_request:
+            interface.print_error(
+                "disconnecting unverified server for sending unrelated header chunk"
+            )
+            self.connection_down(interface.server, blacklist=True)
+            return
+
+        # Verification request must include proof
+        if not verification.proof_was_provided:
+            interface.print_error(
+                "disconnecting unverified server for sending verification "
+                "header chunk without proof"
+            )
+            self.connection_down(interface.server, blacklist=True)
+            return
+
+        # Apply verification - this changes interface.mode on success
+        if not self.apply_successful_verification(
+            interface, data.checkpoint_height, data.proof_root
+        ):
+            return  # Verification failed, method handles cleanup
+
+        # Connect chunk to main chain
+        target_blockchain = self.blockchains.get(0)
+        if target_blockchain is None:
+            interface.print_error("main blockchain not found")
             self.connection_down(interface.server)
             return
 
-        verification_top_height = self.checkpoint_servers_verified.get(interface.server, {}).get('height', None)
-        was_verification_request = False
-        if verification_top_height is not None:
-            if not networks.net.REGTEST:
-                was_verification_request = request_base_height == verification_top_height - 147 + 1 and actual_header_count == 147
-            else:
-                was_verification_request = request_base_height == verification_top_height - 50 + 1 and actual_header_count == 50
+        if not self._connect_chunk_to_blockchain(
+            interface, target_blockchain, data, verification
+        ):
+            return
 
-        initial_interface_mode = interface.mode
-        if interface.mode == Interface.MODE_VERIFICATION:
-            if not was_verification_request:
-                interface.print_error("disconnecting unverified server for sending unrelated header chunk")
-                self.connection_down(interface.server, blacklist=True)
-                return
-            if not proof_was_provided:
-                interface.print_error("disconnecting unverified server for sending verification header chunk without proof")
-                self.connection_down(interface.server, blacklist=True)
-                return
+        # Verification complete - start normal sync
+        self._process_latest_tip(interface)
 
-            if not self.apply_successful_verification(interface, request_params[2], result['root']):
-                return
-            # We connect this verification chunk into the longest chain.
-            target_blockchain = self.blockchains[0]
-        else:
-            target_blockchain = interface.blockchain
+    # =========================================================================
+    # Normal Mode Handling
+    # =========================================================================
 
-        chunk_data = bfh(hexdata)
-        connect_state = (target_blockchain.connect_chunk(request_base_height, chunk_data, proof_was_provided)
-                         if target_blockchain
-                         else blockchain.CHUNK_BAD)  # fix #1079 -- invariant is violated here due to extant bugs, so rather than raise an exception, just trigger a connection_down below...
+    def _handle_normal_mode_headers(
+        self,
+        interface: Interface,
+        data: HeadersResponseData,
+        verification: ProofVerificationResult,
+    ) -> None:
+        """Handle headers received in normal operation (non-verification mode).
+
+        Primarily handles MODE_CATCH_UP. Other modes (BACKWARD, BINARY, DEFAULT)
+        use single-header requests via on_header(). If a chunk arrives unexpectedly
+        in these modes (e.g., due to race conditions or protocol quirks), we
+        connect it if valid and notify, but don't alter sync state.
+        """
+        target_blockchain = interface.blockchain
+
+        if not self._connect_chunk_to_blockchain(
+            interface, target_blockchain, data, verification
+        ):
+            # No notification here. For CHUNK_FORKS, no state changed and fork
+            # resolution happens via other mechanisms. For CHUNK_BAD etc,
+            # connection_down was called and blockchain state is unchanged.
+            return
+
+        self._handle_post_connection_sync(interface, data, verification)
+
+    # =========================================================================
+    # Chunk Connection
+    # =========================================================================
+
+    def _connect_chunk_to_blockchain(
+        self,
+        interface: Interface,
+        target_blockchain: Optional[blockchain.Blockchain],
+        data: HeadersResponseData,
+        verification: ProofVerificationResult,
+    ) -> bool:
+        """Connect a chunk of headers to a blockchain.
+
+        Returns:
+            True on success (CHUNK_ACCEPTED), False on any failure.
+
+        Failure handling:
+            - CHUNK_FORKS: No disconnect; fork resolution via BACKWARD/BINARY modes
+            - CHUNK_BAD/other: Disconnect; server sent invalid data
+            - No blockchain: Disconnect; internal state error
+        """
+        if target_blockchain is None:
+            interface.print_error("no target blockchain for chunk connection")
+            self.connection_down(interface.server)
+            return False
+
+        connect_state = target_blockchain.connect_chunk(
+            data.request_base_height,
+            data.chunk_data,
+            verification.proof_was_provided
+        )
+
         if connect_state == blockchain.CHUNK_ACCEPTED:
-            interface.print_error("connected chunk, height={} count={} proof_was_provided={}".format(request_base_height, actual_header_count, proof_was_provided))
-        elif connect_state == blockchain.CHUNK_FORKS:
-            interface.print_error("identified forking chunk, height={} count={}".format(request_base_height, actual_header_count))
-            # We actually have all the headers up to the bad point. In theory we
-            # can use them to detect a fork point in some cases. But that's bonus
-            # work for someone later.
-            # Discard the chunk and do a normal search for the fork point.
-            # Note that this will not give us the right blockchain, the
-            # syncing does not work that way historically.  That might
-            # wait until either a new block appears, or
-            if False:
-                interface.blockchain = None
-                interface.set_mode(Interface.MODE_BACKWARD)
-                interface.bad = request_base_height + actual_header_count - 1
-                interface.bad_header = blockchain.HeaderChunk(request_base_height, chunk_data).get_header_at_height(interface.bad)
-                self.request_header(interface, min(interface.tip, interface.bad - 1))
-            return
-        else:
-            interface.print_error("discarded bad chunk, height={} count={} reason={}".format(request_base_height, actual_header_count, connect_state))
-            self.connection_down(interface.server)
+            interface.print_error(
+                f"connected chunk, height={data.request_base_height} "
+                f"count={data.actual_count} "
+                f"proof_was_provided={verification.proof_was_provided}"
+            )
+            return True
+
+        if connect_state == blockchain.CHUNK_FORKS:
+            # Fork detected within chunk range. Don't notify - no state changed.
+            # Fork resolution will occur via MODE_BACKWARD/BINARY when tip
+            # mismatch is detected, which will notify appropriately.
+            interface.print_error(
+                f"identified forking chunk, height={data.request_base_height} "
+                f"count={data.actual_count}"
+            )
+            return False
+
+        # CHUNK_BAD, CHUNK_LACKED_PROOF, or other error
+        interface.print_error(
+            f"discarded bad chunk, height={data.request_base_height} "
+            f"count={data.actual_count} reason={connect_state}"
+        )
+        self.connection_down(interface.server)
+        return False
+
+    # =========================================================================
+    # Post-Connection Sync
+    # =========================================================================
+
+    def _handle_post_connection_sync(
+        self,
+        interface: Interface,
+        data: HeadersResponseData,
+        verification: ProofVerificationResult,
+    ) -> None:
+        """Determine and execute next sync action after connecting a chunk.
+
+        Handles the state transitions:
+        - Proven overlay chunks: notification only (SPV verifier requested these)
+        - Catch-up mode with more headers needed: request next chunk
+        - Catch-up complete: transition to MODE_DEFAULT
+        - Other modes: notification only
+        """
+        # Case 1: Proven overlay chunk (pre-checkpoint fill requested by SPV verifier)
+        # These are overlaid into the sparse headers file and don't drive sync state
+        if verification.proof_was_provided and not data.was_verification_request:
+            self.notify('blockchain_updated')
             return
 
-        # This interface was verified above. Get it syncing.
-        if initial_interface_mode == Interface.MODE_VERIFICATION:
-            self._process_latest_tip(interface)
+        # Safety check - blockchain should exist at this point
+        if interface.blockchain is None:
+            interface.print_error('unexpected: no blockchain in post-connection sync')
+            self.notify('blockchain_updated')
             return
 
-        # If not finished, get the next chunk.
-        if proof_was_provided and not was_verification_request:
-            # the verifier must have asked for this chunk.  It has been overlaid into the file.
-            pass
+        # Case 2: Not in catch-up mode
+        # Chunk requests are primarily made in MODE_CATCH_UP (MODE_VERIFICATION is
+        # handled separately). If we receive a chunk in another mode, it's likely
+        # a race condition - just notify and return.
+        if interface.mode != Interface.MODE_CATCH_UP:
+            self.notify('blockchain_updated')
+            return
+
+        # Case 3: Catch-up mode - check if we need more headers
+        current_height = interface.blockchain.height()
+        target_height = interface.tip
+
+        if current_height < target_height:
+            # Still behind - request next chunk
+            next_base = data.request_base_height + data.actual_count
+            self.request_headers(interface, next_base, 2016)
+            self.notify('blockchain_updated')
         else:
-            if interface.blockchain.height() < interface.tip:
-                self.request_headers(interface, request_base_height + actual_header_count, 2016)
-            else:
-                interface.set_mode(Interface.MODE_DEFAULT)
-                interface.print_error('catch up done', interface.blockchain.height())
-                interface.blockchain.catch_up = None
+            # Caught up - finalize
+            self._complete_catch_up(interface)
+
+    def _complete_catch_up(self, interface: Interface) -> None:
+        """Complete the catch-up process for an interface.
+
+        Transitions the interface to default mode and performs cleanup.
+
+        Note: This aligns chunk-based catch-up completion with single-header
+        catch-up (on_header) by adding switch_lagging_interface() and
+        notify('interfaces') calls. This ensures consistent interface switching
+        and UI updates regardless of how catch-up completed.
+        """
+        interface.set_mode(Interface.MODE_DEFAULT)
+        interface.print_error('catch up done', interface.blockchain.height())
+
+        # Clear catch-up tracking. Guard against race where another interface
+        # may have claimed catch-up duty.
+        if (interface.blockchain is not None
+                and interface.blockchain.catch_up == interface.server):
+            interface.blockchain.catch_up = None
+
+        self.switch_lagging_interface()
+        self.notify('interfaces')
         self.notify('blockchain_updated')
+
+    # endregion on_block_headers
 
     def request_header(self, interface, height):
         """
@@ -1348,8 +1798,6 @@ class Network(util.DaemonThread):
             params = [height, networks.net.VERIFICATION_BLOCK_HEIGHT]
         self.queue_request('blockchain.block.header', params, interface)
         return True
-
-
 
     def on_header(self, interface, request, response):
         """Handle receiving a single block header"""
