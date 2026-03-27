@@ -22,6 +22,8 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from __future__ import annotations
+
 import time
 import queue
 import os
@@ -1349,160 +1351,550 @@ class Network(util.DaemonThread):
         self.queue_request('blockchain.block.header', params, interface)
         return True
 
+    # region on_header
 
+    # =========================================================================
+    # Single Header Response Handling
+    # =========================================================================
+    #
+    # Refactored from monolithic on_header method.
+    #
+    # Handles single header responses during fork detection and resolution.
+    # Used by modes: BACKWARD, BINARY, CATCH_UP (single header path)
+    #
+    # Notification strategy: blockchain_updated is notified inline where state
+    # actually changes (new fork created, branch modified, catch-up complete).
+    # interfaces is always notified at the end for UI refresh.
+    #
+    # Behavioral changes from original:
+    # - Adds validation for response types and proof formats
+    # - Adds validation that header hex is a string with correct length
+    # - Proof validation failures now blacklist the server (aligned with on_block_headers)
 
-    def on_header(self, interface, request, response):
-        """Handle receiving a single block header"""
+    # =========================================================================
+    # Data Classes
+    # =========================================================================
+
+    class HeaderResponseData:
+        """Parsed and validated single header response data."""
+        __slots__ = (
+            'height', 'header',
+            'has_proof', 'proof_root', 'proof_branch',
+        )
+
+        def __init__(self):
+            self.height = 0
+            self.header: Optional[dict] = None
+            self.has_proof = False
+            self.proof_root = None
+            self.proof_branch: Optional[List[str]] = None
+
+    # =========================================================================
+    # Main Entry Point
+    # =========================================================================
+
+    def on_header(
+        self,
+        interface: Interface,
+        request: Optional[Tuple],
+        response: dict,
+    ) -> None:
+        """Handle receiving a single block header.
+
+        Used during fork detection (BACKWARD/BINARY modes) and single-header
+        catch-up. Delegates to mode-specific handlers based on interface state.
+
+        The request tuple structure is (method, params, message_id)
+        where params is [height] or [height, checkpoint_height]
+        """
+        # Step 1: Parse and validate the response
+        parsed = self._parse_header_response(interface, request, response)
+        if parsed is None:
+            return
+
+        # Step 2: Ignore headers received in default mode
+        if interface.mode == Interface.MODE_DEFAULT:
+            interface.print_error(
+                f"ignored header {parsed.height} received in default mode"
+            )
+            return
+
+        # Step 3: Dispatch to mode-specific handler
+        next_height = self._dispatch_header_by_mode(interface, parsed)
+
+        # Step 4: Request next header or finalize
+        self._handle_header_next_action(interface, next_height)
+
+    # =========================================================================
+    # Response Parsing
+    # =========================================================================
+
+    def _parse_header_response(
+        self,
+        interface: Interface,
+        request: Optional[Tuple],
+        response: dict,
+    ) -> Optional[HeaderResponseData]:
+        """Parse and validate a single header response.
+
+        Handles both simple header responses (just hex string) and
+        checkpoint-proven responses (with root, branch, header fields).
+
+        Returns:
+            HeaderResponseData on success, None on failure (logged internally).
+        """
         result = response.get('result')
         if not result:
             interface.print_error(response)
             self.connection_down(interface.server)
-            return
+            return None
 
         if not request:
-            interface.print_error("disconnecting server for sending unsolicited header, no request, params={}".format(response['params']), blacklist=True)
+            interface.print_error(
+                f"disconnecting server for sending unsolicited header, "
+                f"no request, params={response.get('params')}"
+            )
             self.connection_down(interface.server)
-            return
+            return None
+
         request_params = request[1]
         height = request_params[0]
 
-        response_height = response['params'][0]
-        # This check can be removed if request/response params are reconciled in some sort of rewrite.
-        if height != response_height:
-            interface.print_error("unsolicited header request={} request_height={} response_height={}".format(request_params, height, response_height))
+        # Validate response height matches request
+        response_params = response.get('params')
+        if not response_params or response_params[0] != height:
+            response_height = response_params[0] if response_params else 'missing'
+            interface.print_error(
+                f"unsolicited header request={request_params} "
+                f"request_height={height} response_height={response_height}"
+            )
             self.connection_down(interface.server)
-            return
+            return None
 
-        proof_was_provided = False
-        hexheader = None
-        if 'root' in result and 'branch' in result and 'header' in result:
-            hexheader = result["header"]
-            if not self.validate_checkpoint_result(interface, result["root"], result["branch"], hexheader, height):
-                # Got checkpoint validation data, failed to provide proof.
-                interface.print_error("unprovable header request={} height={}".format(request_params, height))
-                self.connection_down(interface.server)
-                return
-            proof_was_provided = True
-        else:
-            hexheader = result
+        data = self.HeaderResponseData()
+        data.height = height
 
-        # Simple header request.
-        header = blockchain.deserialize_header(bfh(hexheader), height)
-        # Is there a blockchain that already includes this header?
-        chain = blockchain.check_header(header)
-        if interface.mode == Interface.MODE_BACKWARD:
-            if chain:
-                interface.print_error("binary search")
-                interface.set_mode(Interface.MODE_BINARY)
-                interface.blockchain = chain
-                interface.good = height
-                next_height = (interface.bad + interface.good) // 2
-            else:
-                # A backwards header request should not happen before the
-                # checkpoint height. It isn't requested in this context, and it
-                # isn't requested anywhere else. If this happens it is an error.
-                # Additionally, if the checkpoint height header was requested
-                # and it does not connect, then there's not much Electron Cash
-                # can do about it (that we're going to bother). We depend on the
-                # checkpoint being relevant for the blockchain the user is
-                # running against.
-                if height <= networks.net.VERIFICATION_BLOCK_HEIGHT:
+        # Extract header hex and optional proof
+        hexheader = self._extract_header_hex(interface, result, data)
+        if hexheader is None:
+            return None
+
+        # Validate checkpoint proof if present
+        if data.has_proof:
+            if not self._validate_header_proof(interface, hexheader, data):
+                return None
+
+        # Deserialize the header
+        try:
+            data.header = blockchain.deserialize_header(bfh(hexheader), height)
+        except Exception as e:
+            interface.print_error(f"failed to deserialize header at height {height}: {e}")
+            self.connection_down(interface.server)
+            return None
+
+        return data
+
+    def _extract_header_hex(
+        self,
+        interface: Interface,
+        result,
+        data: HeaderResponseData,
+    ) -> Optional[str]:
+        """Extract header hex and optional proof from response result.
+
+        Populates proof fields in data if present.
+
+        Returns:
+            Header hex string on success, None on failure.
+        """
+        if isinstance(result, dict):
+            # Checkpoint-proven header response
+            if 'root' in result and 'branch' in result and 'header' in result:
+                hexheader = result['header']
+                if not isinstance(hexheader, str):
+                    interface.print_error(
+                        f'"header" field is not a string: {type(hexheader).__name__}'
+                    )
                     self.connection_down(interface.server)
-                    next_height = None
-                else:
-                    interface.bad = height
-                    interface.bad_header = header
-                    delta = interface.tip - height
-                    # If the longest chain does not connect at any point we check to the chain this interface is
-                    # serving, then we fall back on the checkpoint height which is expected to work.
-                    next_height = max(networks.net.VERIFICATION_BLOCK_HEIGHT, interface.tip - 2 * delta)
+                    return None
 
-        elif interface.mode == Interface.MODE_BINARY:
-            if chain:
-                interface.good = height
-                interface.blockchain = chain
+                root = result['root']
+                branch = result['branch']
+                if not isinstance(root, str) or not isinstance(branch, list):
+                    interface.print_error(
+                        f'invalid proof format: root={type(root).__name__}, '
+                        f'branch={type(branch).__name__}'
+                    )
+                    self.connection_down(interface.server)
+                    return None
+
+                # Validate header hex length
+                if len(hexheader) != blockchain.HEADER_SIZE * 2:
+                    interface.print_error(
+                        f'header hex has invalid length: expected {blockchain.HEADER_SIZE * 2}, '
+                        f'got {len(hexheader)}'
+                    )
+                    self.connection_down(interface.server)
+                    return None
+
+                data.has_proof = True
+                data.proof_root = root
+                data.proof_branch = branch
+                return hexheader
+
             else:
-                interface.bad = height
-                interface.bad_header = header
-            if interface.bad != interface.good + 1:
-                next_height = (interface.bad + interface.good) // 2
-            elif not interface.blockchain.can_connect(interface.bad_header, check_height=False):
+                interface.print_error(
+                    f'dict response missing required proof fields: {list(result.keys())}'
+                )
                 self.connection_down(interface.server)
-                next_height = None
-            else:
-                branch = self.blockchains.get(interface.bad)
-                if branch is not None:
-                    if branch.check_header(interface.bad_header):
-                        interface.print_error('joining chain', interface.bad)
-                        next_height = None
-                    elif branch.parent().check_header(header):
-                        interface.print_error('reorg', interface.bad, interface.tip)
-                        interface.blockchain = branch.parent()
-                        next_height = None
-                    else:
-                        interface.print_error('checkpoint conflicts with existing fork', branch.path())
-                        branch.write(b'', 0)
-                        branch.save_header(interface.bad_header)
-                        interface.set_mode(Interface.MODE_CATCH_UP)
-                        interface.blockchain = branch
-                        next_height = interface.bad + 1
-                        interface.blockchain.catch_up = interface.server
-                else:
-                    bh = interface.blockchain.height()
-                    next_height = None
-                    if bh > interface.good:
-                        if not interface.blockchain.check_header(interface.bad_header):
-                            b = interface.blockchain.fork(interface.bad_header)
-                            self.blockchains[interface.bad] = b
-                            interface.blockchain = b
-                            interface.print_error("new chain", b.base_height)
-                            interface.set_mode(Interface.MODE_CATCH_UP)
-                            next_height = interface.bad + 1
-                            interface.blockchain.catch_up = interface.server
-                    else:
-                        assert bh == interface.good
-                        if interface.blockchain.catch_up is None and bh < interface.tip:
-                            interface.print_error("catching up from %d"% (bh + 1))
-                            interface.set_mode(Interface.MODE_CATCH_UP)
-                            next_height = bh + 1
-                            interface.blockchain.catch_up = interface.server
+                return None
 
+        elif isinstance(result, str):
+            # Simple header response (no proof)
+            if len(result) != blockchain.HEADER_SIZE * 2:
+                interface.print_error(
+                    f'header hex has invalid length: expected {blockchain.HEADER_SIZE * 2}, '
+                    f'got {len(result)}'
+                )
+                self.connection_down(interface.server)
+                return None
+            return result
+
+        else:
+            interface.print_error(f'unexpected result type: {type(result).__name__}')
+            self.connection_down(interface.server)
+            return None
+
+    def _validate_header_proof(
+        self,
+        interface: Interface,
+        hexheader: str,
+        data: HeaderResponseData,
+    ) -> bool:
+        """Validate checkpoint proof for a header.
+
+        Returns:
+            True on success, False on failure (blacklists server).
+        """
+        if not self.validate_checkpoint_result(
+            interface, data.proof_root, data.proof_branch,
+            hexheader, data.height
+        ):
+            interface.print_error(
+                f"disconnecting server for incorrect checkpoint proof "
+                f"at height {data.height}"
+            )
+            self.connection_down(interface.server, blacklist=True)
+            return False
+        return True
+
+    # =========================================================================
+    # Mode Dispatch
+    # =========================================================================
+
+    def _dispatch_header_by_mode(
+        self,
+        interface: Interface,
+        data: HeaderResponseData,
+    ) -> Optional[int]:
+        """Dispatch to appropriate handler based on interface mode.
+
+        Returns:
+            next_height to request, or None if done/error.
+        """
+        mode = interface.mode
+
+        if mode == Interface.MODE_BACKWARD:
+            return self._handle_header_backward(interface, data)
+        elif mode == Interface.MODE_BINARY:
+            return self._handle_header_binary(interface, data)
+        elif mode == Interface.MODE_CATCH_UP:
+            return self._handle_header_catch_up(interface, data)
+        else:
+            # Should not reach here - MODE_DEFAULT filtered earlier,
+            # MODE_VERIFICATION uses on_block_headers
+            interface.print_error(f"unexpected mode {mode} in on_header")
+            return None
+
+    # =========================================================================
+    # MODE_BACKWARD Handler
+    # =========================================================================
+
+    def _handle_header_backward(
+        self,
+        interface: Interface,
+        data: HeaderResponseData,
+    ) -> Optional[int]:
+        """Handle header in BACKWARD mode - searching for known header.
+
+        We're searching backward from a bad (unknown) header trying to find
+        a header that exists in one of our blockchains.
+
+        Returns:
+            next_height to request, or None if error.
+        """
+        chain = blockchain.check_header(data.header)
+
+        if chain:
+            # Found a known header - switch to binary search
+            interface.print_error("binary search")
+            interface.set_mode(Interface.MODE_BINARY)
+            interface.blockchain = chain
+            interface.good = data.height
+            return (interface.bad + interface.good) // 2
+
+        # Header not known - continue searching backward
+        if data.height <= networks.net.VERIFICATION_BLOCK_HEIGHT:
+            # Can't go below checkpoint - server is on incompatible chain
+            interface.print_error(
+                f"backward search reached checkpoint height {data.height}, "
+                "no common chain found"
+            )
+            self.connection_down(interface.server)
+            return None
+
+        # Mark this height as bad and continue backward with exponential steps
+        interface.bad = data.height
+        interface.bad_header = data.header
+        delta = interface.tip - data.height
+        # Double the step size, but don't go below checkpoint
+        return max(
+            networks.net.VERIFICATION_BLOCK_HEIGHT,
+            interface.tip - 2 * delta
+        )
+
+    # =========================================================================
+    # MODE_BINARY Handler
+    # =========================================================================
+
+    def _handle_header_binary(
+        self,
+        interface: Interface,
+        data: HeaderResponseData,
+    ) -> Optional[int]:
+        """Handle header in BINARY mode - binary search for fork point.
+
+        We have a 'good' height (known header) and 'bad' height (unknown header).
+        Binary search to find the exact fork point where good + 1 == bad.
+
+        Returns:
+            next_height to request, or None if fork point found/error.
+        """
+        chain = blockchain.check_header(data.header)
+
+        # Update good/bad bounds based on whether header is known
+        if chain:
+            interface.good = data.height
+            interface.blockchain = chain
+        else:
+            interface.bad = data.height
+            interface.bad_header = data.header
+
+        # Check if we've narrowed down to the fork point
+        if interface.bad != interface.good + 1:
+            # Continue binary search
+            return (interface.bad + interface.good) // 2
+
+        # Fork point found: good is last common, bad is first divergent
+        return self._handle_binary_fork_point(interface, data)
+
+    def _handle_binary_fork_point(
+        self,
+        interface: Interface,
+        data: HeaderResponseData,
+    ) -> Optional[int]:
+        """Handle the case where binary search found the exact fork point.
+
+        At this point:
+        - interface.good: height of last common header
+        - interface.bad: height of first divergent header
+        - interface.bad_header: the divergent header
+        - interface.blockchain: chain containing the good header
+
+        Note: Only notifies 'blockchain_updated' when state actually changes
+        (new fork created, branch reset). Join/reorg cases defer to
+        _handle_header_next_action for notification.
+
+        Returns:
+            next_height for catch-up, or None if done/error.
+        """
+        # Verify the bad header can connect to our chain
+        if not interface.blockchain.can_connect(
+            interface.bad_header, check_height=False
+        ):
+            interface.print_error(
+                f"bad header at {interface.bad} cannot connect to chain"
+            )
+            self.connection_down(interface.server)
+            return None
+
+        # Check if a branch already exists at this fork point
+        branch = self.blockchains.get(interface.bad)
+
+        if branch is not None:
+            return self._handle_binary_existing_branch(interface, data, branch)
+        else:
+            return self._handle_binary_new_fork(interface)
+
+    def _handle_binary_existing_branch(
+        self,
+        interface: Interface,
+        data: HeaderResponseData,
+        branch: blockchain.Blockchain,
+    ) -> Optional[int]:
+        """Handle fork point where a branch already exists.
+
+        Three cases:
+        1. Server's bad_header matches branch - join existing branch
+        2. Current header matches branch's parent - reorg scenario
+        3. Neither matches - conflict, need to reset branch
+
+        Returns:
+            next_height for catch-up (case 3), or None (cases 1, 2).
+        """
+        if branch.check_header(interface.bad_header):
+            # Case 1: Join existing branch
+            interface.print_error('joining chain', interface.bad)
+            interface.blockchain = branch
+            # Don't notify here - _handle_header_next_action will do it
+            return None
+
+        if branch.parent() and branch.parent().check_header(data.header):
+            # Case 2: Reorg - current header matches branch's parent chain
+            interface.print_error('reorg', interface.bad, interface.tip)
+            interface.blockchain = branch.parent()
+            # Don't notify here - _handle_header_next_action will do it
+            return None
+
+        # Case 3: Conflict with existing fork - reset and use server's header
+        interface.print_error(
+            'checkpoint conflicts with existing fork', branch.path()
+        )
+        branch.write(b'', 0)  # Clear branch file
+        branch.save_header(interface.bad_header)
+        interface.set_mode(Interface.MODE_CATCH_UP)
+        interface.blockchain = branch
+        interface.blockchain.catch_up = interface.server
+        self.notify('blockchain_updated')
+        return interface.bad + 1
+
+    def _handle_binary_new_fork(
+        self,
+        interface: Interface,
+    ) -> Optional[int]:
+        """Handle fork point where no branch exists yet.
+
+        Either create a new branch or start catch-up on existing chain.
+        """
+        bh = interface.blockchain.height()
+
+        if bh > interface.good:
+            # Our chain extends past the fork point - may need new branch
+            if not interface.blockchain.check_header(interface.bad_header):
+                # Different header at bad height - create new fork branch
+                b = interface.blockchain.fork(interface.bad_header)
+                self.blockchains[interface.bad] = b
+                interface.blockchain = b
+                interface.print_error("new chain", b.base_height)
+                interface.set_mode(Interface.MODE_CATCH_UP)
+                interface.blockchain.catch_up = interface.server
                 self.notify('blockchain_updated')
+                return interface.bad + 1
+            # Header matches - let _handle_header_next_action notify
+            return None
 
-        elif interface.mode == Interface.MODE_CATCH_UP:
-            can_connect = interface.blockchain.can_connect(header)
-            if can_connect:
-                interface.blockchain.save_header(header)
-                next_height = height + 1 if height < interface.tip else None
-            else:
-                # go back
-                interface.print_error("cannot connect", height)
-                interface.set_mode(Interface.MODE_BACKWARD)
-                interface.bad = height
-                interface.bad_header = header
-                next_height = height - 1
+        # bh == interface.good: chain ends at fork point
+        assert bh == interface.good, f"unexpected: bh={bh} good={interface.good}"
 
-            if next_height is None:
-                # exit catch_up state
-                interface.print_error('catch up done', interface.blockchain.height())
+        if interface.blockchain.catch_up is None and bh < interface.tip:
+            # Chain needs to catch up and no other interface is doing it
+            interface.print_error(f"catching up from {bh + 1}")
+            interface.set_mode(Interface.MODE_CATCH_UP)
+            interface.blockchain.catch_up = interface.server
+            self.notify('blockchain_updated')
+            return bh + 1
+
+        # Chain is current or another interface is catching up
+        # Let _handle_header_next_action notify
+        return None
+
+    # =========================================================================
+    # MODE_CATCH_UP Handler
+    # =========================================================================
+
+    def _handle_header_catch_up(
+        self,
+        interface: Interface,
+        data: HeaderResponseData,
+    ) -> Optional[int]:
+        """Handle header in CATCH_UP mode - syncing headers to tip.
+
+        Returns:
+            next_height to request, or None if caught up/error.
+        """
+        if interface.blockchain is None:
+            interface.print_error("catch_up mode but no blockchain assigned")
+            self.connection_down(interface.server)
+            return None
+
+        can_connect = interface.blockchain.can_connect(data.header)
+
+        if can_connect:
+            interface.blockchain.save_header(data.header)
+            if data.height < interface.tip:
+                return data.height + 1
+
+            # Caught up to tip - finalize
+            interface.set_mode(Interface.MODE_DEFAULT)
+            interface.print_error('catch up done', interface.blockchain.height())
+
+            # Guard against race where another interface claimed catch-up
+            if (interface.blockchain.catch_up == interface.server):
                 interface.blockchain.catch_up = None
-                self.switch_lagging_interface()
-                self.notify('blockchain_updated')
-        elif interface.mode == Interface.MODE_DEFAULT:
-            interface.print_error("ignored header {} received in default mode".format(height))
-            return
 
-        # If not finished, get the next header
-        if next_height:
-            if interface.mode == Interface.MODE_CATCH_UP and interface.tip > next_height:
+            self.switch_lagging_interface()
+            self.notify('blockchain_updated')
+            return None
+
+        # Can't connect - need to search backward for divergence point
+        interface.print_error("cannot connect", data.height)
+        interface.set_mode(Interface.MODE_BACKWARD)
+        interface.bad = data.height
+        interface.bad_header = data.header
+        return data.height - 1
+
+    # =========================================================================
+    # Next Action Handler
+    # =========================================================================
+
+    def _handle_header_next_action(
+        self,
+        interface: Interface,
+        next_height: Optional[int],
+    ) -> None:
+        """Determine and execute next action after processing a header.
+
+        Either requests the next header/chunk or finalizes the sync.
+        """
+        if next_height is not None:
+            # More headers needed
+            if (interface.mode == Interface.MODE_CATCH_UP
+                    and interface.tip > next_height):
+                # Far from tip - switch to chunks for efficiency
                 self.request_headers(interface, next_height, 2016)
             else:
+                # Close to tip or in search mode - single headers
                 self.request_header(interface, next_height)
         else:
-            interface.set_mode(Interface.MODE_DEFAULT)
-            self.notify('blockchain_updated')
-        # refresh network dialog
+            # Done with current operation
+            if interface.mode != Interface.MODE_DEFAULT:
+                interface.set_mode(Interface.MODE_DEFAULT)
+                self.notify('blockchain_updated')
+
+        # Always refresh network dialog
         self.notify('interfaces')
+
+    # endregion on_header
 
     def find_bad_fds_and_kill(self):
         bad = []
