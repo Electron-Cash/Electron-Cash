@@ -36,7 +36,7 @@ from collections import defaultdict
 import threading
 import socket
 import json
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Tuple, Optional
 
 import socks
 from . import util
