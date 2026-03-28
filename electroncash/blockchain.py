@@ -470,12 +470,12 @@ class Blockchain(util.PrintError):
             self.update_size()
 
     def save_header(self, header):
-        delta = header.get('block_height') - self.base_height
+        height = header.get('block_height')
+        delta = height - self.base_height
         data = bfh(serialize_header(header))
         assert delta == self.size()
         assert len(data) == HEADER_SIZE
 
-        height = header.get('block_height')
         checkpoint_height = networks.net.VERIFICATION_BLOCK_HEIGHT
 
         # Pre-checkpoint headers go to memory
