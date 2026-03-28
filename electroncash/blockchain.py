@@ -25,7 +25,7 @@ import os
 import sys
 import threading
 
-from typing import Optional
+from typing import Optional, Dict
 
 from . import asert_daa
 from . import networks
@@ -270,6 +270,10 @@ class HeaderChunk:
     def get_header_at_index(self, index):
         return self.headers[index]
 
+# Shared pre-checkpoint cache, these are immutable and pinned by the checkpoint
+_memory_headers: Dict[int, bytes] = {}  # height -> raw 80-byte header
+_memory_headers_lock = threading.Lock()
+
 class Blockchain(util.PrintError):
     """
     Manages blockchain headers and their verification
@@ -383,8 +387,40 @@ class Blockchain(util.PrintError):
         # Those should be overwritten and should not truncate the chain.
         top_height = base_height + (len(chunk_data) // HEADER_SIZE) - 1
         truncate = top_height > networks.net.VERIFICATION_BLOCK_HEIGHT
-        self.write(chunk_data, chunk_offset, truncate)
-        self.swap_with_parent()
+
+        checkpoint_height = networks.net.VERIFICATION_BLOCK_HEIGHT
+        if checkpoint_height is not None:
+            header_count = len(chunk_data) // HEADER_SIZE
+
+            # Determine which headers go to memory vs disk
+            memory_end = min(top_height, checkpoint_height)
+            memory_start = base_height
+
+            if memory_start <= memory_end:
+                # Some headers go to memory
+                with _memory_headers_lock:
+                    for i in range(header_count):
+                        h = base_height + i
+                        if h <= checkpoint_height:
+                            offset = i * HEADER_SIZE
+                            _memory_headers[h] = chunk_data[offset:offset + HEADER_SIZE]
+
+            # Only write to disk if there are post-checkpoint headers
+            if top_height > checkpoint_height:
+                if base_height <= checkpoint_height:
+                    # Chunk crosses checkpoint - only write post-checkpoint portion
+                    skip_count = checkpoint_height - base_height + 1
+                    disk_data = chunk_data[skip_count * HEADER_SIZE:]
+                    disk_offset = (checkpoint_height + 1 - self.base_height) * HEADER_SIZE
+                    self.write(disk_data, disk_offset, truncate)
+                else:
+                    # Entire chunk is post-checkpoint
+                    self.write(chunk_data, chunk_offset, truncate)
+                self.swap_with_parent()
+        else:
+            # No checkpoint (e.g., regtest) - original behavior
+            self.write(chunk_data, chunk_offset, truncate)
+            self.swap_with_parent()
 
     def swap_with_parent(self):
         if self.parent_base_height is None:
@@ -438,6 +474,17 @@ class Blockchain(util.PrintError):
         data = bfh(serialize_header(header))
         assert delta == self.size()
         assert len(data) == HEADER_SIZE
+
+        height = header.get('block_height')
+        checkpoint_height = networks.net.VERIFICATION_BLOCK_HEIGHT
+
+        # Pre-checkpoint headers go to memory
+        if checkpoint_height is not None and height <= checkpoint_height:
+            with _memory_headers_lock:
+                _memory_headers[height] = data
+            return
+
+        # Post-checkpoint headers go to disk
         self.write(data, delta*HEADER_SIZE)
         self.swap_with_parent()
 
@@ -453,6 +500,17 @@ class Blockchain(util.PrintError):
             return self.parent().read_header(height)
         if height > self.height():
             return
+
+        # Pre-checkpoint headers are stored in memory
+        checkpoint_height = networks.net.VERIFICATION_BLOCK_HEIGHT
+        if checkpoint_height is not None and height <= checkpoint_height:
+            with _memory_headers_lock:
+                raw = _memory_headers.get(height)
+            if raw is None:
+                return None
+            return deserialize_header(raw, height)
+
+        # Post-checkpoint headers are read from disk
         delta = height - self.base_height
         name = self.path()
         if os.path.exists(name):
