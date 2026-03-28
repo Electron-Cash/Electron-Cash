@@ -807,11 +807,17 @@ class Network(util.DaemonThread):
         # to throw up a crash reporter by sending unexpected JSON data types
         # or garbage data in the server response.
 
-        # We handle some responses; return the rest to the client.
+        # Caller owns the response exclusively when callbacks are registered
+        if callbacks:
+            for callback in callbacks:
+                callback(response)
+            return
+
+        # Internal handling for network-initiated requests only
         if method == 'server.version':
             if isinstance(result, list):
                 self.on_server_version(interface, result)
-        if method == 'blockchain.headers.subscribe':
+        elif method == 'blockchain.headers.subscribe':
             if error is None:
                 # on_notify_header below validates result is right type or format
                 self.on_notify_header(interface, result)
@@ -862,9 +868,6 @@ class Network(util.DaemonThread):
             except Exception as e:
                 self.print_error(f"bad server response for {method}: {repr(e)} / {response}")
                 self.connection_down(interface.server)
-
-        for callback in callbacks:
-            callback(response)
 
     @staticmethod
     def get_index(method, params):
