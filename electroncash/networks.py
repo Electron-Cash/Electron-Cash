@@ -48,7 +48,9 @@ class AbstractNet:
     DEFAULT_UNIT = "BCH"
     RPA_START_HEIGHT = 0
     PAYTACA_HOST = ""
-
+    # Verification chunk: headers needed for MTP calculation at checkpoint
+    # We need 11 headers: checkpoint - 10 through checkpoint (inclusive)
+    VERIFICATION_CHUNK_SIZE = 11
 
 class MainNet(AbstractNet):
     TESTNET = False
