@@ -189,9 +189,9 @@ class ScaleNet(TestNet):
 
     VERIFICATION_BLOCK_MERKLE_ROOT = "41eb32849a353fcb408c8b25e84578c714dbdc5ee774d0fbe25e85755250df6a"
     VERIFICATION_BLOCK_HEIGHT = 2016
+    VERIFICATION_CHUNK_SIZE = 147 # For CW-144 initialization
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
-
 
 class RegtestNet(TestNet):
     GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
