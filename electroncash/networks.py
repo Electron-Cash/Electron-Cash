@@ -52,6 +52,7 @@ class AbstractNet:
     # We need 11 headers: checkpoint - 10 through checkpoint (inclusive)
     VERIFICATION_CHUNK_SIZE = 11
 
+
 class MainNet(AbstractNet):
     TESTNET = False
     WIF_PREFIX = 0x80
@@ -192,6 +193,7 @@ class ScaleNet(TestNet):
     VERIFICATION_CHUNK_SIZE = 147 # For CW-144 initialization
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
+
 
 class RegtestNet(TestNet):
     GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
