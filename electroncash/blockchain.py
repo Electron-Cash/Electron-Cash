@@ -166,8 +166,19 @@ def read_blockchains(config):
     l = filter(lambda x: x.startswith('fork_'), os.listdir(fdir))
     l = sorted(l, key = lambda x: int(x.split('_')[1]))
     for filename in l:
-        parent_base_height = int(filename.split('_')[1])
-        base_height = int(filename.split('_')[2])
+        try:
+            parent_base_height = int(filename.split('_')[1])
+            base_height = int(filename.split('_')[2])
+        except (IndexError, ValueError):
+            util.print_error(f"[Blockchain] skipping malformed fork file: {filename}")
+            continue
+
+        # Verify parent chain has headers up to base_height - 1
+        parent = blockchains.get(parent_base_height)
+        if parent is None or parent.height() < base_height - 1:
+            util.print_error(f"[Blockchain] skipping orphaned fork: {filename}")
+            continue
+
         b = Blockchain(config, base_height, parent_base_height)
         blockchains[b.base_height] = b
     return blockchains
