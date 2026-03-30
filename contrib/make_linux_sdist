@@ -22,12 +22,11 @@ export EC_PACKAGE_NAME
 info "Making SrcDist for version: ${EC_PACKAGE_NAME}-${TAGGED_VERSION} ..."
 
 "$contrib"/make_locale && \
-    "$contrib"/make_packages && \
-    python3 setup.py sdist --enable-secp --enable-zbar --enable-tor --format=zip,gztar || fail "Failed."
+    python3 setup.py sdist --format=zip,gztar || fail "Failed."
 
 unset EC_PACKAGE_NAME TAGGED_VERSION
 
-info "Linux source distribution (including compiled libseck256k1 & libzbar) has been placed in dist/"
+info "Source distribution has been placed in dist/"
 
 popd
 popd
