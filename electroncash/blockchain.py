@@ -186,6 +186,11 @@ def read_blockchains(config):
     fork_files.sort(key=lambda x: x[1])
 
     for filename, parent_base_height, base_height in fork_files:
+        # Forks at or below checkpoint are not supported - checkpoint headers are sparse
+        if networks.net.VERIFICATION_BLOCK_HEIGHT is not None and base_height <= networks.net.VERIFICATION_BLOCK_HEIGHT:
+            util.print_error(f"[Blockchain] skipping fork below checkpoint: {filename}")
+            continue
+
         # Verify parent chain exists and has headers up to base_height - 1
         parent = blockchains.get(parent_base_height)
         if parent is None or parent.height() < base_height - 1:
