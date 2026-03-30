@@ -163,17 +163,30 @@ def read_blockchains(config):
     fdir = os.path.join(util.get_headers_dir(config), 'forks')
     if not os.path.exists(fdir):
         os.mkdir(fdir)
-    l = filter(lambda x: x.startswith('fork_'), os.listdir(fdir))
-    l = sorted(l, key = lambda x: int(x.split('_')[1]))
-    for filename in l:
-        try:
-            parent_base_height = int(filename.split('_')[1])
-            base_height = int(filename.split('_')[2])
-        except (IndexError, ValueError):
-            util.print_error(f"[Blockchain] skipping malformed fork file: {filename}")
-            continue
 
-        # Verify parent chain has headers up to base_height - 1
+    def parse_fork_filename(filename):
+        """Returns (parent_base_height, base_height) or None if invalid."""
+        if not filename.startswith('fork_'):
+            return None
+        try:
+            parts = filename.split('_')
+            return int(parts[1]), int(parts[2])
+        except (IndexError, ValueError):
+            return None
+
+    fork_files = []
+    for filename in os.listdir(fdir):
+        parsed = parse_fork_filename(filename)
+        if parsed is None:
+            util.print_error(f"[Blockchain] skipping invalid file in forks folder: {filename}")
+            continue
+        fork_files.append((filename, parsed[0], parsed[1]))
+
+    # Sort by parent_base_height so parents are loaded before children
+    fork_files.sort(key=lambda x: x[1])
+
+    for filename, parent_base_height, base_height in fork_files:
+        # Verify parent chain exists and has headers up to base_height - 1
         parent = blockchains.get(parent_base_height)
         if parent is None or parent.height() < base_height - 1:
             util.print_error(f"[Blockchain] skipping orphaned fork: {filename}")
@@ -181,6 +194,7 @@ def read_blockchains(config):
 
         b = Blockchain(config, base_height, parent_base_height)
         blockchains[b.base_height] = b
+
     return blockchains
 
 def check_header(header):
