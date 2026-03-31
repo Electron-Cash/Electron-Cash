@@ -160,23 +160,39 @@ blockchains = {}
 
 def read_blockchains(config):
     blockchains[0] = Blockchain(config, 0, None)
+
+    # Verify main chain continuity from checkpoint to tip, truncate at first break
+    checkpoint_height = networks.net.VERIFICATION_BLOCK_HEIGHT
+    if checkpoint_height is not None:
+        _verify_and_truncate_chain(blockchains[0], checkpoint_height)
+
     fdir = os.path.join(util.get_headers_dir(config), 'forks')
     if not os.path.exists(fdir):
         os.mkdir(fdir)
 
-    def parse_fork_filename(filename):
+    def parse_fork_file(filename):
         """Returns (parent_base_height, base_height) or None if invalid."""
         if not filename.startswith('fork_'):
             return None
         try:
             parts = filename.split('_')
-            return int(parts[1]), int(parts[2])
+            parent_base_height = int(parts[1])
+            base_height = int(parts[2])
         except (IndexError, ValueError):
             return None
+        # Verify file size is non-zero and multiple of header size
+        filepath = os.path.join(fdir, filename)
+        try:
+            size = os.path.getsize(filepath)
+            if size == 0 or size % HEADER_SIZE != 0:
+                return None
+        except OSError:
+            return None
+        return parent_base_height, base_height
 
     fork_files = []
     for filename in os.listdir(fdir):
-        parsed = parse_fork_filename(filename)
+        parsed = parse_fork_file(filename)
         if parsed is None:
             util.print_error(f"[Blockchain] skipping invalid file in forks folder: {filename}")
             continue
@@ -186,7 +202,7 @@ def read_blockchains(config):
     fork_files.sort(key=lambda x: x[1])
 
     for filename, parent_base_height, base_height in fork_files:
-        # Forks at or below checkpoint are not supported - checkpoint headers are sparse
+        # Forks at or below checkpoint are not supported
         if networks.net.VERIFICATION_BLOCK_HEIGHT is not None and base_height <= networks.net.VERIFICATION_BLOCK_HEIGHT:
             util.print_error(f"[Blockchain] skipping fork below checkpoint: {filename}")
             continue
@@ -197,10 +213,72 @@ def read_blockchains(config):
             util.print_error(f"[Blockchain] skipping orphaned fork: {filename}")
             continue
 
+        # Verify fork point header exists (not sparse/null)
+        fork_point_header = parent.read_header(base_height - 1)
+        if fork_point_header is None:
+            util.print_error(f"[Blockchain] skipping fork with missing fork point header: {filename}")
+            continue
+
+        # Verify fork's first header connects to parent chain
         b = Blockchain(config, base_height, parent_base_height)
+        first_header = b.read_header(base_height)
+        if first_header is None:
+            util.print_error(f"[Blockchain] skipping fork with missing first header: {filename}")
+            continue
+        if first_header.get('prev_block_hash') != hash_header(fork_point_header):
+            util.print_error(f"[Blockchain] skipping fork that doesn't connect to parent: {filename}")
+            continue
+
+        # Verify fork internal continuity, truncate at first break
+        _verify_and_truncate_chain(b, base_height)
+
         blockchains[b.base_height] = b
 
     return blockchains
+
+def _verify_and_truncate_chain(blockchain, from_height):
+    """Verify chain continuity from from_height to tip, truncate at first break."""
+    tip_height = blockchain.height()
+    if tip_height < from_height:
+        return
+
+    filename = blockchain.path()
+    base_height = blockchain.base_height
+    prev_hash = None
+
+    with open(filename, 'rb') as f:
+        for height in range(from_height, tip_height + 1):
+            offset = (height - base_height) * HEADER_SIZE
+            f.seek(offset)
+            raw_header = f.read(HEADER_SIZE)
+
+            # Check for null header
+            if raw_header == NULL_HEADER:
+                util.print_error(f"[Blockchain] null header at height {height}, truncating")
+                _truncate_at(blockchain, height)
+                return
+
+            header = deserialize_header(raw_header, height)
+
+            # Check hash linkage (skip for first header in range)
+            if prev_hash is not None and header.get('prev_block_hash') != prev_hash:
+                util.print_error(f"[Blockchain] hash mismatch at height {height}, truncating")
+                _truncate_at(blockchain, height)
+                return
+
+            prev_hash = hash_header(header)
+
+def _truncate_at(blockchain, height):
+    """Truncate blockchain file at given height."""
+    filename = blockchain.path()
+    base_height = blockchain.base_height
+    truncate_length = (height - base_height) * HEADER_SIZE
+    with open(filename, 'r+b') as f:
+        f.truncate(truncate_length)
+        f.flush()
+        os.fsync(f.fileno())
+    with blockchain.lock:
+        blockchain.update_size()
 
 def check_header(header):
     if type(header) is not dict:
