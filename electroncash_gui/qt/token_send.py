@@ -965,7 +965,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             self.print_error("_estimate_max_amount:", repr(e))
             return None
         dust_regular = wallet.dust_threshold(self.wallet.network)
-        dust_token = token.heuristic_dust_limit_for_token_bearing_output()
+        dust_token = wallet.dust_threshold(self.wallet.network, output_bytes=118)
         # Consider all non-token non-dust utxos as potentially contributing to max_amount
         max_in = sum(x['value'] for x in spec.non_token_utxos.values() if x['value'] >= dust_regular)
         # Quirk: We don't choose token utxos for contributing to BCH amount unless the token was selected for
