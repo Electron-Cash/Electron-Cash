@@ -1,8 +1,8 @@
 <RCC>
   <qresource prefix="/" >
     <file>icons/baton.png</file>
-    <file>icons/cashacct-logo.png</file>
-    <file>icons/cashacct-button-darkmode.png</file>
+    <file>icons/cashacct-logo.svg</file>
+    <file>icons/cashacct-logo-original.svg</file>
     <file>icons/electron-cash.svg</file>
     <file>icons/electron-cash-update.svg</file>
     <file>icons/clock1.svg</file>
@@ -11,19 +11,18 @@
     <file>icons/clock4.svg</file>
     <file>icons/clock5.svg</file>
     <file>icons/confirmed.svg</file>
-    <file>icons/copy.png</file>
+    <file>icons/copy.svg</file>
     <file>icons/digitalbitbox.png</file>
     <file>icons/digitalbitbox_unpaired.png</file>
     <file>icons/edit_nft.png</file>
     <file>icons/electron_light_icon.svg</file>
     <file>icons/electron_dark_icon.svg</file>
     <file>icons/expired.svg</file>
-    <file>icons/file.png</file>
+    <file>icons/file.svg</file>
     <file>icons/import.svg</file>
-    <file>icons/import_dark_theme.svg</file>
     <file>icons/keepkey.png</file>
     <file>icons/keepkey_unpaired.png</file>
-    <file>icons/key.png</file>
+    <file>icons/key.svg</file>
     <file>icons/ledger.png</file>
     <file>icons/ledger_unpaired.png</file>
     <file>icons/lock.svg</file>
@@ -31,7 +30,6 @@
     <file>icons/mutable.png</file>
     <file>icons/openalias-logo.svg</file>
     <file>icons/qrcode.svg</file>
-    <file>icons/qrcode_white.svg</file>
     <file>icons/qr_finder.svg</file>
     <file>icons/paper-plane.svg</file>
     <file>icons/paper-plane_dark_theme.svg</file>
@@ -39,8 +37,7 @@
     <file>icons/satochip.png</file>
     <file>icons/satochip_unpaired.png</file>
     <file>icons/save.svg</file>
-    <file>icons/save_dark_theme.svg</file>
-    <file>icons/seed.png</file>
+    <file>icons/seed.svg</file>
     <file>icons/status_connected.svg</file>
     <file>icons/status_connected_fork.svg</file>
     <file>icons/status_connected_proxy.svg</file>
@@ -52,29 +49,30 @@
     <file>icons/seal.svg</file>
     <file>icons/tab_addresses.png</file>
     <file>icons/tab_coins.png</file>
-    <file>icons/tab_console.png</file>
+    <file>icons/tab_console.svg</file>
     <file>icons/tab_contacts.png</file>
     <file>icons/tab_converter.svg</file>
     <file>icons/tab_converter_bw.svg</file>
     <file>icons/tab_token.svg</file>
+    <file>icons/tab_token-original.svg</file>
     <file>icons/cashshuffle_on_error.svg</file>
     <file>icons/cashshuffle_on.svg</file>
     <file>icons/cashshuffle_off.svg</file>
     <file>icons/CashShuffleLogos/logo-vertical.svg</file>
     <file>icons/CashShuffleLogos/logo-vertical_grayed.svg</file>
-    <file>icons/question-mark-dark.svg</file>
-    <file>icons/question-mark-light.svg</file>
-    <file>icons/tab_history.png</file>
-    <file>icons/tab_receive.png</file>
-    <file>icons/tab_send.png</file>
+    <file>icons/question-mark.svg</file>
+    <file>icons/tab_history.svg</file>
+    <file>icons/tab_receive.svg</file>
+    <file>icons/tab_send.svg</file>
     <file>icons/tor_logo.svg</file>
     <file>icons/speaker.png</file>
-    <file>icons/trash-10-24.png</file>
-    <file>icons/trezor_unpaired.png</file>
-    <file>icons/trezor.png</file>
+    <file>icons/trash-10-24.svg</file>
+    <file>icons/trezor_unpaired.svg</file>
+    <file>icons/trezor.svg</file>
     <file>icons/unconfirmed.svg</file>
     <file>icons/unpaid.svg</file>
     <file>icons/unlock.svg</file>
-    <file>icons/warning.png</file>
+    <file>icons/warning.svg</file>
+    <file>icons/transparent.svg</file>
   </qresource>
 </RCC>
