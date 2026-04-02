@@ -6,6 +6,7 @@ It reads the current stylesheet, appends our modifications and sets the new styl
 from PyQt5 import QtWidgets
 from electroncash.util import print_error
 
+
 OLD_QDARKSTYLE_PATCH = '''
 QWidget:disabled {
     color: hsl(0, 0, 50%);
@@ -32,6 +33,10 @@ QAbstractItemView QLineEdit {
 QComboBox::item:checked {
     font-weight: bold;
     max-height: 30px;
+}
+/*qdarkstyle sets alternate-background-color to the same as the background color (#19232D), making row colors invisible. Override with a visible darker shade. */
+QAbstractItemView{
+    alternate-background-color: #111820;
 }
 '''
 
