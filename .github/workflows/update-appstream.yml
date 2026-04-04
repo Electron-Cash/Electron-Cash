@@ -23,18 +23,8 @@ jobs:
           # Strip 'v' prefix from version
           VERSION=${VERSION#v}
           DATE=${DATE:0:10}  # Extract YYYY-MM-DD from ISO timestamp
-          FILE="org.electroncash.ElectronCash.appdata.xml"
           
-          # Skip if version already exists
-          if grep -q "version=\"$VERSION\"" "$FILE"; then
-            echo "✓ Release $VERSION already in appdata.xml"
-            exit 0
-          fi
-          
-          # Insert new release after <releases> tag
-          sed -i "s|<releases>|<releases>\n\t\t<release version=\"$VERSION\" date=\"$DATE\"/>|" "$FILE"
-          
-          echo "✓ Added release $VERSION ($DATE) to appdata.xml"
+          python3 scripts/update_appstream.py "$VERSION" "$DATE"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
