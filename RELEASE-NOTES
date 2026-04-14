@@ -1532,3 +1532,23 @@ and there is no warning message.
 - add BCH Ninja explorers; remove electroncash.de (kzKallisti)
 - Enhance CashTokens User Experience plus Bug Fixes #3197 (OPReturnCode)
 - Bump header checkpoints to something recent (cculianu)
+
+RELEASE NOTES 4.4.4
+
+- Enhance precision of max BCH amount estimation on the send tab when sending tokens (OPReturnCode)
+- Update token combobox logic and pay address checks (OPReturnCode)
+- wine build: Build only the 64-bit binaries for windows (cculianu)
+- Minor BCMR improvements: add chipnet; update BCMR string truncation (#3196) (rnbrady)
+- Add 'Address' column to CashTokens tab (OPReturnCode)
+- Update Category sort logic to use token name in CashTokens tab (OPReturnCode)
+- Update Category sort logic: use lowercase token names; prioritize items with metadata first in CT tab (OPReturnCode)
+- Add action menu to MyTreeWidget headers for hiding/showing columns (OPReturnCode)
+- Change alignment of 'NFTs' and 'Num UTXOs' columns to right in CashTokens tab (OPReturnCode)
+- Set Category as stretch column in CashTokens tab (OPReturnCode)
+- Fix search bug in CashTokens tab that failed to filter top-level items (OPReturnCode)
+- Add functionality to save and restore header column order in MyTreeWidget (OPReturnCode)
+- Enable dynamic resizing of TokenList columns (OPReturnCode)
+- Add functionality to save and restore header column widths in MyTreeWidget (OPReturnCode)
+- Disable last unchecked item in MyTreeWidget header action menu to prevent the header from disappearing (OPReturnCode)
+- Headers & SPV: fix CVE-2012-2459 in merkle proof verification (#3202) (bitcoincashautist)
+- blockchain: skip loading orphaned fork files on startup (#3211) (bitcoincashautist)
