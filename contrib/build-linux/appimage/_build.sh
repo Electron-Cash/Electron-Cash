@@ -117,7 +117,7 @@ export CMAKE_BUILD_PARALLEL_LEVEL="${WORKER_COUNT:-$(nproc)}"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-pip.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-build-appimage.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
-PIP_CONSTRAINT="$CONTRIB/requirements/build-constraint.txt" CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary PyQt5,PyQt5-Qt5 --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
+PIP_CONSTRAINT="$CONTRIB/requirements/build-constraint.txt" CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary PyQt5,PyQt5-Qt5,zxing-cpp --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
 # Temporary fix for hidapi incompatibility with Cython 3
 # See https://github.com/trezor/cython-hidapi/issues/155
 # We use PIP_CONSTRAINT as an environment variable instead of command line flag because it gets passed to subprocesses
