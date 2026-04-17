@@ -1261,10 +1261,7 @@ class Network(util.DaemonThread):
         verification_top_height = self.checkpoint_servers_verified.get(interface.server, {}).get('height', None)
         was_verification_request = False
         if verification_top_height is not None:
-            if not networks.net.REGTEST:
-                was_verification_request = request_base_height == verification_top_height - 147 + 1 and actual_header_count == 147
-            else:
-                was_verification_request = request_base_height == verification_top_height - 50 + 1 and actual_header_count == 50
+            was_verification_request = request_base_height == verification_top_height - networks.net.VERIFICATION_CHUNK_SIZE + 1 and actual_header_count == networks.net.VERIFICATION_CHUNK_SIZE
 
         initial_interface_mode = interface.mode
         if interface.mode == Interface.MODE_VERIFICATION:
@@ -1704,11 +1701,7 @@ class Network(util.DaemonThread):
             if self.checkpoint_height is None:
                 self.checkpoint_height = interface.tip - 100
             self.checkpoint_servers_verified[interface.server] = { 'root': None, 'height': self.checkpoint_height }
-            # We need at least 147 headers before the post checkpoint headers for daa calculations.
-            if not networks.net.REGTEST:
-                self._request_headers(interface, self.checkpoint_height - 147 + 1, 147, self.checkpoint_height)
-            else:
-                self._request_headers(interface, self.checkpoint_height - 50 + 1, 50, self.checkpoint_height)
+            self._request_headers(interface, self.checkpoint_height - networks.net.VERIFICATION_CHUNK_SIZE + 1, networks.net.VERIFICATION_CHUNK_SIZE, self.checkpoint_height)
         else:
             # We already have them verified, maybe we got disconnected.
             interface.print_error("request_initial_proof_and_headers bypassed")
