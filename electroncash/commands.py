@@ -167,7 +167,7 @@ class Commands:
                 return nt
 
             if isinstance(v, tuple): v = EncodeNamedTupleObject(v)
-            elif isinstance(v, token.OutputData): v = v.to_dict()
+            elif isinstance(v, token.OutputData): v = { 'id' : v.id_hex, 'bitfield' : v.bitfield, 'amount' : v.amount, 'commitment' : v.commitment or '' }
             elif isinstance(v, list): v = ChkList(v) # may recurse
             elif isinstance(v, dict): v = Commands._EnsureDictNamedTuplesAreJSONSafe(v) # recurse
             return v
@@ -407,7 +407,7 @@ class Commands:
                     id=bytes.fromhex(token_data['id'])[::-1],
                     bitfield=token_data['bitfield'],
                     amount=token_data['amount'],
-                    commitment=bytes.fromhex(token_data['commitment'] or '')
+                    commitment=token_data['commitment'] or ''
                 )
         locktime = jsontx.get('locktime', jsontx.get('lockTime', 0))
         version = jsontx.get('version', 1)
@@ -439,7 +439,7 @@ class Commands:
                     id=bytes.fromhex(token_data['id'])[::-1],
                     bitfield=token_data['bitfield'],
                     amount=token_data['amount'],
-                    commitment=bytes.fromhex(token_data['commitment'] or '')
+                    commitment=token_data['commitment'] or ''
                 ))
             else:
                 token_datas.append(None)

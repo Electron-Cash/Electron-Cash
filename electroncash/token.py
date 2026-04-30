@@ -75,10 +75,6 @@ class OutputData:
         return f"<token.OutputData(id={self.id_hex}, bitfield={self.bitfield:02x}, amount={self.amount}, " \
                f"commitment={self.commitment[:MAX_CONSENSUS_COMMITMENT_LENGTH].hex()})>"
 
-    def to_dict(self) -> dict:
-        d = { 'id' : self.id_hex, 'bitfield' : self.bitfield, 'amount' : self.amount, 'commitment' : self.commitment.hex() or '' }
-        return d
-
     @classmethod
     def fromhex(cls, hexdata: str) -> Optional[object]:
         """Convenience: Attempts to parse hexdata (which should already have PREFIX_BYTE chopped off) as if it were a
