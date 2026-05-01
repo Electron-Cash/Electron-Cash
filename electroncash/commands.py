@@ -167,7 +167,7 @@ class Commands:
                 return nt
 
             if isinstance(v, tuple): v = EncodeNamedTupleObject(v)
-            elif isinstance(v, token.OutputData): v = { 'id' : v.id_hex, 'bitfield' : v.bitfield, 'amount' : v.amount, 'commitment' : v.commitment.hex() or '' }
+            elif isinstance(v, token.OutputData): v = { 'id' : v.id_hex, 'bitfield' : v.bitfield, 'amount' : v.amount, 'commitment' : v.commitment.hex() }
             elif isinstance(v, list): v = ChkList(v) # may recurse
             elif isinstance(v, dict): v = Commands._EnsureDictNamedTuplesAreJSONSafe(v) # recurse
             return v
