@@ -407,7 +407,7 @@ class Commands:
                     id=bytes.fromhex(token_data['id'])[::-1],
                     bitfield=token_data['bitfield'],
                     amount=token_data['amount'],
-                    commitment=token_data.get('commitment', '')
+                    commitment=bytes.fromhex(token_data.get('commitment', ''))
                 )
         locktime = jsontx.get('locktime', jsontx.get('lockTime', 0))
         version = jsontx.get('version', 1)
@@ -439,7 +439,7 @@ class Commands:
                     id=bytes.fromhex(token_data['id'])[::-1],
                     bitfield=token_data['bitfield'],
                     amount=token_data['amount'],
-                    commitment=token_data.get('commitment', '')
+                    commitment=bytes.fromhex(token_data.get('commitment', ''))
                 ))
             else:
                 token_datas.append(None)
