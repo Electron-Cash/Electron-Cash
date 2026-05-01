@@ -115,9 +115,6 @@ def dust_threshold(network, *, script_bytes=25, output_bytes=0):
     Hord-coded 148 covers all bytes but the actual output of the next tx for dust limit purposes,
     other variables are named for easy adjustment in the case of future changes.
     We don't need to reimplement *relayfee/1000 until/unless relay fees vary."""
-    # Change < dust threshold is added to the tx fee
-    #return 182 * 3 * relayfee(network) / 1000 # original Electrum logic
-    #return 1 # <-- was this value until late Sept. 2018
     #return 546  # hard-coded Bitcoin Cash dust threshold. Was changed to this as of Sept. 2018
     value_bytes = 8
     if script_bytes < 253:
