@@ -2885,7 +2885,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 assert td.is_valid_bitfield(), list_name
 
         # Setup outputs
-        token_dust = dust_threshold(self.network, output_bytes=118)  # will return 798 sats
+        token_dust = token.heuristic_dust_limit_for_token_bearing_output()
         outputs: List[Tuple[int, Address, Union[int, str]]]
         outputs = [(TYPE_ADDRESS, spec.payto_addr, token_dust)] * len(tds_out)
         tds_satoshis = []
