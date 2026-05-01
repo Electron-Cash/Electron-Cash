@@ -107,7 +107,7 @@ def relayfee(network):
     return min(f, MAX_RELAY_FEE)
 
 
-def dust_threshold(network, *, script_bytes=25, output_bytes=0):
+def dust_threshold(network, *, script_bytes=25, output_bytes=None):
     """To calculate the dust threshold for BCH and cashtoken UTXOs alike, various variables can be use.
     This implementation is using a default of 25 bytes for the output script (P2PKH).
     Alternatviely, the size of the serialized output can be used (34 bytes for P2PKH).
@@ -116,12 +116,13 @@ def dust_threshold(network, *, script_bytes=25, output_bytes=0):
     other variables are named for easy adjustment in the case of future changes.
     We don't need to reimplement *relayfee/1000 until/unless relay fees vary."""
     #return 546  # hard-coded Bitcoin Cash dust threshold. Was changed to this as of Sept. 2018
-    value_bytes = 8
-    if script_bytes < 253:
-        length_bytes = 1
-    else: # this can only be reached in the case of a non-standard transaction, may not be necessary
-        length_bytes = 3
-    if output_bytes < 1:
+    if output_bytes is None:
+        value_bytes = 8
+        if script_bytes < 253:
+            length_bytes = 1
+        else:
+            # this can only be reached in the case of a non-standard transaction
+            length_bytes = 3
         output_bytes = value_bytes + length_bytes + script_bytes
     return (148 + output_bytes) * 3
 
