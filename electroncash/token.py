@@ -205,11 +205,8 @@ def unwrap_spk(wrapped_spk: bytes) -> Tuple[Optional[OutputData], bytes]:
 
 def heuristic_dust_limit_for_token_bearing_output() -> int:
     """If calculating dust, wallet.dust_threshold should be used instead of a new function, but it may be desirable 
-    to retain this function beyond deprecation to support hypothetical private plugins."""
-    #return 800
-    """800 was hard-coded at implementation and expected to be enough to cover all conceivable token-bearing UTXOs
-    however, if my math is correct and there aren't any conflicts between components of the UTXO, worst-case for a
-    standard transaction may at least theoretically be 1392 (output size of 316 bytes)."""
+    to retain this function beyond deprecation to support hypothetical private plugins.
+    800 was originally hard-coded at implementation and expected to be enough to cover all conceivable token-bearing UTXOs."""
     return wallet.dust_threshold(None, output_bytes=118) # This should return 798, supports same UTXOs as 800.
 
 
