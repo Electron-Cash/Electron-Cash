@@ -107,7 +107,7 @@ def relayfee(network):
     return min(f, MAX_RELAY_FEE)
 
 
-def dust_threshold(network, *, script_bytes=25, output_bytes=None):
+def dust_threshold(network, *, script_byte_len=25, output_byte_len=None):
     """To calculate the dust threshold for BCH and cashtoken UTXOs alike, various variables can be used.
     This implementation is using a default of 25 bytes for the output script (P2PKH).
     Alternatviely, the size of the serialized output can be used (34 bytes for P2PKH).
@@ -115,15 +115,31 @@ def dust_threshold(network, *, script_bytes=25, output_bytes=None):
     Hard-coded 148 covers all bytes but the actual output of the next tx for dust limit purposes,
     other variables are named for easy adjustment in the case of future changes.
     We don't need to reimplement *relayfee/1000 until/unless relay fees vary."""
-    if output_bytes is None:
-        value_bytes = 8
-        if script_bytes < 253:
-            length_bytes = 1
+    if output_byte_len is None:
+        value_byte_len = 8
+        if script_byte_len < 253:
+            length_byte_len = 1
         else:
             # this can only be reached in the case of a non-standard transaction
-            length_bytes = 3
-        output_bytes = value_bytes + length_bytes + script_bytes
-    return (148 + output_bytes) * 3
+            length_byte_len = 3
+        output_byte_len = value_byte_len + length_byte_len + script_byte_len
+    return (148 + output_byte_len) * 3
+
+
+def calc_dust(script_or_address: Union[bytes, bytearray, Address, ScriptOutput, PublicKey],
+              td: Optional[token.OutputData]) -> int:
+    """Returns the dust amount for this output given a destination address and/or a locking script, etc,
+    and an optional token"""
+    if isinstance(script_or_address, (Address, PublicKey, ScriptOutput)):
+        script = script_or_address.to_script()
+    elif isinstance(script_or_address, bytearray):
+        script = bytes(script_or_address)
+    else:
+        assert isinstance(script_or_address, bytes)
+        script = script_or_address
+    script_byte_len = len(token.wrap_spk(td, script))
+    return dust_threshold(None, script_byte_len=script_byte_len)
+
 
 def sweep_preparations(privkeys, network, imax=100):
     class InputsMaxxed(Exception):
@@ -2991,16 +3007,18 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         if not spec.change_addr:
                             raise RuntimeError("Can't find a change address!")
 
-
         # Setup outputs
-        token_dust = token.heuristic_dust_limit_for_token_bearing_output()
-        outputs: List[Tuple[int, Address, Union[int, str]]]
-        outputs = [(TYPE_ADDRESS, spec.payto_addr, token_dust)] * len(tds_out)
+        outputs: List[Tuple[int, Address, Union[int, str]]] = []
+        addr_script = spec.payto_addr.to_script()
+        for td in tds_out:
+            outputs.append((TYPE_ADDRESS, spec.payto_addr, calc_dust(addr_script, td)))
         tds_satoshis = []
         if spec.send_satoshis > 0:
             outputs += [(TYPE_ADDRESS, spec.payto_addr, spec.send_satoshis)]
             tds_satoshis += [None]  # Non-token output for pure BCH
-        outputs += [(TYPE_ADDRESS, spec.change_addr, token_dust)] * len(tds_change_out)
+        change_addr_script = spec.change_addr.to_script()
+        for td in tds_change_out:
+            outputs.append((TYPE_ADDRESS, spec.change_addr, calc_dust(change_addr_script, td)))
 
         if spec.opreturn_msg:
             assert isinstance(spec.opreturn_msg, (bytes, bytearray))
@@ -3054,9 +3072,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         tx = self.make_unsigned_transaction(inputs, outputs, config, token_datas=token_datas, fixed_fee=get_fee,
                                             sign_schnorr=sign_schnorr, bip69_sort=False)
         if tx._outputs:
-            # Corner case: delete the change output if it contains dust
+            # Corner case: delete the change output if it contains dust; dust goes to fee as a result
             t, addr, value = tx._outputs[i_change]
-            if addr == spec.change_addr and value < dust_threshold(self.network):
+            if addr == spec.change_addr and value < calc_dust(change_addr_script, token_datas[i_change]):
                 self.print_error(f"Deleting change output at position {i_change} with value: {value}")
                 del tx._outputs[i_change]
                 assert tx._token_datas[i_change] is None

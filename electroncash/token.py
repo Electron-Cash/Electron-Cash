@@ -203,11 +203,20 @@ def unwrap_spk(wrapped_spk: bytes) -> Tuple[Optional[OutputData], bytes]:
     return token_data, spk  # Parsed ok
 
 
-def heuristic_dust_limit_for_token_bearing_output() -> int:
-    """If calculating dust, wallet.dust_threshold should be used instead of a new function, but it may be desirable 
-    to retain this function beyond deprecation to support hypothetical private plugins.
-    800 was originally hard-coded at implementation and expected to be enough to cover all conceivable token-bearing UTXOs."""
-    return wallet.dust_threshold(None, output_bytes=118) # This should return 798, supports same UTXOs as 800.
+# The length of the longest possible token serialization, if it has full max amount and largest possible commitment.
+# Used by `heuristic_dust_limit_for_longest_possible_token_bearing_p2pkh_output` below.
+LONGEST_POSSIBLE_TOKEN_SERIALIZATON_LEN = len(
+    OutputData(amount=2**63-1, bitfield=Structure.HasAmount | Structure.HasNFT | Structure.HasCommitmentLength,
+               commitment=b'\x00' * MAX_CONSENSUS_COMMITMENT_LENGTH).serialize()
+)
+
+
+def heuristic_dust_limit_for_longest_possible_token_bearing_p2pkh_output() -> int:
+    """The dust limit for a very long token-bearing output (largest possible serialization) that pays to a standard
+    p2pkh output."""
+    script_byte_len = len(PREFIX_BYTE) + LONGEST_POSSIBLE_TOKEN_SERIALIZATON_LEN + 25  # 25 is a p2pkh script
+    # Pre-May 2026 this returned 798, post May-2026 this returns 1062
+    return wallet.dust_threshold(None, script_byte_len=script_byte_len)
 
 
 def get_nft_flag_text(td: OutputData) -> Optional[str]:

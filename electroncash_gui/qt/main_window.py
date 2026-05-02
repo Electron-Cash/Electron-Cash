@@ -2090,7 +2090,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if self.is_token_tx:
                     try:
                         token_id = self.token_c.currentData(TokenSendComboBox.DataRoles.token_id)
-                        amount = self.send_token_util.estimate_max_bch_amount(token_id)
+                        token_amount = self._parse_token_amount(token_id)
+                        amount = self.send_token_util.estimate_max_bch_amount(token_id, token_amount=token_amount)
                         self.not_enough_funds = False
                     except NotEnoughFunds:
                         self.not_enough_funds = True
@@ -2394,6 +2395,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         else:
             return outputs, fee, label, coins
 
+    def _parse_token_amount(self, token_id) -> Optional[int]:
+        token_amount_text = self.token_amount_e.text()
+        if not token_amount_text:
+            return None
+        return self.token_meta.parse_amount(token_id, token_amount_text)
+
     # Process the token send action in a separate method to minimize potential side effects from using
     # the new CashTokens code.
     # It might be a good idea to combine this with read_send_tab() later.
@@ -2425,11 +2432,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         tx_desc = self.message_e.text()
 
-        token_amount = self.token_amount_e.text()
-        if not token_amount:
+        amount = self._parse_token_amount(token_id)
+        if amount is None:
             self.show_error(_('Invalid Token Amount'))
             return
-        amount = self.token_meta.parse_amount(token_id, token_amount)
 
         send_satoshis = self.amount_e.get_amount() or 0
 
