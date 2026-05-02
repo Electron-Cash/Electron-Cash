@@ -19,7 +19,7 @@ from .util import print_error
 from . import wallet
 
 # By consensus, NFT commitment byte blobs may not exceed this length
-MAX_CONSENSUS_COMMITMENT_LENGTH = 40
+MAX_CONSENSUS_COMMITMENT_LENGTH = 128  # Originally was 40, upgraded to 128 after May 2026
 
 
 class Structure(IntEnum):
