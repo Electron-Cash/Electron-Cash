@@ -107,11 +107,13 @@ class OpCodes(IntEnum):
 
     # control
     OP_NOP = 0x61
-    OP_VER = 0x62
+    OP_VER = 0x62  # Historical (early bitcoin)
     OP_IF = 0x63
     OP_NOTIF = 0x64
-    OP_VERIF = 0x65
-    OP_VERNOTIF = 0x66
+    # OP_VERIF = 0x65 # Historical (early bitcoin)
+    # OP_VERNOTIF = 0x66 # Historical (early bitcoin)
+    OP_BEGIN = 0x65  # after upgrade12 (May 2026)
+    OP_UNTIL = 0x66  # after upgrade12 (May 2026)
     OP_ELSE = 0x67
     OP_ENDIF = 0x68
     OP_VERIFY = 0x69
@@ -146,20 +148,24 @@ class OpCodes(IntEnum):
     OP_SIZE = 0x82
 
     # bit logic
-    OP_INVERT = 0x83
+    OP_INVERT = 0x83  # after upgrade12 (May 2026); Existed in early Bitcoin before being disabled.
     OP_AND = 0x84
     OP_OR = 0x85
     OP_XOR = 0x86
     OP_EQUAL = 0x87
     OP_EQUALVERIFY = 0x88
-    OP_RESERVED1 = 0x89
-    OP_RESERVED2 = 0x8a
+
+    # function support
+    OP_DEFINE = 0x89  # after upgrade12 (May 2026), was: OP_RESERVED1
+    OP_INVOKE = 0x8a  # after upgrade12 (May 2026), was: OP_RESERVED2
 
     # numeric
     OP_1ADD = 0x8b
     OP_1SUB = 0x8c
-    OP_2MUL = 0x8d
-    OP_2DIV = 0x8e
+    # OP_2MUL = 0x8d  # Historical (early Bitcoin)
+    # OP_2DIV = 0x8e  # Historical (early Bitcoin)
+    OP_LSHIFTNUM = 0x8d  # after upgrade12 (May 2026); arithmetic left-shift, defined as in C++20
+    OP_RSHIFTNUM = 0x8e  # after upgrade12 (May 2026); arithmetic right-shift, defined as in C++20
     OP_NEGATE = 0x8f
     OP_ABS = 0x90
     OP_NOT = 0x91
@@ -170,8 +176,10 @@ class OpCodes(IntEnum):
     OP_MUL = 0x95
     OP_DIV = 0x96
     OP_MOD = 0x97
-    OP_LSHIFT = 0x98
-    OP_RSHIFT = 0x99
+    # OP_LSHIFT = 0x98  # Historical (early Bitcoin)
+    # OP_RSHIFT = 0x99  # Historical (early Bitcoin)
+    OP_LSHIFTBIN = 0x98  # after upgrade12 (May 2026); binary blob left-shift (non-arithmetic)
+    OP_RSHIFTBIN = 0x99  # after upgrade12 (May 2026); binary blob right-shift (non-arithmetic)
 
     OP_BOOLAND = 0x9a
     OP_BOOLOR = 0x9b
