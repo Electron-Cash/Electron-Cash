@@ -19,3 +19,6 @@
 [submodule "contrib/tor"]
 	path = contrib/tor
 	url = https://github.com/EchterAgo/tor.git
+[submodule "electroncash_plugins/cauldron"]
+	path = electroncash_plugins/cauldron
+	url = https://github.com/robchank/cauldron.git
