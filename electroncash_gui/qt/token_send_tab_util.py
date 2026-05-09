@@ -146,26 +146,33 @@ class TokenSendUtil(PrintError):
     def get_outpoint_longname(utxo) -> str:
         return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
 
-    def estimate_max_bch_amount(self, token_id=None):
+    def estimate_max_bch_amount(self, token_id=None, token_amount=None):
         # make a dummy token spec
         tokens, _ = self.get_wallet_fungible_only_tokens()
-        dummy_tid = token_id if token_id else next(iter(tokens))
-        dummy_amount = tokens[dummy_tid][0]['token_data'].amount
-        spec = self.get_ft_send_spec(None, dummy_tid, dummy_amount, tokens, dummy=True)
+        tid = token_id if token_id else next(iter(tokens))
+        amt = tokens[tid][0]['token_data'].amount if token_amount is None else token_amount
+        spec = self.get_ft_send_spec(None, tid, amt, tokens, dummy=True)
 
         try:
             tx = self.wallet.make_token_send_tx(self.config, spec)
         except Exception as e:
-            self.print_error("_estimate_max_bch_amount:", repr(e))
+            self.print_error("estimate_max_bch_amount:", repr(e))
             raise e
-        dust_regular = wallet.dust_threshold(self.wallet.network)
-        dust_token = token.heuristic_dust_limit_for_token_bearing_output()
-        # Consider all non-token non-dust utxos as potentially contributing to max_amount
-        max_in = sum(x['value'] for x in spec.non_token_utxos.values() if x['value'] >= dust_regular)
-        # Quirk: We don't choose token utxos for contributing to BCH amount unless the token was selected for
-        # sending by the user in the UI. So only consider BCH amounts > 800 sats for tokens chosen for this tx
-        # by the user's NFT/FT selections in the UI.
-        max_in += sum(x['value'] - dust_token for x in tx.inputs() if x['token_data'] and x['value'] > dust_token)
+        max_in = 0
+        seen = set()
+        for inp in list(spec.non_token_utxos.values()) + list(tx.inputs()):
+            # 1. Consider all non-token non-dust utxos as potentially contributing to max_amount
+            # 2. Also consider token UTXOs that are over dust limit as contributing as well.
+            #    Quirk: We don't choose token utxos for contributing to BCH amount unless the token was selected for
+            #    sending by the user in the UI. So only consider BCH amounts > "dust' sats for tokens chosen for this tx
+            #    by the user's NFT/FT selections in the UI.
+            outpt = self.get_outpoint_longname(inp)
+            if outpt not in seen:
+                dust_amt = wallet.calc_dust(inp['address'], inp['token_data'])
+                val = inp['value']
+                if val > dust_amt:
+                    max_in += val - dust_amt
+                seen.add(outpt)
 
         val_out_minus_change = 0
         for (_, addr, val), td in tx.outputs(tokens=True):

@@ -16,8 +16,10 @@ from .i18n import _
 from .serialize import BCDataStream, SerializationError
 from .util import print_error
 
+from . import wallet
+
 # By consensus, NFT commitment byte blobs may not exceed this length
-MAX_CONSENSUS_COMMITMENT_LENGTH = 40
+MAX_CONSENSUS_COMMITMENT_LENGTH = 128  # Originally was 40, upgraded to 128 after May 2026
 
 
 class Structure(IntEnum):
@@ -201,14 +203,20 @@ def unwrap_spk(wrapped_spk: bytes) -> Tuple[Optional[OutputData], bytes]:
     return token_data, spk  # Parsed ok
 
 
-def heuristic_dust_limit_for_token_bearing_output() -> int:
-    """Returns the dust limit in sats for a token-bearing output in a transaction (which is a heavier output than
-    normal).  This value is ideally calculated by serializing the token UTXO and then returning a number in the
-    600-700 sat range, depending on the token UTXO's serialized data size in bytes.
+# The length of the longest possible token serialization, if it has full max amount and largest possible commitment.
+# Used by `heuristic_dust_limit_for_longest_possible_token_bearing_p2pkh_output` below.
+LONGEST_POSSIBLE_TOKEN_SERIALIZATON_LEN = len(
+    OutputData(amount=2**63-1, bitfield=Structure.HasAmount | Structure.HasNFT | Structure.HasCommitmentLength,
+               commitment=b'\x00' * MAX_CONSENSUS_COMMITMENT_LENGTH).serialize()
+)
 
-    Rather than doing that, for simplicity, we just return a hard-coded value which is expected to be enough to allow
-    all conceivable token-bearing UTXOs to be beyond the dust limit."""
-    return 800  # Worst-case; hard-coded for now.
+
+def heuristic_dust_limit_for_longest_possible_token_bearing_p2pkh_output() -> int:
+    """The dust limit for a very long token-bearing output (largest possible serialization) that pays to a standard
+    p2pkh output."""
+    script_byte_len = len(PREFIX_BYTE) + LONGEST_POSSIBLE_TOKEN_SERIALIZATON_LEN + 25  # 25 is a p2pkh script
+    # Pre-May 2026 this returned 798, post May-2026 this returns 1062
+    return wallet.dust_threshold(None, script_byte_len=script_byte_len)
 
 
 def get_nft_flag_text(td: OutputData) -> Optional[str]:

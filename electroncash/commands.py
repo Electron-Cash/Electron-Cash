@@ -37,6 +37,7 @@ from functools import wraps
 
 from . import bitcoin
 from . import rpa
+from . import token
 from . import token_meta
 from . import util
 from .address import Address, AddressError
@@ -166,6 +167,7 @@ class Commands:
                 return nt
 
             if isinstance(v, tuple): v = EncodeNamedTupleObject(v)
+            elif isinstance(v, token.OutputData): v = { 'id' : v.id_hex, 'bitfield' : v.bitfield, 'amount' : v.amount, 'commitment' : v.commitment.hex() }
             elif isinstance(v, list): v = ChkList(v) # may recurse
             elif isinstance(v, dict): v = Commands._EnsureDictNamedTuplesAreJSONSafe(v) # recurse
             return v
@@ -382,12 +384,13 @@ class Commands:
         return l
 
     @command('n')
-    def getaddressunspent(self, address):
-        """Returns the UTXO list of any address. Note: This
-        is a walletless server query, results are not checked by SPV.
+    def getaddressunspent(self, address, include_tokens=False, tokens_only=False):
+        """Returns the UTXO list of any address. Note: This is a walletless server
+        query that excludes token UTXOs by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
-        return self.network.synchronous_get(('blockchain.scripthash.listunspent', [sh]))
+        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else "exclude_tokens"
+        return self.network.synchronous_get(('blockchain.scripthash.listunspent', [sh, token_filter]))
 
     @command('')
     def serialize(self, jsontx):
@@ -398,8 +401,16 @@ class Commands:
         keypairs = {}
         inputs = jsontx.get('inputs')
         outputs = jsontx.get('outputs')
-        locktime = jsontx.get('locktime', 0)
-        locktime = jsontx.get('lockTime', locktime)
+        for txin in inputs:
+            token_data = txin.get('token_data')
+            if isinstance(token_data, dict):
+                txin['token_data'] = token.OutputData(
+                    id=bytes.fromhex(token_data['id'])[::-1],
+                    bitfield=token_data['bitfield'],
+                    amount=token_data['amount'],
+                    commitment=bytes.fromhex(token_data.get('commitment', ''))
+                )
+        locktime = jsontx.get('locktime', jsontx.get('lockTime', 0))
         version = jsontx.get('version', 1)
         for txin in inputs:
             if txin.get('output'):
@@ -416,8 +427,25 @@ class Commands:
                 txin['signatures'] = [None]
                 txin['num_sig'] = 1
 
-        outputs = [(TYPE_ADDRESS, Address.from_string(x['address']), int(x['value'])) for x in outputs]
-        tx = Transaction.from_io(inputs, outputs, locktime=locktime, version=version, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
+        outputs_list = []
+        token_datas = []
+        for txout in outputs:
+            addr = Address.from_string(txout['address'])
+            value = int(txout['value'])
+            output_type = txout.get('type', TYPE_ADDRESS)
+            outputs_list.append((output_type, addr, value))
+            token_data = txout.get('token_data')
+            if isinstance(token_data, dict):
+                token_datas.append(token.OutputData(
+                    id=bytes.fromhex(token_data['id'])[::-1],
+                    bitfield=token_data['bitfield'],
+                    amount=token_data['amount'],
+                    commitment=bytes.fromhex(token_data.get('commitment', ''))
+                ))
+            else:
+                token_datas.append(None)
+
+        tx = Transaction.from_io(inputs, outputs_list, locktime=locktime, version=version, token_datas=token_datas, sign_schnorr=self.wallet and self.wallet.is_schnorr_enabled())
         tx.sign(keypairs)
         return tx.as_dict()
 
@@ -529,12 +557,13 @@ class Commands:
         return out
 
     @command('n')
-    def getaddressbalance(self, address):
-        """Return the balance of any address. Note: This is a walletless
-        server query, results are not checked by SPV.
+    def getaddressbalance(self, address, include_tokens=False, tokens_only=False):
+        """Return the balance of any address. Note: This is a walletless server
+        query that excludes token dust by default, results are not checked by SPV.
         """
         sh = Address.from_string(address).to_scripthash_hex()
-        out = self.network.synchronous_get(('blockchain.scripthash.get_balance', [sh]))
+        token_filter = "tokens_only" if tokens_only else "include_tokens" if include_tokens else "exclude_tokens"
+        out = self.network.synchronous_get(('blockchain.scripthash.get_balance', [sh, token_filter]))
         out["confirmed"] =  str(PyDecimal(out["confirmed"])/COIN)
         out["unconfirmed"] =  str(PyDecimal(out["unconfirmed"])/COIN)
         return out
@@ -1037,6 +1066,7 @@ command_options = {
     'frozen':      (None, "Show only frozen addresses"),
     'funded':      (None, "Show only funded addresses"),
     'imax':        (None, "Maximum number of inputs"),
+    'include_tokens': (None, "Include CashToken-containing UTXOs"),
     'index_url':   (None, 'Override the URL where you would like users to be shown the BIP70 Payment Request'),
     'labels':      ("-l", "Show the labels of listed addresses"),
     'language':    ("-L", "Default language for wordlist"),
@@ -1060,6 +1090,7 @@ command_options = {
     'show_fiat':   (None, "Show fiat value of transactions"),
     'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
     'token_request': (None, "Cashtokens payment request"),
+    'tokens_only': (None, "Return only CashToken-containing UTXOs"),
     'unsigned':    ("-u", "Do not sign transaction"),
     'unused':      (None, "Show only unused addresses"),
     'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations and/or token meta-data for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates and/or token meta-data."),
