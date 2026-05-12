@@ -129,7 +129,8 @@ class TokenSendUtil(PrintError):
         spec.feerate = feerate
         spec.token_utxos = copy.deepcopy(utxos_by_name)
         spec.non_token_utxos = {self.get_outpoint_longname(x): x
-                                for x in self.wallet.get_spendable_coins(None, self.config)}
+                                for x in self.wallet.get_spendable_coins(None, self.config)
+                                if not x.get('token_data')}
         spec.send_fungible_amounts = {category_id: amount}
 
         spec.opreturn_msg = opreturn_msg

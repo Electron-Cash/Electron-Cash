@@ -1400,7 +1400,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         c = u = x = 0
         tok_locked = 0
         had_cb = False
-        for txo, (tx_height, v, is_cb, token_data) in received.items():
+        for txo, (tx_height, v, is_cb, _) in received.items():
             if exclude_frozen_coins and (txo in self.frozen_coins or txo in self.frozen_coins_tmp):
                 continue
             had_cb = had_cb or is_cb  # remember if this address has ever seen a coinbase txo
@@ -1415,10 +1415,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     c -= v
                 else:
                     u -= v
-            elif token_data:
-                # This received output has a token on it and has not been spent.
-                # We can say its BCH amount is "locked" onto a CashToken
-                tok_locked += v
 
         result = (c, u, x, tok_locked)[:return_arity]
         if not exclude_frozen_coins and not had_cb:
@@ -1462,8 +1458,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if isInvoice:
             confirmed_only = True
         return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only, exclude_slp=True,
-                              # For now, we will prohibit spending cash tokens implicitly (must be explicit)
-                              exclude_tokens=True)
+                              exclude_tokens=False)
 
     def get_utxos(self, domain=None, exclude_frozen=False, mature=False, confirmed_only=False,
                   *, addr_set_out=None, exclude_slp=True, exclude_tokens=True, tokens_only=False):
@@ -2714,11 +2709,86 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             assert all(isinstance(addr, Address) for addr in change_addrs)
 
             coin_chooser = coinchooser.CoinChooserPrivacy()
-            tx = coin_chooser.make_tx(inputs, outputs, change_addrs,
+
+            # When the caller has already built explicit token outputs (e.g. make_token_send_tx
+            # providing non-None token_datas entries), pass inputs straight through.
+            # Otherwise, extract token UTXOs from inputs, present them to the coin chooser at
+            # net value (value − dust) so the chooser can select them by address-bucket, then
+            # restore real values and inject the mandatory token dust outputs post-selection.
+            caller_handles_tokens = token_datas is not None and any(
+                td is not None for td in token_datas
+            )
+
+            if caller_handles_tokens:
+                plain_inputs = list(inputs)
+                tok_pool = []
+            else:
+                plain_inputs = []
+                tok_pool = []
+                for inp in inputs:
+                    if inp.get('token_data'):
+                        _dust = calc_dust(inp['address'], inp['token_data'])
+                        if inp['value'] >= _dust:
+                            _c = dict(inp)
+                            _c['_tok_orig_value'] = inp['value']
+                            _c['_tok_dust'] = _dust
+                            _c['value'] = inp['value'] - _dust  # 0 when value == dust
+                            tok_pool.append(_c)
+                        # below-dust token UTXOs are skipped (they have no net BCH to offer)
+                    else:
+                        plain_inputs.append(inp)
+
+            tx = coin_chooser.make_tx(plain_inputs + tok_pool, outputs, change_addrs,
                                       fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr,
                                       token_datas=token_datas)
+
+            # For each token UTXO the coin chooser actually selected, restore the real
+            # value and attach the mandatory token dust output to a change address.
+            _tok_selected = [inp for inp in tx.inputs() if '_tok_orig_value' in inp]
+            if _tok_selected:
+                _tok_change = self.get_default_change_addresses(len(_tok_selected))
+                if len(_tok_change) < len(_tok_selected):
+                    _pad = (_tok_change or change_addrs)[-1]
+                    _tok_change += [_pad] * (len(_tok_selected) - len(_tok_change))
+                _tok_outs = []
+                _tok_tds = []
+                for inp, _tok_addr in zip(_tok_selected, _tok_change):
+                    inp['value'] = inp.pop('_tok_orig_value')
+                    _d = inp.pop('_tok_dust')
+                    _tok_outs.append((TYPE_ADDRESS, _tok_addr, _d))
+                    _tok_tds.append(inp['token_data'])
+                tx.add_outputs(_tok_outs, token_datas=_tok_tds)
         else:
-            sendable = sum(map(lambda x:x['value'], inputs))
+            # MAX path
+            inputs = list(inputs)
+            outputs = list(outputs)
+            _td_list = list(token_datas) if token_datas else [None] * len(outputs)
+
+            caller_handles_tokens = token_datas is not None and any(
+                td is not None for td in token_datas
+            )
+
+            if not caller_handles_tokens:
+                # Automatically pull in token UTXOs that have sats above their dust limit.
+                # Token UTXOs arrive via inputs (from get_spendable_coins).  For each one
+                # that meets the dust threshold, add the mandatory token dust output so the
+                # token is preserved.  The full value is kept in inputs so sendable is correct.
+                _tok_inputs_raw = [
+                    (inp, calc_dust(inp['address'], inp['token_data']))
+                    for inp in inputs
+                    if inp.get('token_data') and inp['value'] >= calc_dust(inp['address'], inp['token_data'])
+                ]
+                if _tok_inputs_raw:
+                    _tok_change = self.get_default_change_addresses(len(_tok_inputs_raw))
+                    if len(_tok_change) < len(_tok_inputs_raw):
+                        _pad = (_tok_change or [inputs[0]['address']])[-1]
+                        _tok_change += [_pad] * (len(_tok_inputs_raw) - len(_tok_change))
+                    for (_c, _dust), _tok_addr in zip(_tok_inputs_raw, _tok_change):
+                        outputs.append((TYPE_ADDRESS, _tok_addr, _dust))
+                        _td_list.append(_c['token_data'])
+            token_datas = _td_list
+
+            sendable = sum(inp['value'] for inp in inputs)
             _type, data, value = outputs[i_max]
             outputs[i_max] = (_type, data, 0)
             tx = Transaction.from_io(inputs, outputs, sign_schnorr=sign_schnorr, token_datas=token_datas)
