@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # -*- mode: python3 -*-
-# This file (c) 2023-2025 Calin Culianu <calin.culianu@gmail.com>
+# This file (c) 2023-2026 Calin Culianu <calin.culianu@gmail.com>
 # Part of the Electron Cash SPV Wallet
 # License: MIT
 """ Encapsulation and handling of token metadata -- Qt-specific functions """
