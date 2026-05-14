@@ -35,14 +35,17 @@ class RpaManager(ThreadJob):
     External interface: __init__() and add() member functions."""
 
     def __init__(self, wallet, network):
-        from electroncash.wallet import RpaWallet
-        assert isinstance(wallet, RpaWallet)
+        assert (hasattr(wallet, 'rpa_height')
+                and hasattr(wallet, 'extract_private_keys_from_transaction')
+                and hasattr(wallet, 'import_rpa_private_key')), \
+            "wallet must implement the RPA interface"
         self.wallet = wallet
         self.network = network
         self.lock = Lock()
         self.rpa_q_rawtx = queue.Queue()
         self.last_mempool_check = 0.0
         self._up_to_date = True
+        self.scan_start_height = None  # set on first phase_1 run; used for progress %
 
         # self.tx_heights is a dict that stores the height of each tx the rpa_manager encounters.
         self.tx_heights = dict()
@@ -104,6 +107,9 @@ class RpaManager(ThreadJob):
         if rpa_height is None:
             self.wallet.rpa_height = rpa_height = server_height - 100
 
+        if self.scan_start_height is None:
+            self.scan_start_height = rpa_height
+
         # Only request blocks if the rpa_height is lagging behind the tip.
         if rpa_height < server_height:
 
@@ -140,6 +146,8 @@ class RpaManager(ThreadJob):
         if payload is None:
             error = response.get('error')
             self.print_error(f"Got error reply for '{method}' with params: {params}. Error: {error}")
+            if method == 'blockchain.reusable.get_history' and params:
+                self.block_requests.pop(params[0], None)  # allow retry on next run
             return
 
         for i in payload:
@@ -206,13 +214,14 @@ class RpaManager(ThreadJob):
                 # This will be assigned to zero if the private key cannot be extracted (most tx)
                 extracted_private_keys = self.wallet.extract_private_keys_from_transaction(rawtx, password)
                 for pk in extracted_private_keys:
-                    self.wallet.import_private_key(pk, password)
+                    self.wallet.import_rpa_private_key(pk, password)
             else:
                 # last block
                 lastblock_height = tx_height
                 new_height = lastblock_height + 1
                 if new_height > 0:
                     self.wallet.rpa_height = lastblock_height
+                    self.network.trigger_callback('wallet_updated', self.wallet)
 
             iterct += 1
             if iterct >= limit_iters:

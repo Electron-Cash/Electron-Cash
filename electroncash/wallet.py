@@ -455,6 +455,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def __str__(self):
         return self.basename()
 
+    def is_rpa_enabled(self) -> bool:
+        return False
+
     def get_master_public_key(self):
         """Subclasses that use master pubkeys should reimplement this"""
         return None
@@ -3257,7 +3260,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             finalization_print_error(self.verifier)
             finalization_print_error(self.synchronizer)
             my_jobs = [self.verifier, self.synchronizer]
-            if self.wallet_type == 'rpa':
+            if self.is_rpa_enabled():
                 self.rpa_manager = RpaManager(self, network)
                 my_jobs.append(self.rpa_manager)
             else:
@@ -4266,180 +4269,23 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
             return pubkey.address
 
 
-class RpaWallet(ImportedWalletBase):
-    """ RPA wallet made of imported private keys  """
-
-    wallet_type = 'rpa'
-    txin_type = 'p2pkh'
-    rpa_pwd = None
-
-    def __init__(self, storage):
-        Abstract_Wallet.__init__(self, storage)
-        self.seed_ts = storage.get('seed_ts')  # The timestamp the seed was created, if known (for default rpa_height)
-        self.keystore_rpa_aux = None
-        self.rpa_payload = None
-
-    @property
-    def rpa_height(self) -> int:
-        height = self.storage.get('rpa_height')
-        if height is not None:
-            # we had a stored height to resume from
-            return height
-        else:
-            # we lack a stored height, use the seed_ts, if known, as a heuristic to start off from
-            if self.seed_ts is not None:
-                args = self.seed_ts,
-            else:
-                args = ()  # just use default which ends up being some height circa Dec 2023
-            return rpa.determine_best_rpa_start_height(*args)
-
-    @rpa_height.setter
-    def rpa_height(self, value: int):
-        self.storage.put('rpa_height', value)
-
-    @classmethod
-    def from_text(cls, storage, text, password=None):
-        wallet = cls(storage)
-        storage.put('use_encryption', bool(password))
-        for privkey in text.split():
-            wallet.import_private_key(privkey, password)
-        return wallet
-
-    def is_watching_only(self):
-        return False
-
-    def get_keystores(self):
-        return [self.keystore]
-
-    def get_keystore_rpa_aux(self):
-        return self.keystore_rpa_aux
-
-    def can_import_privkey(self):
-        return True
-
-    def has_seed(self):
-        return self.keystore_rpa_aux.has_seed()
-
-    def get_seed(self, password):
-        return self.keystore_rpa_aux.get_seed(password)
-
-    def load_keystore_rpa_aux(self):
-        if self.storage.get('keystore_rpa_aux'):
-            self.keystore_rpa_aux = load_keystore(
-                self.storage, 'keystore_rpa_aux')
-
-    def load_keystore(self):
-        self.load_keystore_rpa_aux()
-        if self.storage.get('keystore'):
-            self.keystore = load_keystore(self.storage, 'keystore')
-        else:
-            self.keystore = Imported_KeyStore({})
-
-    def save_keystore(self):
-        self.storage.put('keystore', self.keystore.dump())
-
-    def check_password(self, password):
-        self.keystore_rpa_aux.check_password(password)
-
-    def save_keystore_rpa_aux(self):
-        self.storage.put('keystore_rpa_aux', self.keystore_rpa_aux.dump())
-
-    def load_addresses(self):
-        pass
-
-    def save_addresses(self):
-        pass
-
-    def update_password(self, old_pw, new_pw, encrypt=False):
-        if old_pw is None and self.has_password():
-            raise InvalidPassword()
-
-        if self.keystore is not None and len(self.keystore.keypairs) > 0 and self.keystore.can_change_password():
-            self.keystore.update_password(old_pw,new_pw)
-            self.save_keystore()
-        if self.keystore_rpa_aux is not None and self.keystore_rpa_aux.can_change_password():
-            self.keystore_rpa_aux.update_password(old_pw, new_pw)
-            self.save_keystore_rpa_aux()
-        self.storage.set_password(new_pw, encrypt)
-        self.storage.write()
-        self.rpa_pwd = new_pw
-
-    def can_change_password(self):
-        return True
-
-    def can_import_address(self):
-        return False
-
-    def get_addresses(self):
-        return self.keystore.get_addresses()
-
-    def delete_address_derived(self, address):
-        self.keystore.remove_address(address)
-        self.save_keystore()
-
-    def get_address_index(self, address):
-        return self.get_public_key(address)
-
-    def get_public_key(self, address):
-        return self.keystore.address_to_pubkey(address)
-
-    def import_private_key(self, sec, pw):
-        pubkey = self.keystore.import_privkey(sec, pw)
-        self.save_keystore()
-        self.add_address(pubkey.address)
-        self.cashacct.save()
-        self.save_addresses()
-        self.storage.write()  # no-op if above already wrote
-        return pubkey.address.to_ui_string()
-
-    def export_private_key(self, address, password):
-        '''Returned in WIF format.'''
-        pubkey = self.keystore.address_to_pubkey(address)
-        return self.keystore.export_private_key(pubkey, password)
-
-    def export_private_key_from_index(self, index, password):
-        # returns a private from the HD (rpa auxilliary) keystore based on the index
-        # The index is a tuple consisting of Change (boolean) and Address number.
-        # for example (False,0) is the first receiving address.
-        pk, compressed = self.keystore_rpa_aux.get_private_key(index, password)
-        return bitcoin.serialize_privkey(pk, compressed, self.txin_type)
-
-    def add_input_sig_info(self, txin, address):
-        assert txin['type'] == 'p2pkh'
-        pubkey = self.keystore.address_to_pubkey(address)
-        txin['num_sig'] = 1
-        txin['x_pubkeys'] = [pubkey.to_ui_string()]
-        txin['signatures'] = [None]
-
-    def pubkeys_to_address(self, pubkey):
-        pubkey = PublicKey.from_string(pubkey)
-        if pubkey in self.keystore.keypairs:
-            return pubkey.address
-
-    def derive_pubkeys(self, c, i):
-        if not self.keystore_rpa_aux:
-            self.load_keystore_rpa_aux()
-        k = self.get_keystore_rpa_aux()
-        return k.derive_pubkey(c, i)
-
-    def dummy_address(self):
-        pubkey = self.derive_pubkeys(0, 0)
-        dummy_address = Address.from_pubkey(pubkey)
-        return dummy_address
-
-    def get_grind_string(self):
-        rpa_grind_string = rpa.get_grind_string(self)
-        return rpa_grind_string
-
-    def get_receiving_paycode(self):
-        return rpa.generate_paycode(self, prefix_size="10")
-
-    def extract_private_keys_from_transaction(self, rawtx, password):
-        return rpa.extract_private_keys_from_transaction(self, rawtx, password)
-
-    def rebuild_history(self):
-        self.storage.put('rpa_height', rpa.determine_best_rpa_start_height())
-        super(RpaWallet, self).rebuild_history()
+def _open_legacy_rpa_wallet(storage):
+    """Raises when an old 'rpa' wallet file is opened, with migration instructions."""
+    raise UnknownWalletType(
+        "This wallet file uses the legacy 'rpa' wallet type which is no longer supported.\n\n"
+        "Migration steps:\n"
+        "  1. Retrieve your seed phrase from an older Electron Cash release "
+        "(Wallet > Seed).\n"
+        "  2. Create a new Standard wallet from that seed.\n"
+        "  3. Enable Reusable Payment Addresses in Wallet Settings.\n"
+        "     Your new paycode is derived at m/44'/145'/8' (differs from the old one).\n"
+        "  4. To scan for funds sent to your OLD paycode (derived at m/), add\n"
+        "       \"rpa_derivation_path\": \"m/\"\n"
+        "     to the new wallet file before opening it, or run after opening:\n"
+        "       electroncash --wallet <path> set_rpa_derivation_path m/\n"
+        "  5. Import already-extracted private keys from the old wallet's 'keystore'\n"
+        "     JSON key via Wallet > Private Keys > Import or the importprivkey CLI command."
+    )
 
 
 class Deterministic_Wallet(Abstract_Wallet):
@@ -4619,9 +4465,223 @@ class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
 
 class Standard_Wallet(Simple_Deterministic_Wallet):
     wallet_type = 'standard'
+    rpa_pwd = None  # session password for RPA scanning; set by update_password
+
+    def __init__(self, storage):
+        self.keystore_rpa_aux = None
+        self.keystore_rpa_imported = None
+        super().__init__(storage)
 
     def pubkeys_to_address(self, pubkey):
         return Address.from_pubkey(pubkey)
+
+    # --- RPA keystore load / save ---
+
+    def load_keystore(self):
+        super().load_keystore()
+        if self.storage.get('keystore_rpa_aux'):
+            self.keystore_rpa_aux = load_keystore(self.storage, 'keystore_rpa_aux')
+        if self.storage.get('keystore_rpa_imported'):
+            self.keystore_rpa_imported = load_keystore(self.storage, 'keystore_rpa_imported')
+        else:
+            self.keystore_rpa_imported = Imported_KeyStore({})
+        # Heal storage inconsistency: rpa_enabled=True without the aux keystore means
+        # a previous enable/disable cycle didn't complete cleanly.
+        if self.storage.get('rpa_enabled', False) and self.keystore_rpa_aux is None:
+            self.storage.put('rpa_enabled', False)
+
+    def save_keystore_rpa_aux(self):
+        self.storage.put('keystore_rpa_aux', self.keystore_rpa_aux.dump())
+
+    def save_keystore_rpa_imported(self):
+        self.storage.put('keystore_rpa_imported', self.keystore_rpa_imported.dump())
+
+    def get_keystore_rpa_aux(self):
+        return self.keystore_rpa_aux
+
+    # --- RPA enabled flag ---
+
+    def is_rpa_enabled(self) -> bool:
+        return bool(self.storage.get('rpa_enabled', False)) and self.keystore_rpa_aux is not None
+
+    def set_rpa_enabled(self, enabled: bool):
+        self.storage.put('rpa_enabled', enabled)
+        self.storage.write()
+
+    def start_threads(self, network):
+        super().start_threads(network)
+        if self.synchronizer and self.keystore_rpa_imported:
+            for addr in self.keystore_rpa_imported.get_addresses():
+                self.synchronizer.add(addr)
+
+    def start_rpa_manager(self):
+        """Start the RpaManager for this wallet. No-op if already running or offline."""
+        if self.rpa_manager or not self.network:
+            return
+        self.rpa_manager = RpaManager(self, self.network)
+        self.network.add_jobs([self.rpa_manager])
+
+    def stop_rpa_manager(self):
+        """Stop the RpaManager for this wallet. No-op if not running."""
+        if not self.rpa_manager:
+            return
+        if self.network:
+            self.network.remove_jobs([self.rpa_manager])
+        self.rpa_manager = None
+
+    # --- RPA derivation path ---
+
+    _RPA_DEFAULT_DERIVATION_PATH = "m/44'/145'/8'"
+
+    def get_rpa_derivation_path(self) -> str:
+        return self.storage.get('rpa_derivation_path', self._RPA_DEFAULT_DERIVATION_PATH)
+
+    def set_rpa_derivation_path(self, path: str):
+        if not path.startswith('m/'):
+            raise ValueError(f"RPA derivation path must start with 'm/': {path!r}")
+        self.storage.put('rpa_derivation_path', path)
+        self.storage.write()
+
+    # --- First-time RPA setup ---
+
+    def enable_rpa(self, password):
+        """Derive the RPA auxiliary keystore from the wallet seed.
+
+        The derivation path defaults to m/44'/145'/8' and can be overridden via
+        set_rpa_derivation_path() before calling this method. Supports BIP39 and
+        Electrum-style seeds. Raises RuntimeError for incompatible seed types."""
+        seed = self.keystore.get_seed(password)
+        passphrase = self.keystore.get_passphrase(password)
+        seed_type = self.keystore.seed_type
+        if seed_type == 'bip39':
+            bip32_seed = keystore.Mnemonic.mnemonic_to_seed(seed, passphrase)
+        elif seed_type in ('electrum', 'standard'):
+            bip32_seed = keystore.Mnemonic_Electrum.mnemonic_to_seed(seed, passphrase)
+        else:
+            raise RuntimeError(
+                f"RPA is not supported for seed type '{seed_type}'. "
+                "Only BIP39 and Electrum-style seeds are supported."
+            )
+        rpa_ks = BIP32_KeyStore({})
+        rpa_ks.add_xprv_from_seed(bip32_seed, 'standard', self.get_rpa_derivation_path())
+        if password is not None:
+            rpa_ks.update_password(None, password)
+        self.keystore_rpa_aux = rpa_ks
+        self.save_keystore_rpa_aux()
+        if not self.keystore_rpa_imported:
+            self.keystore_rpa_imported = Imported_KeyStore({})
+        self.save_keystore_rpa_imported()
+        self.set_rpa_enabled(True)
+
+    # --- RPA key derivation ---
+
+    def derive_pubkeys_rpa(self, c, i):
+        """Derive a pubkey from the RPA auxiliary keystore (m/44'/145'/8')."""
+        if not self.keystore_rpa_aux:
+            raise RuntimeError("RPA is not enabled on this wallet")
+        return self.keystore_rpa_aux.derive_pubkey(c, i)
+
+    def export_private_key_from_index(self, index, password):
+        """Return WIF private key from the RPA auxiliary keystore by (change, n) index."""
+        pk, compressed = self.keystore_rpa_aux.get_private_key(index, password)
+        return bitcoin.serialize_privkey(pk, compressed, self.txin_type)
+
+    # --- RPA scanning height ---
+
+    @property
+    def rpa_height(self):
+        return self.storage.get('rpa_height')  # None → rpa_manager initialises to server_height - 100
+
+    @rpa_height.setter
+    def rpa_height(self, value: int):
+        self.storage.put('rpa_height', value)
+
+    # --- RPA prefix size ---
+
+    _RPA_VALID_PREFIX_SIZES = ("04", "08", "0C", "10")
+
+    def get_rpa_prefix_size(self) -> str:
+        return self.storage.get('rpa_prefix_size', '10')
+
+    def set_rpa_prefix_size(self, value: str):
+        if value not in self._RPA_VALID_PREFIX_SIZES:
+            raise ValueError(f"Invalid RPA prefix size: {value!r}")
+        if value != self.get_rpa_prefix_size():
+            self.storage.put('rpa_height', None)  # force full rescan under new prefix
+        self.storage.put('rpa_prefix_size', value)
+        self.storage.write()
+
+    # --- RPA interface methods (called by RpaManager / paycode.py) ---
+
+    def get_receiving_paycode(self):
+        return rpa.generate_paycode(self, prefix_size=self.get_rpa_prefix_size())
+
+    def get_grind_string(self):
+        return rpa.get_grind_string(self, prefix_size=self.get_rpa_prefix_size())
+
+    def extract_private_keys_from_transaction(self, rawtx, password):
+        return rpa.extract_private_keys_from_transaction(self, rawtx, password)
+
+    def import_rpa_private_key(self, sec, pw):
+        """Import a private key extracted from an incoming RPA transaction."""
+        pubkey = self.keystore_rpa_imported.import_privkey(sec, pw)
+        self.save_keystore_rpa_imported()
+        self.add_address(pubkey.address)
+        self.storage.write()
+        return pubkey.address.to_ui_string()
+
+    # --- Address list and ownership includes RPA-imported addresses ---
+
+    def get_addresses(self):
+        addrs = super().get_addresses()
+        if self.keystore_rpa_imported:
+            addrs = addrs + self.keystore_rpa_imported.get_addresses()
+        return addrs
+
+    def is_mine(self, address):
+        if super().is_mine(address):
+            return True
+        if self.keystore_rpa_imported:
+            return address in self.keystore_rpa_imported.get_addresses()
+        return False
+
+    # --- Signing: route imported RPA keys through keystore_rpa_imported ---
+
+    def get_keystores(self):
+        ks = super().get_keystores()
+        if self.keystore_rpa_imported and self.keystore_rpa_imported.keypairs:
+            ks = ks + [self.keystore_rpa_imported]
+        return ks
+
+    def add_input_sig_info(self, txin, address):
+        if (self.keystore_rpa_imported
+                and address in self.keystore_rpa_imported.get_addresses()):
+            assert txin['type'] == 'p2pkh'
+            pubkey = self.keystore_rpa_imported.address_to_pubkey(address)
+            txin['x_pubkeys'] = [pubkey.to_ui_string()]
+            txin['signatures'] = [None]
+            txin['num_sig'] = 1
+        else:
+            super().add_input_sig_info(txin, address)
+
+    # --- Password management ---
+
+    def update_password(self, old_pw, new_pw, encrypt=False):
+        if old_pw is None and self.has_password():
+            raise InvalidPassword()
+        if self.keystore is not None and self.keystore.can_change_password():
+            self.keystore.update_password(old_pw, new_pw)
+            self.save_keystore()
+        if self.keystore_rpa_aux is not None and self.keystore_rpa_aux.can_change_password():
+            self.keystore_rpa_aux.update_password(old_pw, new_pw)
+            self.save_keystore_rpa_aux()
+        if (self.keystore_rpa_imported is not None
+                and self.keystore_rpa_imported.can_change_password()):
+            self.keystore_rpa_imported.update_password(old_pw, new_pw)
+            self.save_keystore_rpa_imported()
+        self.storage.set_password(new_pw, encrypt)
+        self.storage.write()
+        self.rpa_pwd = new_pw
 
 
 class Multisig_Wallet(Deterministic_Wallet):
@@ -4958,7 +5018,7 @@ class MultiXPubWallet(Deterministic_Wallet):
         return Address.from_pubkey(pubkey)
 
 
-wallet_types = ['standard', 'multisig', 'imported', 'rpa', 'multi_xpub']
+wallet_types = ['standard', 'multisig', 'imported', 'multi_xpub']
 
 
 def register_wallet_type(category):
@@ -4971,7 +5031,7 @@ wallet_constructors = {
     'xpub': Standard_Wallet,
     'imported_privkey': ImportedPrivkeyWallet,
     'imported_addr': ImportedAddressWallet,
-    'rpa': RpaWallet,
+    'rpa': _open_legacy_rpa_wallet,  # migration stub — raises UnknownWalletType
     'multi_xpub': MultiXPubWallet,
 }
 

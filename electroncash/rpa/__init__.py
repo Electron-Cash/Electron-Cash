@@ -5,5 +5,4 @@
 # Part of the Electron Cash SPV Wallet
 # License: MIT
 
-from . import addr
 from . import paycode
