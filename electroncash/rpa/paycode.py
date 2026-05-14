@@ -141,7 +141,7 @@ def _generate_address_from_pubkey_and_secret(parent_pubkey, secret):
     This function generates a receiving address based on CKD."""
 
     new_pubkey = bitcoin.CKD_pub(parent_pubkey, secret, 0)[0]
-    use_uncompressed = True
+    use_uncompressed = False
 
     # Currently, just uses compressed keys, but if this ever changes to
     # require uncompressed points:
