@@ -4270,21 +4270,11 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
 
 
 def _open_legacy_rpa_wallet(storage):
-    """Raises when an old 'rpa' wallet file is opened, with migration instructions."""
+    """Raises when an old 'rpa' wallet file is opened."""
     raise UnknownWalletType(
         "This wallet file uses the legacy 'rpa' wallet type which is no longer supported.\n\n"
-        "Migration steps:\n"
-        "  1. Retrieve your seed phrase from an older Electron Cash release "
-        "(Wallet > Seed).\n"
-        "  2. Create a new Standard wallet from that seed.\n"
-        "  3. Enable Reusable Payment Addresses in Wallet Settings.\n"
-        "     Your new paycode is derived at m/44'/145'/8' (differs from the old one).\n"
-        "  4. To scan for funds sent to your OLD paycode (derived at m/), add\n"
-        "       \"rpa_derivation_path\": \"m/\"\n"
-        "     to the new wallet file before opening it, or run after opening:\n"
-        "       electroncash --wallet <path> set_rpa_derivation_path m/\n"
-        "  5. Import already-extracted private keys from the old wallet's 'keystore'\n"
-        "     JSON key via Wallet > Private Keys > Import or the importprivkey CLI command."
+        "To access your funds, open this wallet with an older version of Electron Cash "
+        "that supports the 'rpa' wallet type."
     )
 
 
