@@ -98,7 +98,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.fully_constructed = False
         self._rebuilding_treewidget = False
         util.finalization_print_error(self)
-        self.setWindowIcon(QtGui.QIcon(":icons/tab_send.png"))
+        self.setWindowIcon(QtGui.QIcon(":icons/tab_send.svg"))
         self.parent = parent
         self.token_meta: TokenMetaQt = parent.token_meta
         self.wallet: wallet.Abstract_Wallet = self.parent.wallet
@@ -114,7 +114,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.broadcast_callback = broadcast_callback
         self.icon_baton = QtGui.QIcon(":icons/baton.png")
         self.icon_mutable = QtGui.QIcon(":icons/mutable.png")
-        self.icon_trash = QtGui.QIcon(":icons/trash-10-24.png")
+        self.icon_trash = QtGui.QIcon(":icons/trash-10-24.svg")
         self.form_mode = form_mode
 
         # Setup data source; iterate over a sorted list of utxos
