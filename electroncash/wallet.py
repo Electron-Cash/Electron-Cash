@@ -4676,6 +4676,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
             self.keystore_rpa_aux.update_password(old_pw, new_pw)
             self.save_keystore_rpa_aux()
         if (self.keystore_rpa_imported is not None
+                and self.keystore_rpa_imported.keypairs
                 and self.keystore_rpa_imported.can_change_password()):
             self.keystore_rpa_imported.update_password(old_pw, new_pw)
             self.save_keystore_rpa_imported()
