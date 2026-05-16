@@ -4519,27 +4519,15 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
             self.network.remove_jobs([self.rpa_manager])
         self.rpa_manager = None
 
-    # --- RPA derivation path ---
-
-    _RPA_DEFAULT_DERIVATION_PATH = "m/44'/145'/8'"
-
-    def get_rpa_derivation_path(self) -> str:
-        return self.storage.get('rpa_derivation_path', self._RPA_DEFAULT_DERIVATION_PATH)
-
-    def set_rpa_derivation_path(self, path: str):
-        if not path.startswith('m/'):
-            raise ValueError(f"RPA derivation path must start with 'm/': {path!r}")
-        self.storage.put('rpa_derivation_path', path)
-        self.storage.write()
-
     # --- First-time RPA setup ---
 
     def enable_rpa(self, password):
         """Derive the RPA auxiliary keystore from the wallet seed.
 
-        The derivation path defaults to m/44'/145'/8' and can be overridden via
-        set_rpa_derivation_path() before calling this method. Supports BIP39 and
-        Electrum-style seeds. Raises RuntimeError for incompatible seed types."""
+        The aux keystore is rooted at self.keystore.derivation (e.g.
+        m/44'/145'/0' for BIP39, m/ for Electrum seeds). RPA scan/spend keys
+        are at chain 2: {derivation}/2/0 (scan) and {derivation}/2/1 (spend).
+        Supports BIP39 and Electrum-style seeds."""
         seed = self.keystore.get_seed(password)
         passphrase = self.keystore.get_passphrase(password)
         seed_type = self.keystore.seed_type
@@ -4553,7 +4541,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
                 "Only BIP39 and Electrum-style seeds are supported."
             )
         rpa_ks = BIP32_KeyStore({})
-        rpa_ks.add_xprv_from_seed(bip32_seed, 'standard', self.get_rpa_derivation_path())
+        rpa_ks.add_xprv_from_seed(bip32_seed, 'standard', self.keystore.derivation)
         if password is not None:
             rpa_ks.update_password(None, password)
         self.keystore_rpa_aux = rpa_ks
@@ -4566,7 +4554,10 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     # --- RPA key derivation ---
 
     def derive_pubkeys_rpa(self, c, i):
-        """Derive a pubkey from the RPA auxiliary keystore (m/44'/145'/8')."""
+        """Derive a pubkey from the RPA auxiliary keystore at chain c, index i.
+
+        For RPA, always call with c=2: scan=derive_pubkeys_rpa(2,0),
+        spend=derive_pubkeys_rpa(2,1), giving {derivation}/2/0 and {derivation}/2/1."""
         if not self.keystore_rpa_aux:
             raise RuntimeError("RPA is not enabled on this wallet")
         return self.keystore_rpa_aux.derive_pubkey(c, i)

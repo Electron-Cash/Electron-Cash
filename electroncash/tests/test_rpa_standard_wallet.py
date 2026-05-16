@@ -41,7 +41,7 @@ class TestRpaStandardWallet(unittest.TestCase):
 
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_enable_rpa_electrum_seed(self, _mock_write):
-        """enable_rpa() sets up keystore_rpa_aux at m/44'/145'/8' for Electrum seeds."""
+        """enable_rpa() sets up keystore_rpa_aux at the wallet's account node for Electrum seeds."""
         w = _make_electrum_wallet()
         self.assertFalse(w.is_rpa_enabled())
         self.assertIsNone(w.keystore_rpa_aux)
@@ -50,14 +50,13 @@ class TestRpaStandardWallet(unittest.TestCase):
 
         self.assertTrue(w.is_rpa_enabled())
         self.assertIsNotNone(w.keystore_rpa_aux)
-        self.assertEqual(w.keystore_rpa_aux.derivation, "m/44'/145'/8'")
+        # Electrum seeds use m/ as account node
+        self.assertEqual(w.keystore_rpa_aux.derivation, "m/")
         self.assertTrue(w.keystore_rpa_aux.xpub.startswith('xpub'))
-        # RPA keystore is at a different path, so its xpub must differ from main
-        self.assertNotEqual(w.keystore_rpa_aux.xpub, w.keystore.xpub)
 
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_enable_rpa_bip39_seed(self, _mock_write):
-        """enable_rpa() sets up keystore_rpa_aux at m/44'/145'/8' for BIP39 seeds."""
+        """enable_rpa() sets up keystore_rpa_aux at the wallet's account node for BIP39 seeds."""
         w = _make_bip39_wallet()
         self.assertFalse(w.is_rpa_enabled())
 
@@ -65,29 +64,26 @@ class TestRpaStandardWallet(unittest.TestCase):
 
         self.assertTrue(w.is_rpa_enabled())
         self.assertIsNotNone(w.keystore_rpa_aux)
-        self.assertEqual(w.keystore_rpa_aux.derivation, "m/44'/145'/8'")
+        # BIP39 wallet uses m/44'/145'/0' as account node
+        self.assertEqual(w.keystore_rpa_aux.derivation, "m/44'/145'/0'")
         self.assertTrue(w.keystore_rpa_aux.xpub.startswith('xpub'))
-        self.assertNotEqual(w.keystore_rpa_aux.xpub, w.keystore.xpub)
 
     @mock.patch.object(storage.WalletStorage, '_write')
-    def test_paycode_differs_from_legacy_rpa_wallet(self, _mock_write):
-        """Standard_Wallet RPA scan key is at m/44'/145'/8'/0/0, not the root m/0/0."""
+    def test_paycode_uses_chain_2(self, _mock_write):
+        """RPA scan key is at {keystore.derivation}/2/0, distinct from {keystore.derivation}/0/0."""
         w = _make_electrum_wallet()
         w.enable_rpa(None)
 
-        # Simulate legacy RpaWallet: keystore_rpa_aux is derived at the root (m/)
-        bip32_seed = keystore.Mnemonic_Electrum.mnemonic_to_seed(_ELECTRUM_SEED, '')
-        ks_root = keystore.BIP32_KeyStore({})
-        ks_root.add_xprv_from_seed(bip32_seed, 'standard', 'm/')
-
-        scan_pubkey_standard = w.derive_pubkeys_rpa(0, 0)
-        scan_pubkey_root = ks_root.derive_pubkey(0, 0)
+        scan_pubkey = w.derive_pubkeys_rpa(2, 0)
+        spend_pubkey = w.derive_pubkeys_rpa(2, 1)
+        # {keystore.derivation}/0/0 is the first normal receive key
+        first_receive_key = w.keystore_rpa_aux.derive_pubkey(0, 0)
 
         self.assertNotEqual(
-            scan_pubkey_standard, scan_pubkey_root,
-            "Standard_Wallet scan pubkey must differ from the root-derived pubkey "
-            "(legacy RpaWallet uses root derivation; Standard_Wallet uses m/44'/145'/8')"
+            scan_pubkey, first_receive_key,
+            "RPA scan key ({keystore.derivation}/2/0) must differ from first receive key ({keystore.derivation}/0/0)"
         )
+        self.assertNotEqual(scan_pubkey, spend_pubkey)
 
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_get_addresses_includes_rpa_imported(self, _mock_write):
