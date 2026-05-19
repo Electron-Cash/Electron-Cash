@@ -1277,8 +1277,11 @@ class Network(util.DaemonThread):
                 self.connection_down(interface.server, blacklist=True)
                 return
 
-            if not self.apply_successful_verification(interface, request_params[2], result['root']):
+            is_valid_checkpoint = self.verify_checkpoint(interface,
+                    request_params[2], result['root'])
+            if not is_valid_checkpoint:
                 return
+
             # We connect this verification chunk into the longest chain.
             target_blockchain = self.blockchains[0]
         else:
@@ -1715,16 +1718,17 @@ class Network(util.DaemonThread):
             interface.set_mode(Interface.MODE_DEFAULT)
             self._process_latest_tip(interface)
 
-    def apply_successful_verification(self, interface, checkpoint_height, checkpoint_root):
+    def verify_checkpoint(self, interface, checkpoint_height, checkpoint_root,
+            is_checkpoint_generation_enabled=False)-> bool:
         known_roots = [ v['root'] for v in self.checkpoint_servers_verified.values() if v['root'] is not None ]
         if len(known_roots) > 0 and checkpoint_root != known_roots[0]:
             interface.print_error("server sent inconsistent root '{}'".format(checkpoint_root))
             self.connection_down(interface.server)
             return False
+
         self.checkpoint_servers_verified[interface.server]['root'] = checkpoint_root
 
-        # rt12 --- checkpoint generation currently disabled.
-        if False:
+        if is_checkpoint_generation_enabled:
             interface.print_error("received verification {}".format(self.verifications_required))
             self.verifications_required -= 1
             if self.verifications_required > 0:
@@ -1741,8 +1745,7 @@ class Network(util.DaemonThread):
             self.init_headers_file()
             self.verified_checkpoint = True
 
-        # rt12 --- checkpoint generation currently disabled.
-        if False:
+        if is_checkpoint_generation_enabled:
             with self.interface_lock:
                 interfaces = list(self.interfaces.values())
             for interface_entry in interfaces:
