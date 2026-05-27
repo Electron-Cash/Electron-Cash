@@ -231,6 +231,8 @@ class Network(util.DaemonThread):
 
     tor_controller: TorController = None
 
+    SHV_CHUNK_SIZE = 26  # Simple Header Verification (SHV): we request this much headers for historical transactions SPV verification
+
     def __init__(self, config=None):
         if config is None:
             config = {}  # Do not use mutables as default values!
@@ -1173,8 +1175,8 @@ class Network(util.DaemonThread):
         self.requested_chunks.add(chunk_index)
 
         interface.print_error("requesting chunk {}".format(chunk_index))
-        chunk_base_height = chunk_index * 2016
-        chunk_count = 2016
+        chunk_base_height = chunk_index * self.SHV_CHUNK_SIZE
+        chunk_count = self.SHV_CHUNK_SIZE
         return self.request_headers(interface, chunk_base_height, chunk_count, silent=True)
 
     def request_headers(self, interface, base_height, count, silent=False):
@@ -1209,16 +1211,16 @@ class Network(util.DaemonThread):
         params = response.get('params')
         if not request or result is None or params is None or error is not None:
             interface.print_error(error or 'bad response')
-            # Ensure the chunk can be rerequested, but only if the request originated from us.
-            if request and request[1][0] // 2016 in self.requested_chunks:
-                self.requested_chunks.remove(request[1][0] // 2016)
+            # Ensure the SHV chunk can be rerequested, but only if the request originated from us.
+            if request and request[1][0] // self.SHV_CHUNK_SIZE in self.requested_chunks:
+                self.requested_chunks.remove(request[1][0] // self.SHV_CHUNK_SIZE)
             return
 
         # Ignore unsolicited chunks
         request_params = request[1]
         request_base_height = request_params[0]
         expected_header_count = request_params[1]
-        index = request_base_height // 2016
+        index = request_base_height // self.SHV_CHUNK_SIZE
         if request_params != params:
             interface.print_error("unsolicited chunk base_height={} count={}".format(request_base_height, expected_header_count))
             return
@@ -2022,7 +2024,7 @@ class Network(util.DaemonThread):
         return _("An error occurred broadcasting the transaction")
 
     # Used by the verifier job.
-    def get_merkle_for_transaction(self, tx_hash, tx_height, callback, max_qlen=10):
+    def get_merkle_for_transaction(self, tx_hash, tx_height, callback, max_qlen=20):
         """ Asynchronously enqueue a request for a merkle proof for a tx.
             Note that the callback param is required.
             May return None if too many requests were enqueued (max_qlen) or
