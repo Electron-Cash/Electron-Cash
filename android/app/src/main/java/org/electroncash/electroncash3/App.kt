@@ -46,8 +46,8 @@ class App : Application() {
         // The rest of this method should run in the main process only.
         if (ACRA.isACRASenderServiceProcess()) return
 
-        if (BuildConfig.testnet) {
-            libNetworks.callAttr("set_testnet4")
+        if (BuildConfig.chipnet) {
+            libNetworks.callAttr("set_chipnet")
         }
 
         val config = initSettings()

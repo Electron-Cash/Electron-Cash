@@ -99,10 +99,10 @@ android {
     flavorDimensions "version"
     productFlavors {
         MainNet {
-            buildConfigField "boolean", "testnet", "false"
+            buildConfigField "boolean", "chipnet", "false"
         }
-        TestNet {
-            buildConfigField "boolean", "testnet", "true"
+        ChipNet {
+            buildConfigField "boolean", "chipnet", "true"
         }
     }
 
