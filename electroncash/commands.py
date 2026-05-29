@@ -703,8 +703,8 @@ class Commands:
 
     @command('w')
     def rpa_generate_paycode(self):
-        if self.wallet.wallet_type != 'rpa':
-            return {'error': 'This command may only be used on an RPA wallet.'}
+        if not self.wallet.is_rpa_enabled():
+            return {'error': 'RPA is not enabled on this wallet. Enable it in Wallet Settings first.'}
         return rpa.paycode.generate_paycode(self.wallet)
 
     @command('w')
@@ -714,9 +714,8 @@ class Commands:
 
     @command('wp')
     def rpa_extract_private_keys_from_transaction(self, raw_tx, password=None):
-        if self.wallet.wallet_type != 'rpa':
-            return {'error': 'This command may only be used on an RPA wallet.'}
-
+        if not self.wallet.is_rpa_enabled():
+            return {'error': 'RPA is not enabled on this wallet. Enable it in Wallet Settings first.'}
         return rpa.paycode.extract_private_keys_from_transaction(self.wallet, raw_tx, password)
 
     @command('wp')

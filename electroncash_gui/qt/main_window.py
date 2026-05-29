@@ -61,7 +61,7 @@ from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
 from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing, TokensBurnedError
 from electroncash.contacts import Contact
-from electroncash import rpa
+from electroncash import rpa, cashaddr
 try:
     from electroncash.plot import plot_history
 except:
@@ -275,7 +275,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.gui_object.token_metadata_updated_signal.connect(lambda x: self.update_tabs())
 
     def new_window_initialized(self):
-        if self.wallet.wallet_type == "rpa" and not self.wallet.rpa_pwd and self.wallet.has_password():
+        needs_rpa_pwd = (
+            self.wallet.is_rpa_enabled()
+            and not self.wallet.rpa_pwd
+            and self.wallet.has_password()
+        )
+        if needs_rpa_pwd:
             while not self.wallet.rpa_pwd:
                 password = self.password_dialog("To perform RPA syncing in the background, please enter your password.")
                 try:
@@ -999,15 +1004,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             server_height = self.network.get_server_height()
             server_lag = self.network.get_local_height() - server_height
             num_chains = len(self.network.get_blockchains())
+            rpa_is_busy = False
+            rpa_progress_str = ""
             if self.wallet.rpa_manager is not None:
-                rpa_is_busy = not self.wallet.rpa_manager.up_to_date
-            else:
-                rpa_is_busy = False
+                mgr = self.wallet.rpa_manager
+                rpa_is_busy = not mgr.up_to_date
+                if rpa_is_busy and mgr.scan_start_height is not None and server_height > 0:
+                    current = self.wallet.rpa_height or mgr.scan_start_height
+                    total = server_height - mgr.scan_start_height
+                    if total > 0:
+                        done = max(0, current - mgr.scan_start_height)
+                        pct = min(100, int(done * 100 / total))
+                        rpa_progress_str = f" (RPA block {pct}%)"
             # Server height can be 0 after switching to a new server
             # until we get a headers subscription request response.
             # Display the synchronizing message in that case.
             if not self.wallet.up_to_date or server_height == 0 or rpa_is_busy:
-                text = _("Synchronizing...")
+                text = _("Synchronizing...") + rpa_progress_str
                 icon = icon_dict["status_waiting"]
                 status_tip = status_tip_dict["status_waiting"]
             elif server_lag > 1:
@@ -1082,7 +1095,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def check_necessary_server_features(self):
         if not self.network or self.network.features is None:
             return  # Suppress check if not really valid yet or no network
-        if self.wallet.wallet_type == 'rpa' and 'rpa' not in (self.network.features or {}):
+        if self.wallet.is_rpa_enabled() and 'rpa' not in (self.network.features or {}):
             self.show_warning(_("The connected server does not support reusable addresses."
                                 " Please connect to an RPA server."))
 
@@ -1182,38 +1195,45 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         row = 0
 
-        if self.wallet.wallet_type == 'rpa':
+        # Standard_Wallet with RPA enabled: paycode + address + token address.
+        # All other wallets: address + token address only.
+        show_paycode = not self.wallet.is_watching_only() and self.wallet.is_rpa_enabled()
+
+        if show_paycode:
+            paycode_msg = _("Your reusable paycode. Share this with senders — each payment "
+                            "they make will arrive at a unique one-time address that only "
+                            "your wallet can detect and spend.")
             self.receive_paycode_e = ButtonsLineEdit()
             self.receive_paycode_e.addCopyButton()
-            grid.addWidget(self.receive_paycode_e, row, 1, 1, -1)
-            self.receive_paycode_e.setText(self.wallet.get_receiving_paycode())
             self.receive_paycode_e.setReadOnly(True)
             self.receive_paycode_e.setStyleSheet(
                 "QLineEdit { qproperty-cursorPosition: 0; }")
-            label = HelpLabel(_('&Receiving paycode'), msg)
-            label.setBuddy(self.receive_paycode_e)
-            grid.addWidget(label, row, 0)
+            self.receive_paycode_e.setText(self.wallet.get_receiving_paycode())
+            paycode_label = HelpLabel(_('&Paycode'), paycode_msg)
+            paycode_label.setBuddy(self.receive_paycode_e)
+            grid.addWidget(paycode_label, row, 0)
+            grid.addWidget(self.receive_paycode_e, row, 1, 1, -1)
             row += 1
+
+        grid.addWidget(self.receive_address_e, row, 1, 1, -1)
+        label = HelpLabel(_('&Receiving address'), msg)
+        label.setBuddy(self.receive_address_e)
+        grid.addWidget(label, row, 0)
+        row += 1
+        label = HelpLabel(_('&Token address'), msg2)
+        grid.addWidget(label, row, 0)
+        if self.wallet.is_hw_without_cashtoken_support():
+            label2 = QLabel("⚠" + _("This HW wallet cannot sign CashToken inputs; sending tokens to this wallet"
+                                    " should be avoided."))
+            label2.setStyleSheet(ColorScheme.YELLOW.as_stylesheet())
+            label2.setWordWrap(True)
+            grid.addWidget(label2, row, 1, 1, -1)
+            label.setBuddy(label2)
+            label.setDisabled(True)
         else:
-            grid.addWidget(self.receive_address_e, row, 1, 1, -1)
-            label = HelpLabel(_('&Receiving address'), msg)
-            label.setBuddy(self.receive_address_e)
-            grid.addWidget(label, row, 0)
-            row += 1
-            label = HelpLabel(_('&Token address'), msg2)
-            grid.addWidget(label, row, 0)
-            if self.wallet.is_hw_without_cashtoken_support():
-                label2 = QLabel("⚠" + _("This HW wallet cannot sign CashToken inputs; sending tokens to this wallet"
-                                        " should be avoided."))
-                label2.setStyleSheet(ColorScheme.YELLOW.as_stylesheet())
-                label2.setWordWrap(True)
-                grid.addWidget(label2, row, 1, 1, -1)
-                label.setBuddy(label2)
-                label.setDisabled(True)
-            else:
-                grid.addWidget(self.receive_token_address_e, row, 1, 1, -1)
-                label.setBuddy(self.receive_token_address_e)
-            row += 1
+            grid.addWidget(self.receive_token_address_e, row, 1, 1, -1)
+            label.setBuddy(self.receive_token_address_e)
+        row += 1
 
         # Cash Account for this address (if any)
         msg = _("The Cash Account (if any) associated with this address. It doesn't get saved with the request, but it is shown here for your convenience.\n\nYou may use the Cash Accounts button to register a new Cash Account for this address.")
@@ -1392,48 +1412,37 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.copy_to_clipboard(
                     uri, _('Receive request URI copied to clipboard'), uribut)
 
-        if self.wallet.wallet_type == 'rpa':
-            # Disable unnecessary fields
-            self.save_request_button.setEnabled(False)
-            self.new_request_button.setEnabled(False)
-            self.receive_message_e.setEnabled(False)
-            self.receive_amount_e.setEnabled(False)
-            self.fiat_receive_e.setEnabled(False)
-            self.expires_combo.setEnabled(False)
-
         # The QR code for the receive tab.
-        if self.wallet.wallet_type != 'rpa':
-            # Do not attempt to show a QR code for RPA paycode wallets.  There is no URI scheme yet for RPA.
-            vbox2 = QVBoxLayout()
-            vbox2.setContentsMargins(0, 0, 0, 0)
-            vbox2.setSpacing(4)
-            vbox2.addWidget(self.receive_qr, Qt.AlignHCenter | Qt.AlignTop)
-            self.receive_qr.setToolTip(_('Receive request QR code (click for details)'))
-            but = uribut = QPushButton(_('Copy &URI'))
-            but.clicked.connect(on_copy_uri)
-            but.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            but.setToolTip(_('Click to copy the receive request URI to the clipboard'))
+        vbox2 = QVBoxLayout()
+        vbox2.setContentsMargins(0, 0, 0, 0)
+        vbox2.setSpacing(4)
+        vbox2.addWidget(self.receive_qr, Qt.AlignHCenter | Qt.AlignTop)
+        self.receive_qr.setToolTip(_('Receive request QR code (click for details)'))
+        but = uribut = QPushButton(_('Copy &URI'))
+        but.clicked.connect(on_copy_uri)
+        but.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        but.setToolTip(_('Click to copy the receive request URI to the clipboard'))
 
-            qr_addr_format_toggle = QPushButton(_('Show tokens address'))
-            qr_addr_format_toggle.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            qr_addr_format_toggle.setToolTip(_('Click to switch between cash and token address formats'))
-            self.qr_use_token_address = False
-            def toggle_qr_code_address_format():
-                if not self.qr_use_token_address:
-                    self.qr_use_token_address = True
-                    qr_addr_format_toggle.setText(_('Show cash address'))
-                else:
-                    self.qr_use_token_address = False
-                    qr_addr_format_toggle.setText(_('Show token address'))
-                self.update_receive_qr()
+        qr_addr_format_toggle = QPushButton(_('Show tokens address'))
+        qr_addr_format_toggle.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        qr_addr_format_toggle.setToolTip(_('Click to switch between cash and token address formats'))
+        self.qr_use_token_address = False
+        def toggle_qr_code_address_format():
+            if not self.qr_use_token_address:
+                self.qr_use_token_address = True
+                qr_addr_format_toggle.setText(_('Show cash address'))
+            else:
+                self.qr_use_token_address = False
+                qr_addr_format_toggle.setText(_('Show token address'))
+            self.update_receive_qr()
 
-            qr_addr_format_toggle.clicked.connect(toggle_qr_code_address_format)
+        qr_addr_format_toggle.clicked.connect(toggle_qr_code_address_format)
 
-            vbox2.addWidget(but)
-            vbox2.addWidget(qr_addr_format_toggle)
-            vbox2.setAlignment(but, Qt.AlignHCenter | Qt.AlignVCenter)
-            vbox2.setAlignment(qr_addr_format_toggle, Qt.AlignHCenter | Qt.AlignVCenter)
-            hbox.addLayout(vbox2)
+        vbox2.addWidget(but)
+        vbox2.addWidget(qr_addr_format_toggle)
+        vbox2.setAlignment(but, Qt.AlignHCenter | Qt.AlignVCenter)
+        vbox2.setAlignment(qr_addr_format_toggle, Qt.AlignHCenter | Qt.AlignVCenter)
+        hbox.addLayout(vbox2)
 
         class ReceiveTab(QWidget):
             def showEvent(slf, e):
@@ -1596,6 +1605,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_address_e.setText(text)
         self.receive_token_address_e.setText(text_token)
         self.cash_account_e.set_cash_acct()
+
+    def update_receive_paycode(self):
+        """Refresh the paycode field if it exists on the receive tab."""
+        if hasattr(self, 'receive_paycode_e') and hasattr(self.wallet, 'get_receiving_paycode'):
+            self.receive_paycode_e.setText(self.wallet.get_receiving_paycode())
+
+    def rebuild_receive_tab(self):
+        """Replace the receive tab widget in-place. Called after RPA is toggled."""
+        idx = self.tabs.indexOf(self.receive_tab)
+        if idx == -1:
+            return
+        old_tab = self.receive_tab
+        self.receive_tab = self.create_receive_tab()
+        self.tabs.removeTab(idx)
+        self.tabs.insertTab(idx, self.receive_tab, QIcon(":icons/tab_receive.png"), _('Receive'))
+        self.tabs.setCurrentIndex(idx)
+        old_tab.setParent(None)  # allow Python GC
 
     @rate_limited(0.250, ts_after=True)  # this function potentially re-computes the QR widget, so it's rate limited to once every 250ms
     def check_and_reset_receive_address_if_needed(self):
@@ -2273,17 +2299,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             full_unit_amount = self.amount_e.get_amount() / 100000000
 
             rpa_pwd = None
-            if self.wallet.wallet_type == 'rpa':
-                rpa_pwd = self.wallet.rpa_pwd
-            else:
-                if self.wallet.has_password():
-                    msg = []
-                    msg.append("")
-                    msg.append(_("Enter your password to proceed"))
-                    password = self.password_dialog('\n'.join(msg))
-                    if not password:
-                        return
-                    rpa_pwd = password
+            if self.wallet.has_password():
+                msg = []
+                msg.append("")
+                msg.append(_("Enter your password to proceed"))
+                password = self.password_dialog('\n'.join(msg))
+                if not password:
+                    return
+                rpa_pwd = password
 
             paycode_raw_tx = dlg = None
             exit_event = threading.Event()
@@ -3005,7 +3028,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         paycode_checksum_ok = True
         if scheme == networks.net.RPA_PREFIX and not self.wallet.is_multisig():
             try:
-                rpa.addr.decode(networks.net.RPA_PREFIX + ":" + address)
+                cashaddr.decode_rpa(networks.net.RPA_PREFIX + ":" + address)
             except:
                 paycode_checksum_ok = False
 
@@ -3624,10 +3647,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not self.wallet.has_seed():
             self.show_message(_('This wallet has no seed'))
             return
-        if self.wallet.wallet_type == 'rpa':
-            keystore = self.wallet.get_keystore_rpa_aux()
-        else:
-            keystore = self.wallet.get_keystore()
+        keystore = self.wallet.get_keystore()
         try:
             seed = keystore.get_seed(password)
             passphrase = keystore.get_passphrase(password)  # may be None or ''
@@ -5349,6 +5369,65 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                                   " for retirement. This value is in terms of address index position"
                                                   " from the most recent change address.") + "</o>")
         per_wallet_tx_widgets.append((limit_change_w, None))
+
+        # RPA (Reusable Payment Addresses / paycodes)
+        # Hidden for hardware wallets and watch-only wallets — both lack the
+        # private key material needed to derive or use RPA keys.
+        if (hasattr(self.wallet, 'enable_rpa')
+                and not self.wallet.is_watching_only()
+                and not isinstance(self.wallet.keystore, keystore.Hardware_KeyStore)):
+            rpa_cb = QCheckBox(_("Enable Reusable Payment Addresses (paycodes)"))
+            rpa_cb.setChecked(self.wallet.is_rpa_enabled())
+            rpa_cb.setToolTip(
+                "<p>" + _("When enabled, a scan key pair is derived from your seed at "
+                          "chain 2 of your account node and a shareable paycode is generated.") + "</p>"
+                + "<p>" + _("The wallet will scan the blockchain in the background for "
+                            "incoming payments sent to this paycode and automatically "
+                            "import the one-time private keys for each received coin.") + "</p>"
+                + "<p>" + _("Your paycode is fully deterministic — it can always be "
+                            "recovered from your seed phrase.") + "</p>"
+            )
+
+            def on_rpa_toggled(checked, _rpa_cb=rpa_cb):
+                checked = bool(checked)
+                if checked == self.wallet.is_rpa_enabled():
+                    return
+                if checked:
+                    password = None
+                    if self.wallet.has_password():
+                        password = self.password_dialog(_("Enter your password to derive the RPA keys."))
+                        if password is None:  # user cancelled
+                            _rpa_cb.setChecked(False)
+                            return
+
+                    def do_enable():
+                        self.wallet.enable_rpa(password)
+
+                    def on_enable_success(_result):
+                        self.wallet.rpa_pwd = password
+                        self.wallet.storage.write()  # flush from UI thread; enable_rpa runs on QThread (daemon) so its storage.write() is a no-op
+                        self.wallet.start_rpa_manager()
+                        self.rebuild_receive_tab()
+
+                    def on_enable_error(exc_info):
+                        self.show_error(str(exc_info[1]))
+                        _rpa_cb.setChecked(False)
+
+                    WaitingDialog(
+                        self,
+                        _("Deriving RPA keys…"),
+                        do_enable,
+                        on_enable_success,
+                        on_enable_error,
+                        disable_escape_key=True,
+                    )
+                else:
+                    self.wallet.set_rpa_enabled(False)
+                    self.wallet.stop_rpa_manager()
+                    self.rebuild_receive_tab()
+
+            rpa_cb.stateChanged.connect(on_rpa_toggled)
+            per_wallet_tx_widgets.append((rpa_cb, None))
 
         # Fiat Tab (only build it if not on testnet)
         #

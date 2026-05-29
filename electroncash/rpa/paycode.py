@@ -18,8 +18,8 @@ import queue
 import traceback
 from decimal import Decimal as PyDecimal
 
-from . import addr
 from .. import bitcoin
+from .. import cashaddr
 from .. import networks
 from .. import schnorr
 from .. import transaction
@@ -175,7 +175,7 @@ def get_grind_string(wallet, prefix_size="10"):
     else:
         raise ValueError("Invalid prefix size. Must be 4,8,12, or 16 bits.")
 
-    scanpubkey = wallet.derive_pubkeys(0, 0)
+    scanpubkey = wallet.derive_pubkeys_rpa(2, 0)
     grind_string = scanpubkey[2:prefix_chars + 2].upper()
     return grind_string
 
@@ -187,8 +187,8 @@ def generate_paycode(wallet, prefix_size="10"):
     version = "01"
     if networks.net.TESTNET:
         version = "05"
-    scanpubkey = wallet.derive_pubkeys(0, 0)
-    spendpubkey = wallet.derive_pubkeys(0, 1)
+    scanpubkey = wallet.derive_pubkeys_rpa(2, 0)
+    spendpubkey = wallet.derive_pubkeys_rpa(2, 1)
     expiry = "00000000"
 
     # Concatenate
@@ -197,9 +197,8 @@ def generate_paycode(wallet, prefix_size="10"):
     # Convert to bytes
     payloadbytes = bytes.fromhex(payloadstring)
 
-    # Generate paycode "address" via rpa.addr function
     prefix = networks.net.RPA_PREFIX
-    return addr.encode_full(prefix, addr.PUBKEY_TYPE, payloadbytes)
+    return cashaddr.encode_rpa_full(prefix, payloadbytes)
 
 
 def _swap_dummy_for_destination(tx: Transaction, rpa_dummy_address: Address, rpa_destination_address: Address):
@@ -226,7 +225,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
 
     exit_event = exit_event or threading.Event()  # Since we rely on exit_event below, ensure it's valid regardless
     # Decode the paycode
-    rprefix, addr_hash = addr.decode(rpa_paycode)
+    rprefix, addr_hash = cashaddr.decode_rpa(rpa_paycode)
     paycode_hex = addr_hash.hex().upper()
 
     # Parse paycode
@@ -491,13 +490,11 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             # hex string (P2PK, etc), or is not a scriptSig we can understand
             continue
 
-        # We need the private key that corresponds to the scanpubkey.
-        # In this implementation, this is the one that goes with receiving
-        # address 0
-        scanpubkey = wallet.derive_pubkeys(0, 0)
+        # We need the private key that corresponds to the scanpubkey ({derivation}/2/0).
+        scanpubkey = wallet.derive_pubkeys_rpa(2, 0)
 
         scan_private_key_wif_format = wallet.export_private_key_from_index(
-            (False, 0), password)
+            (2, 0), password)
 
         scan_private_key_int_format = int.from_bytes(Base58.decode_check(scan_private_key_wif_format)[1:33],
                                                      byteorder="big")
@@ -505,18 +502,17 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
         shared_secret = _calculate_paycode_shared_secret(
             scan_private_key_int_format, sender_pubkey, outpoint_string)
 
-        # Get the spendpubkey for our paycode.
-        # In this implementation, simply: receiving address 1.
-        spendpubkey = wallet.derive_pubkeys(0, 1)
+        # Get the spendpubkey for our paycode ({derivation}/2/1).
+        spendpubkey = wallet.derive_pubkeys_rpa(2, 1)
 
         # Get the destination address for the transaction
         destination = _generate_address_from_pubkey_and_secret(bytes.fromhex(spendpubkey), shared_secret).to_string(
             Address.FMT_CASHADDR)
 
         # Fetch our own private (spend) key out of the wallet.
-        spendpubkey = wallet.derive_pubkeys(0, 1)
+        spendpubkey = wallet.derive_pubkeys_rpa(2, 1)
         spend_private_key_wif_format = wallet.export_private_key_from_index(
-            (False, 1), password)
+            (2, 1), password)
         spend_private_key_int_format = int.from_bytes(Base58.decode_check(spend_private_key_wif_format)[1:33],
                                                       byteorder="big")
 
