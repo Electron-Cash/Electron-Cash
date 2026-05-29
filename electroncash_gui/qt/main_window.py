@@ -59,7 +59,8 @@ from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct, token, address
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
-from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing, TokensBurnedError
+from electroncash.wallet import (Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing,
+                                 TokensBurnedError, calc_dust)
 from electroncash.contacts import Contact
 from electroncash import rpa
 try:
@@ -2101,7 +2102,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     except BaseException:
                         return
                 else:
-                    amount = tx.output_value()
+                    # Subtract dust locked in token outputs so the amount field
+                    # shows only the BCH going to the recipient.
+                    _tok_dust = sum(calc_dust(inp['address'], inp['token_data'])
+                                   for inp in tx.inputs() if inp.get('token_data'))
+                    amount = tx.output_value() - _tok_dust
 
                 self.amount_e.setAmount(amount)
             if fee is not None:
