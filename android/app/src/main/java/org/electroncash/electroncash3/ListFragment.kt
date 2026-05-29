@@ -28,7 +28,7 @@ class ListModel : ViewModel() {
 abstract class ListFragment(fragLayout: Int, val rvId: Int) :
     Fragment(fragLayout), MainFragment {
 
-    val wallet = daemonModel.wallet!!
+    val wallet by lazy { daemonModel.wallet!! }
     private val model: ListModel by viewModels()
     private val adapter by lazy { onCreateAdapter() }
 
