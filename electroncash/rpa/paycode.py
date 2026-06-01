@@ -175,7 +175,7 @@ def get_grind_string(wallet, prefix_size="10"):
     else:
         raise ValueError("Invalid prefix size. Must be 4,8,12, or 16 bits.")
 
-    scanpubkey = wallet.derive_pubkeys_rpa(2, 0)
+    scanpubkey = wallet.derive_pubkeys_rpa(3, 0)
     grind_string = scanpubkey[2:prefix_chars + 2].upper()
     return grind_string
 
@@ -187,8 +187,8 @@ def generate_paycode(wallet, prefix_size="10"):
     version = "01"
     if networks.net.TESTNET:
         version = "05"
-    scanpubkey = wallet.derive_pubkeys_rpa(2, 0)
-    spendpubkey = wallet.derive_pubkeys_rpa(2, 1)
+    scanpubkey = wallet.derive_pubkeys_rpa(3, 0)
+    spendpubkey = wallet.derive_pubkeys_rpa(3, 1)
     expiry = "00000000"
 
     # Concatenate
@@ -490,11 +490,11 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             # hex string (P2PK, etc), or is not a scriptSig we can understand
             continue
 
-        # We need the private key that corresponds to the scanpubkey ({derivation}/2/0).
-        scanpubkey = wallet.derive_pubkeys_rpa(2, 0)
+        # We need the private key that corresponds to the scanpubkey ({derivation}/3/0).
+        scanpubkey = wallet.derive_pubkeys_rpa(3, 0)
 
         scan_private_key_wif_format = wallet.export_private_key_from_index(
-            (2, 0), password)
+            (3, 0), password)
 
         scan_private_key_int_format = int.from_bytes(Base58.decode_check(scan_private_key_wif_format)[1:33],
                                                      byteorder="big")
@@ -502,17 +502,17 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
         shared_secret = _calculate_paycode_shared_secret(
             scan_private_key_int_format, sender_pubkey, outpoint_string)
 
-        # Get the spendpubkey for our paycode ({derivation}/2/1).
-        spendpubkey = wallet.derive_pubkeys_rpa(2, 1)
+        # Get the spendpubkey for our paycode ({derivation}/3/1).
+        spendpubkey = wallet.derive_pubkeys_rpa(3, 1)
 
         # Get the destination address for the transaction
         destination = _generate_address_from_pubkey_and_secret(bytes.fromhex(spendpubkey), shared_secret).to_string(
             Address.FMT_CASHADDR)
 
         # Fetch our own private (spend) key out of the wallet.
-        spendpubkey = wallet.derive_pubkeys_rpa(2, 1)
+        spendpubkey = wallet.derive_pubkeys_rpa(3, 1)
         spend_private_key_wif_format = wallet.export_private_key_from_index(
-            (2, 1), password)
+            (3, 1), password)
         spend_private_key_int_format = int.from_bytes(Base58.decode_check(spend_private_key_wif_format)[1:33],
                                                       byteorder="big")
 

@@ -4526,7 +4526,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
         The aux keystore is rooted at self.keystore.derivation (e.g.
         m/44'/145'/0' for BIP39, m/ for Electrum seeds). RPA scan/spend keys
-        are at chain 2: {derivation}/2/0 (scan) and {derivation}/2/1 (spend).
+        are at chain 3: {derivation}/3/0 (scan) and {derivation}/3/1 (spend).
         Supports BIP39 and Electrum-style seeds."""
         seed = self.keystore.get_seed(password)
         passphrase = self.keystore.get_passphrase(password)
@@ -4556,8 +4556,8 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     def derive_pubkeys_rpa(self, c, i):
         """Derive a pubkey from the RPA auxiliary keystore at chain c, index i.
 
-        For RPA, always call with c=2: scan=derive_pubkeys_rpa(2,0),
-        spend=derive_pubkeys_rpa(2,1), giving {derivation}/2/0 and {derivation}/2/1."""
+        For RPA, always call with c=3: scan=derive_pubkeys_rpa(3,0),
+        spend=derive_pubkeys_rpa(3,1), giving {derivation}/3/0 and {derivation}/3/1."""
         if not self.keystore_rpa_aux:
             raise RuntimeError("RPA is not enabled on this wallet")
         return self.keystore_rpa_aux.derive_pubkey(c, i)

@@ -69,19 +69,19 @@ class TestRpaStandardWallet(unittest.TestCase):
         self.assertTrue(w.keystore_rpa_aux.xpub.startswith('xpub'))
 
     @mock.patch.object(storage.WalletStorage, '_write')
-    def test_paycode_uses_chain_2(self, _mock_write):
-        """RPA scan key is at {keystore.derivation}/2/0, distinct from {keystore.derivation}/0/0."""
+    def test_paycode_uses_chain_3(self, _mock_write):
+        """RPA scan key is at {keystore.derivation}/3/0, distinct from {keystore.derivation}/0/0."""
         w = _make_electrum_wallet()
         w.enable_rpa(None)
 
-        scan_pubkey = w.derive_pubkeys_rpa(2, 0)
-        spend_pubkey = w.derive_pubkeys_rpa(2, 1)
+        scan_pubkey = w.derive_pubkeys_rpa(3, 0)
+        spend_pubkey = w.derive_pubkeys_rpa(3, 1)
         # {keystore.derivation}/0/0 is the first normal receive key
         first_receive_key = w.keystore_rpa_aux.derive_pubkey(0, 0)
 
         self.assertNotEqual(
             scan_pubkey, first_receive_key,
-            "RPA scan key ({keystore.derivation}/2/0) must differ from first receive key ({keystore.derivation}/0/0)"
+            "RPA scan key ({keystore.derivation}/3/0) must differ from first receive key ({keystore.derivation}/0/0)"
         )
         self.assertNotEqual(scan_pubkey, spend_pubkey)
 

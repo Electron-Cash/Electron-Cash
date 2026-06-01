@@ -5380,7 +5380,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             rpa_cb.setChecked(self.wallet.is_rpa_enabled())
             rpa_cb.setToolTip(
                 "<p>" + _("When enabled, a scan key pair is derived from your seed at "
-                          "chain 2 of your account node and a shareable paycode is generated.") + "</p>"
+                          "chain 3 of your account node and a shareable paycode is generated.") + "</p>"
                 + "<p>" + _("The wallet will scan the blockchain in the background for "
                             "incoming payments sent to this paycode and automatically "
                             "import the one-time private keys for each received coin.") + "</p>"
