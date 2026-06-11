@@ -239,6 +239,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self._shortcuts.add( QShortcut(QKeySequence("Alt+" + str(i + 1)), self, lambda i=i: wrtabs() and wrtabs().setCurrentIndex(i)) )
 
         self.gui_object.cashaddr_toggled_signal.connect(self.update_cashaddr_icon)
+        # Connected once here, not in create_receive_tab: the receive tab can
+        # be rebuilt (RPA toggle) and reconnecting there would stack
+        # duplicate connections on this app-global signal.
+        self.gui_object.cashaddr_toggled_signal.connect(self.update_receive_address_widget)
         self.payment_request_ok_signal.connect(self.payment_request_ok)
         self.payment_request_error_signal.connect(self.payment_request_error)
         self.gui_object.update_available_signal.connect(self.on_update_available)  # shows/hides the update_available_button, emitted by update check mechanism when a new version is available
@@ -1174,6 +1178,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.setColumnStretch(3, 1)
 
         self.receive_address = None
+        self.receive_paycode_e = None  # set below only when RPA is enabled
         self.receive_address_e = ButtonsLineEdit()
         self.receive_address_e.addCopyButton()
         self.receive_address_e.setReadOnly(True)
@@ -1186,7 +1191,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         label = HelpLabel(_('&Receiving address'), msg)
         label.setBuddy(self.receive_address_e)
         self.receive_address_e.textChanged.connect(self.update_receive_qr)
-        self.gui_object.cashaddr_toggled_signal.connect(self.update_receive_address_widget)
 
         row = 0
 
@@ -1601,21 +1605,21 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_token_address_e.setText(text_token)
         self.cash_account_e.set_cash_acct()
 
-    def update_receive_paycode(self):
-        """Refresh the paycode field if it exists on the receive tab."""
-        if hasattr(self, 'receive_paycode_e') and hasattr(self.wallet, 'get_receiving_paycode'):
-            self.receive_paycode_e.setText(self.wallet.get_receiving_paycode())
-
     def rebuild_receive_tab(self):
         """Replace the receive tab widget in-place. Called after RPA is toggled."""
         idx = self.tabs.indexOf(self.receive_tab)
         if idx == -1:
             return
         old_tab = self.receive_tab
+        # Capture before create_receive_tab reassigns the attribute; the old
+        # instance holds a network callback registration that would otherwise
+        # leak and later fire into a deleted C++ widget.
+        old_cash_account_e = self.cash_account_e
         self.receive_tab = self.create_receive_tab()
         self.tabs.removeTab(idx)
         self.tabs.insertTab(idx, self.receive_tab, QIcon(":icons/tab_receive.png"), _('Receive'))
         self.tabs.setCurrentIndex(idx)
+        old_cash_account_e.clean_up()  # unregister network callback, disconnect network_signal
         old_tab.setParent(None)  # allow Python GC
 
     def prompt_rpa_scan_start(self):
