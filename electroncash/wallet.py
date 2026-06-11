@@ -4585,18 +4585,12 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
     # --- RPA prefix size ---
 
-    _RPA_VALID_PREFIX_SIZES = ("04", "08", "0C", "10")
-
     def get_rpa_prefix_size(self) -> str:
+        """Paycode/grind-string prefix size, hex-encoded bit count. No UI sets
+        this yet; "10" (16 bits) is the only value most servers support. Any
+        future setter must reset_rpa_scan_height() to force a full rescan,
+        since past blocks were indexed under the old prefix."""
         return self.storage.get('rpa_prefix_size', '10')
-
-    def set_rpa_prefix_size(self, value: str):
-        if value not in self._RPA_VALID_PREFIX_SIZES:
-            raise ValueError(f"Invalid RPA prefix size: {value!r}")
-        if value != self.get_rpa_prefix_size():
-            self.reset_rpa_scan_height()  # force full rescan under new prefix
-        self.storage.put('rpa_prefix_size', value)
-        self.storage.write()
 
     # --- RPA interface methods (called by RpaManager / paycode.py) ---
 

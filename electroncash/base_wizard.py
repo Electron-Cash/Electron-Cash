@@ -32,7 +32,6 @@ from . import bitcoin
 from . import keystore
 from . import mnemonic
 from . import networks
-from . import rpa
 from . import util
 from .wallet import (ImportedAddressWallet, ImportedPrivkeyWallet,
                      Standard_Wallet, Multisig_Wallet, MultiXPubWallet, wallet_types)
