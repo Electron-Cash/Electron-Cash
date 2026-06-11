@@ -4137,6 +4137,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     privkey = 'INVALID_PASSWORD'
                 except PrivateKeyMissing:
                     privkey = 'WATCHING_ONLY'
+                except Exception as e:
+                    # Defensive: never let one bad address kill this thread and
+                    # leave the dialog stuck at "Please wait..."
+                    self.print_error("Error exporting private key for",
+                                     addr.to_ui_string(), repr(e))
+                    privkey = 'EXPORT_ERROR'
                 private_keys[addr.to_ui_string()] = privkey
                 strong_d = weak_d()
                 try:

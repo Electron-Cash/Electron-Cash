@@ -5,6 +5,8 @@ from .. import bitcoin
 from .. import keystore
 from .. import storage
 from .. import wallet
+from ..address import PublicKey
+from ..util import InvalidPassword
 
 
 _ELECTRUM_SEED = 'cycle rocket west magnet parrot shuffle foot correct salt library feed song'
@@ -120,3 +122,86 @@ class TestRpaStandardWallet(unittest.TestCase):
         self.assertEqual(txin['x_pubkeys'], [expected_pubkey])
         self.assertEqual(txin['num_sig'], 1)
         self.assertEqual(txin['signatures'], [None])
+
+
+def _make_rpa_wallet_with_imported_key():
+    w = _make_electrum_wallet()
+    w.enable_rpa(None)
+    w.import_rpa_private_key(_test_wif(), None)
+    return w, w.keystore_rpa_imported.get_addresses()[0]
+
+
+class TestRpaImportedAddressOps(unittest.TestCase):
+    """Index-based wallet operations (get_address_index and friends) must work
+    for addresses that exist only in keystore_rpa_imported."""
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_get_address_index_rpa_imported(self, _mock_write):
+        """get_address_index returns the imported pubkey for RPA addresses and
+        keeps the (change, n) tuple contract for HD addresses."""
+        w, rpa_addr = _make_rpa_wallet_with_imported_key()
+
+        index = w.get_address_index(rpa_addr)
+        self.assertEqual(index, w.keystore_rpa_imported.address_to_pubkey(rpa_addr))
+
+        hd_addr = w.get_receiving_addresses()[0]
+        self.assertEqual(w.get_address_index(hd_addr), (False, 0))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_export_private_key_rpa_imported(self, _mock_write):
+        """export_private_key round-trips the imported WIF."""
+        w, rpa_addr = _make_rpa_wallet_with_imported_key()
+        self.assertEqual(w.export_private_key(rpa_addr, None), _test_wif())
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_export_all_addresses_does_not_raise(self, _mock_write):
+        """Exporting every wallet address must succeed — mirrors the GUI's
+        'Export private keys' loop, which iterates get_addresses()."""
+        w, _rpa_addr = _make_rpa_wallet_with_imported_key()
+        for addr in w.get_addresses():
+            wif = w.export_private_key(addr, None)
+            self.assertTrue(wif)
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_get_public_keys_rpa_imported(self, _mock_write):
+        """get_public_key(s) return the imported pubkey hex for RPA addresses."""
+        w, rpa_addr = _make_rpa_wallet_with_imported_key()
+        expected = PublicKey.from_WIF_privkey(_test_wif()).to_ui_string()
+        self.assertEqual(w.get_public_key(rpa_addr), expected)
+        self.assertEqual(w.get_public_keys(rpa_addr), [expected])
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_sign_message_rpa_imported(self, _mock_write):
+        """sign_message works for an RPA-imported address and verifies."""
+        w, rpa_addr = _make_rpa_wallet_with_imported_key()
+        msg = b'test rpa message'
+        sig = w.sign_message(rpa_addr, msg, None)
+        self.assertTrue(bitcoin.verify_message(rpa_addr, sig, msg))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_sign_message_hd_address_unaffected(self, _mock_write):
+        """sign_message still delegates to the HD keystore for HD addresses."""
+        w, _rpa_addr = _make_rpa_wallet_with_imported_key()
+        hd_addr = w.get_receiving_addresses()[0]
+        msg = b'test hd message'
+        sig = w.sign_message(hd_addr, msg, None)
+        self.assertTrue(bitcoin.verify_message(hd_addr, sig, msg))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_export_private_key_wrong_password_raises_invalid_password(self, _mock_write):
+        """A wrong password raises InvalidPassword specifically — the GUI export
+        dialog's error handling depends on that exception type."""
+        w, rpa_addr = _make_rpa_wallet_with_imported_key()
+        w.update_password(None, 'topsecret')
+        with self.assertRaises(InvalidPassword):
+            w.export_private_key(rpa_addr, 'wrong')
+        self.assertEqual(w.export_private_key(rpa_addr, 'topsecret'), _test_wif())
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_decrypt_message_rpa_imported(self, _mock_write):
+        """decrypt_message routes to keystore_rpa_imported when the pubkey is an
+        imported RPA key."""
+        w, _rpa_addr = _make_rpa_wallet_with_imported_key()
+        pubkey_hex = PublicKey.from_WIF_privkey(_test_wif()).to_ui_string()
+        encrypted = bitcoin.encrypt_message(b'hello rpa', pubkey_hex)
+        self.assertEqual(w.decrypt_message(pubkey_hex, encrypted, None), b'hello rpa')

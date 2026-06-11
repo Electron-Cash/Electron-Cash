@@ -4613,6 +4613,12 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
     # --- Address list and ownership includes RPA-imported addresses ---
 
+    def _rpa_imported_pubkey(self, address):
+        """Return the PublicKey if address belongs to keystore_rpa_imported, else None."""
+        if self.keystore_rpa_imported:
+            return self.keystore_rpa_imported.address_to_pubkey(address)
+        return None
+
     def get_addresses(self):
         addrs = super().get_addresses()
         if self.keystore_rpa_imported:
@@ -4622,9 +4628,48 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     def is_mine(self, address):
         if super().is_mine(address):
             return True
+        return self._rpa_imported_pubkey(address) is not None
+
+    # --- Index-based operations route RPA-imported addresses through
+    # --- keystore_rpa_imported. For an Imported_KeyStore the pubkey itself
+    # --- serves as the derivation index (same convention as ImportedPrivkeyWallet).
+
+    def get_address_index(self, address):
+        pubkey = self._rpa_imported_pubkey(address)
+        if pubkey is not None:
+            return pubkey
+        return super().get_address_index(address)
+
+    def get_public_key(self, address):
+        pubkey = self._rpa_imported_pubkey(address)
+        if pubkey is not None:
+            return pubkey.to_ui_string()
+        return super().get_public_key(address)
+
+    def get_public_keys(self, address):
+        pubkey = self._rpa_imported_pubkey(address)
+        if pubkey is not None:
+            return [pubkey.to_ui_string()]
+        return super().get_public_keys(address)
+
+    def export_private_key(self, address, password):
+        pubkey = self._rpa_imported_pubkey(address)
+        if pubkey is not None:
+            return self.keystore_rpa_imported.export_private_key(pubkey, password)
+        return super().export_private_key(address, password)
+
+    def sign_message(self, address, message, password):
+        pubkey = self._rpa_imported_pubkey(address)
+        if pubkey is not None:
+            return self.keystore_rpa_imported.sign_message(pubkey, message, password)
+        return super().sign_message(address, message, password)
+
+    def decrypt_message(self, pubkey, message, password):
         if self.keystore_rpa_imported:
-            return address in self.keystore_rpa_imported.get_addresses()
-        return False
+            pk = PublicKey.from_string(pubkey)
+            if pk in self.keystore_rpa_imported.keypairs:
+                return self.keystore_rpa_imported.decrypt_message(pk, message, password)
+        return super().decrypt_message(pubkey, message, password)
 
     # --- Signing: route imported RPA keys through keystore_rpa_imported ---
 
@@ -4635,10 +4680,9 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
         return ks
 
     def add_input_sig_info(self, txin, address):
-        if (self.keystore_rpa_imported
-                and address in self.keystore_rpa_imported.get_addresses()):
+        pubkey = self._rpa_imported_pubkey(address)
+        if pubkey is not None:
             assert txin['type'] == 'p2pkh'
-            pubkey = self.keystore_rpa_imported.address_to_pubkey(address)
             txin['x_pubkeys'] = [pubkey.to_ui_string()]
             txin['signatures'] = [None]
             txin['num_sig'] = 1
