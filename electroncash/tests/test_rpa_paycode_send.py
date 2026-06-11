@@ -14,6 +14,7 @@ from ..transaction import Transaction
 from .test_rpa_standard_wallet import (
     _make_bip39_wallet,
     _make_electrum_wallet,
+    _make_wallet_from_master_key,
     _test_wif,
 )
 
@@ -66,7 +67,7 @@ class TestInputZeroSigningKey(unittest.TestCase):
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_rpa_imported_address(self, _mock_write):
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
         w.import_rpa_private_key(_test_wif(), None)
         rpa_addr = w.keystore_rpa_imported.get_addresses()[0]
 
@@ -101,7 +102,7 @@ class TestSendToPaycode(unittest.TestCase):
     def _make_receiver(self):
         # 4-bit prefix keeps the grind to ~16 expected iterations.
         r = _make_bip39_wallet()
-        r.enable_rpa(None)
+        r.enable_rpa()
         return r, paycode.generate_paycode(r, prefix_size="04")
 
     def _send(self, sender, paycode_str):
@@ -130,7 +131,7 @@ class TestSendToPaycode(unittest.TestCase):
         must end up as input 0 of the paycode send."""
         receiver, pc = self._make_receiver()
         sender = _make_electrum_wallet()
-        sender.enable_rpa(None)
+        sender.enable_rpa()
         sender.import_rpa_private_key(_test_wif(), None)
         rpa_addr = sender.keystore_rpa_imported.get_addresses()[0]
         _fund_wallet(sender, rpa_addr)
@@ -162,7 +163,7 @@ class TestSendToPaycode(unittest.TestCase):
         one-time private key from the tx the sender ground."""
         receiver, pc = self._make_receiver()
         sender = _make_electrum_wallet()
-        sender.enable_rpa(None)
+        sender.enable_rpa()
         sender.import_rpa_private_key(_test_wif(), None)
         _fund_wallet(sender, sender.keystore_rpa_imported.get_addresses()[0])
 
@@ -172,3 +173,30 @@ class TestSendToPaycode(unittest.TestCase):
         self.assertEqual(len(wifs), 1)
         extracted_addr = PublicKey.from_WIF_privkey(wifs[0]).address
         self.assertIn(extracted_addr, [addr for _, addr, _ in tx.outputs()])
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_xprv_restore_recovers_rpa_funds(self, _mock_write):
+        """Full scenario: receive a paycode payment, export the receiver's
+        xprv, restore it on 'another computer', enable RPA — same paycode,
+        and the same one-time private key is extracted from the payment tx."""
+        receiver, pc = self._make_receiver()
+        sender = _make_electrum_wallet()
+        _fund_wallet(sender, sender.get_receiving_addresses()[0])
+        raw, _tx = self._send(sender, pc)
+
+        xprv = receiver.keystore.get_master_private_key(None)
+        restored = _make_wallet_from_master_key(xprv)
+        restored.enable_rpa()
+
+        self.assertEqual(paycode.generate_paycode(restored, prefix_size="04"), pc)
+
+        wifs_original = receiver.extract_private_keys_from_transaction(raw, None)
+        wifs_restored = restored.extract_private_keys_from_transaction(raw, None)
+        self.assertEqual(len(wifs_restored), 1)
+        self.assertEqual(wifs_restored, wifs_original)
+
+        restored.import_rpa_private_key(wifs_restored[0], None)
+        one_time_addr = PublicKey.from_WIF_privkey(wifs_restored[0]).address
+        self.assertIn(one_time_addr, restored.get_addresses())
+        # A rescan on the new machine starts from a server-independent height
+        self.assertIsInstance(restored.rpa_height, int)

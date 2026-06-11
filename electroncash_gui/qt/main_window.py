@@ -5412,21 +5412,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         per_wallet_tx_widgets.append((limit_change_w, None))
 
         # RPA (Reusable Payment Addresses / paycodes)
-        # Hidden for hardware wallets and watch-only wallets — both lack the
-        # private key material needed to derive or use RPA keys.
-        if (hasattr(self.wallet, 'enable_rpa')
-                and not self.wallet.is_watching_only()
-                and not isinstance(self.wallet.keystore, keystore.Hardware_KeyStore)):
+        # Hidden for wallets that lack the private key material needed to use
+        # RPA keys (watch-only, hardware, non-BIP32) -- see can_enable_rpa.
+        if self.wallet.can_enable_rpa():
             rpa_cb = QCheckBox(_("Enable Reusable Payment Addresses (paycodes)"))
             rpa_cb.setChecked(self.wallet.is_rpa_enabled())
             rpa_cb.setToolTip(
-                "<p>" + _("When enabled, a scan key pair is derived from your seed at "
-                          "chain 3 of your account node and a shareable paycode is generated.") + "</p>"
+                "<p>" + _("When enabled, a scan key pair is derived from your wallet's "
+                          "master key at chain 3 of the account node and a shareable "
+                          "paycode is generated.") + "</p>"
                 + "<p>" + _("The wallet will scan the blockchain in the background for "
                             "incoming payments sent to this paycode and automatically "
                             "import the one-time private keys for each received coin.") + "</p>"
                 + "<p>" + _("Your paycode is fully deterministic — it can always be "
-                            "recovered from your seed phrase.") + "</p>"
+                            "recovered from your seed phrase or master private key.") + "</p>"
             )
 
             def on_rpa_toggled(checked, _rpa_cb=rpa_cb):
@@ -5434,39 +5433,30 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if checked == self.wallet.is_rpa_enabled():
                     return
                 if checked:
-                    password = None
-                    if self.wallet.has_password():
-                        password = self.password_dialog(_("Enter your password to derive the RPA keys."))
-                        if password is None:  # user cancelled
-                            _rpa_cb.setChecked(False)
-                            return
-
-                    def do_enable():
-                        self.wallet.enable_rpa(password)
-
-                    def on_enable_success(_result):
-                        self.wallet.rpa_pwd = password
-                        self.wallet.storage.write()  # flush from UI thread; enable_rpa runs on QThread (daemon) so its storage.write() is a no-op
-                        if (self.wallet.seed_ts is None
-                                and self.wallet.storage.get('rpa_height') is None):
-                            # Seed creation date unknown (restored/legacy wallet):
-                            # let the user narrow the scan window.
-                            self.prompt_rpa_scan_start()
-                        self.wallet.start_rpa_manager()
-                        self.rebuild_receive_tab()
-
-                    def on_enable_error(exc_info):
-                        self.show_error(str(exc_info[1]))
+                    try:
+                        self.wallet.enable_rpa()
+                    except Exception as e:
+                        self.show_error(str(e))
                         _rpa_cb.setChecked(False)
-
-                    WaitingDialog(
-                        self,
-                        _("Deriving RPA keys…"),
-                        do_enable,
-                        on_enable_success,
-                        on_enable_error,
-                        disable_escape_key=True,
+                        return
+                    # Background scanning needs the password on encrypted
+                    # wallets; declining pauses scanning, not enabling.
+                    rpa.acquire_rpa_password(
+                        self.wallet,
+                        lambda: self.password_dialog(
+                            _("Enter your password to allow background scanning for "
+                              "incoming paycode payments.") + "\n\n"
+                            + _("If you cancel, paycode scanning stays paused for this "
+                                "session; everything else works normally.")),
+                        self.show_error,
                     )
+                    if (self.wallet.seed_ts is None
+                            and self.wallet.storage.get('rpa_height') is None):
+                        # Seed creation date unknown (restored/legacy wallet):
+                        # let the user narrow the scan window.
+                        self.prompt_rpa_scan_start()
+                    self.wallet.start_rpa_manager()
+                    self.rebuild_receive_tab()
                 else:
                     self.wallet.set_rpa_enabled(False)
                     self.wallet.stop_rpa_manager()

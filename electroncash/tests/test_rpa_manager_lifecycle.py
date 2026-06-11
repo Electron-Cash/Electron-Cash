@@ -57,7 +57,7 @@ def _make_rpa_enabled_wallet():
     store.put('gap_limit', 1)
     w = wallet.Standard_Wallet(store)
     w.synchronize()
-    w.enable_rpa(None)
+    w.enable_rpa()
     return w
 
 

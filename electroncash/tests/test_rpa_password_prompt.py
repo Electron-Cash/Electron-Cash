@@ -12,7 +12,7 @@ from .test_rpa_standard_wallet import _make_electrum_wallet
 
 def _make_rpa_wallet(password=None):
     w = _make_electrum_wallet()
-    w.enable_rpa(None)
+    w.enable_rpa()
     if password is not None:
         w.update_password(None, password)
         # update_password caches the session password; clear it to simulate a

@@ -458,6 +458,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def is_rpa_enabled(self) -> bool:
         return False
 
+    def can_enable_rpa(self) -> bool:
+        return False
+
     def get_rpa_imported_addresses(self):
         """Addresses of one-time keys received via RPA/paycode. HD address
         lists (get_receiving_addresses/get_change_addresses) must NOT include
@@ -4467,7 +4470,6 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     rpa_pwd = None  # session password for RPA scanning; set by update_password
 
     def __init__(self, storage):
-        self.keystore_rpa_aux = None
         self.keystore_rpa_imported = None
         self.seed_ts = storage.get('seed_ts')  # seed creation time if known; default RPA scan start
         super().__init__(storage)
@@ -4479,30 +4481,23 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
     def load_keystore(self):
         super().load_keystore()
-        if self.storage.get('keystore_rpa_aux'):
-            self.keystore_rpa_aux = load_keystore(self.storage, 'keystore_rpa_aux')
         if self.storage.get('keystore_rpa_imported'):
             self.keystore_rpa_imported = load_keystore(self.storage, 'keystore_rpa_imported')
         else:
             self.keystore_rpa_imported = Imported_KeyStore({})
-        # Heal storage inconsistency: rpa_enabled=True without the aux keystore means
-        # a previous enable/disable cycle didn't complete cleanly.
-        if self.storage.get('rpa_enabled', False) and self.keystore_rpa_aux is None:
-            self.storage.put('rpa_enabled', False)
-
-    def save_keystore_rpa_aux(self):
-        self.storage.put('keystore_rpa_aux', self.keystore_rpa_aux.dump())
 
     def save_keystore_rpa_imported(self):
         self.storage.put('keystore_rpa_imported', self.keystore_rpa_imported.dump())
 
-    def get_keystore_rpa_aux(self):
-        return self.keystore_rpa_aux
-
     # --- RPA enabled flag ---
 
+    def can_enable_rpa(self) -> bool:
+        return (isinstance(self.keystore, BIP32_KeyStore)
+                and not self.is_watching_only()  # need the scan/spend privkeys
+                and not self.is_hardware())
+
     def is_rpa_enabled(self) -> bool:
-        return bool(self.storage.get('rpa_enabled', False)) and self.keystore_rpa_aux is not None
+        return bool(self.storage.get('rpa_enabled', False)) and self.can_enable_rpa()
 
     def set_rpa_enabled(self, enabled: bool):
         self.storage.put('rpa_enabled', enabled)
@@ -4532,31 +4527,13 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
     # --- First-time RPA setup ---
 
-    def enable_rpa(self, password):
-        """Derive the RPA auxiliary keystore from the wallet seed.
-
-        The aux keystore is rooted at self.keystore.derivation (e.g.
-        m/44'/145'/0' for BIP39, m/ for Electrum seeds). RPA scan/spend keys
-        are at chain 3: {derivation}/3/0 (scan) and {derivation}/3/1 (spend).
-        Supports BIP39 and Electrum-style seeds."""
-        seed = self.keystore.get_seed(password)
-        passphrase = self.keystore.get_passphrase(password)
-        seed_type = self.keystore.seed_type
-        if seed_type == 'bip39':
-            bip32_seed = keystore.Mnemonic.mnemonic_to_seed(seed, passphrase)
-        elif seed_type in ('electrum', 'standard'):
-            bip32_seed = keystore.Mnemonic_Electrum.mnemonic_to_seed(seed, passphrase)
-        else:
-            raise RuntimeError(
-                f"RPA is not supported for seed type '{seed_type}'. "
-                "Only BIP39 and Electrum-style seeds are supported."
-            )
-        rpa_ks = BIP32_KeyStore({})
-        rpa_ks.add_xprv_from_seed(bip32_seed, 'standard', self.keystore.derivation)
-        if password is not None:
-            rpa_ks.update_password(None, password)
-        self.keystore_rpa_aux = rpa_ks
-        self.save_keystore_rpa_aux()
+    def enable_rpa(self):
+        """Enable Reusable Payment Addresses. RPA keys derive from the main
+        keystore at chain 3 ({derivation}/3/0 = scan, {derivation}/3/1 =
+        spend), so no seed and no password are needed -- the paycode comes
+        from the xpub. Works for seed-based and xprv-restored wallets alike."""
+        if not self.can_enable_rpa():
+            raise RuntimeError(_('This wallet type cannot use Reusable Payment Addresses.'))
         if not self.keystore_rpa_imported:
             self.keystore_rpa_imported = Imported_KeyStore({})
         self.save_keystore_rpa_imported()
@@ -4565,17 +4542,20 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     # --- RPA key derivation ---
 
     def derive_pubkeys_rpa(self, c, i):
-        """Derive a pubkey from the RPA auxiliary keystore at chain c, index i.
+        """Derive a pubkey from the main keystore at chain c, index i.
 
         For RPA, always call with c=3: scan=derive_pubkeys_rpa(3,0),
         spend=derive_pubkeys_rpa(3,1), giving {derivation}/3/0 and {derivation}/3/1."""
-        if not self.keystore_rpa_aux:
+        if not self.is_rpa_enabled():
             raise RuntimeError("RPA is not enabled on this wallet")
-        return self.keystore_rpa_aux.derive_pubkey(c, i)
+        # NOT keystore.derive_pubkey(c, i): its receive/change xpub cache
+        # treats the chain as a boolean, so chain 3 would poison the
+        # change-address cache. get_pubkey_from_xpub is cache-free.
+        return self.keystore.get_pubkey_from_xpub(self.keystore.xpub, (c, i))
 
     def export_private_key_from_index(self, index, password):
-        """Return WIF private key from the RPA auxiliary keystore by (change, n) index."""
-        pk, compressed = self.keystore_rpa_aux.get_private_key(index, password)
+        """Return WIF private key from the main keystore by (chain, n) index."""
+        pk, compressed = self.keystore.get_private_key(index, password)
         return bitcoin.serialize_privkey(pk, compressed, self.txin_type)
 
     # --- RPA scanning height ---
@@ -4722,19 +4702,12 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     def update_password(self, old_pw, new_pw, encrypt=False):
         if old_pw is None and self.has_password():
             raise InvalidPassword()
-        if self.keystore is not None and self.keystore.can_change_password():
-            self.keystore.update_password(old_pw, new_pw)
-            self.save_keystore()
-        if self.keystore_rpa_aux is not None and self.keystore_rpa_aux.can_change_password():
-            self.keystore_rpa_aux.update_password(old_pw, new_pw)
-            self.save_keystore_rpa_aux()
         if (self.keystore_rpa_imported is not None
                 and self.keystore_rpa_imported.keypairs
                 and self.keystore_rpa_imported.can_change_password()):
             self.keystore_rpa_imported.update_password(old_pw, new_pw)
             self.save_keystore_rpa_imported()
-        self.storage.set_password(new_pw, encrypt)
-        self.storage.write()
+        super().update_password(old_pw, new_pw, encrypt)
         self.rpa_pwd = new_pw
 
 

@@ -35,52 +35,72 @@ def _make_bip39_wallet():
     return w
 
 
+def _make_wallet_from_master_key(master_key):
+    """Simulates restoring a wallet on another computer from an exported
+    xprv (or xpub, for a watching-only wallet)."""
+    ks = keystore.from_master_key(master_key)
+    store = storage.WalletStorage('if_this_exists_mocking_failed_648151893')
+    store.put('keystore', ks.dump())
+    store.put('gap_limit', 1)
+    w = wallet.Standard_Wallet(store)
+    w.synchronize()
+    return w
+
+
 def _test_wif():
     # deterministic test key: bytes 1..32 (valid secp256k1 scalar)
     return bitcoin.serialize_privkey(bytes(range(1, 33)), True, 'p2pkh')
+
+
+# Known-good paycode for _ELECTRUM_SEED (scan/spend keys at account-node
+# chain 3). Pins the derivation against accidental changes.
+_GOLDEN_PAYCODE = ('paycode:qygqxukkpq33mkzs0529rs7390xzg8vclqqx39ddn2pyzlk5qh95w'
+                   '2ydq07zz3z83jppwex4f57ltw57g6plg2eg5cqf8yf7mxhgynxxpfdm5qqq'
+                   'qqqqs8f5m6v9')
 
 
 class TestRpaStandardWallet(unittest.TestCase):
 
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_enable_rpa_electrum_seed(self, _mock_write):
-        """enable_rpa() sets up keystore_rpa_aux at the wallet's account node for Electrum seeds."""
+        """enable_rpa() needs no seed access and no password."""
         w = _make_electrum_wallet()
         self.assertFalse(w.is_rpa_enabled())
-        self.assertIsNone(w.keystore_rpa_aux)
 
-        w.enable_rpa(None)
+        w.enable_rpa()
 
         self.assertTrue(w.is_rpa_enabled())
-        self.assertIsNotNone(w.keystore_rpa_aux)
-        # Electrum seeds use m/ as account node
-        self.assertEqual(w.keystore_rpa_aux.derivation, "m/")
-        self.assertTrue(w.keystore_rpa_aux.xpub.startswith('xpub'))
+        self.assertTrue(w.get_receiving_paycode().startswith('paycode:'))
 
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_enable_rpa_bip39_seed(self, _mock_write):
-        """enable_rpa() sets up keystore_rpa_aux at the wallet's account node for BIP39 seeds."""
         w = _make_bip39_wallet()
         self.assertFalse(w.is_rpa_enabled())
 
-        w.enable_rpa(None)
+        w.enable_rpa()
 
         self.assertTrue(w.is_rpa_enabled())
-        self.assertIsNotNone(w.keystore_rpa_aux)
-        # BIP39 wallet uses m/44'/145'/0' as account node
-        self.assertEqual(w.keystore_rpa_aux.derivation, "m/44'/145'/0'")
-        self.assertTrue(w.keystore_rpa_aux.xpub.startswith('xpub'))
+        self.assertTrue(w.get_receiving_paycode().startswith('paycode:'))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_paycode_golden(self, _mock_write):
+        """Paycodes must be bit-identical to the aux-keystore implementation
+        (captured before the refactor) — wallets that enabled RPA earlier keep
+        their paycode."""
+        w = _make_electrum_wallet()
+        w.enable_rpa()
+        self.assertEqual(w.get_receiving_paycode(), _GOLDEN_PAYCODE)
 
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_paycode_uses_chain_3(self, _mock_write):
         """RPA scan key is at {keystore.derivation}/3/0, distinct from {keystore.derivation}/0/0."""
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
 
         scan_pubkey = w.derive_pubkeys_rpa(3, 0)
         spend_pubkey = w.derive_pubkeys_rpa(3, 1)
         # {keystore.derivation}/0/0 is the first normal receive key
-        first_receive_key = w.keystore_rpa_aux.derive_pubkey(0, 0)
+        first_receive_key = w.keystore.derive_pubkey(0, 0)
 
         self.assertNotEqual(
             scan_pubkey, first_receive_key,
@@ -89,10 +109,73 @@ class TestRpaStandardWallet(unittest.TestCase):
         self.assertNotEqual(scan_pubkey, spend_pubkey)
 
     @mock.patch.object(storage.WalletStorage, '_write')
+    def test_change_addresses_not_poisoned_by_paycode_derivation(self, _mock_write):
+        """The main keystore is now shared between HD chains and RPA chain 3:
+        deriving the paycode must not poison the keystore's change-address
+        cache (Xpub.derive_pubkey treats the chain index as a boolean)."""
+        w = _make_electrum_wallet()
+        w.enable_rpa()
+        fresh = _make_electrum_wallet()
+        expected_change_key = fresh.keystore.derive_pubkey(1, 0)
+
+        w.get_receiving_paycode()  # derives chain-3 keys from the shared keystore
+
+        self.assertEqual(w.keystore.derive_pubkey(1, 0), expected_change_key)
+        self.assertNotEqual(w.derive_pubkeys_rpa(3, 0), expected_change_key)
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_can_enable_rpa_matrix(self, _mock_write):
+        """Seed and xprv wallets can enable RPA; watching-only cannot."""
+        w_seed = _make_electrum_wallet()
+        self.assertTrue(w_seed.can_enable_rpa())
+
+        xprv = w_seed.keystore.get_master_private_key(None)
+        self.assertTrue(_make_wallet_from_master_key(xprv).can_enable_rpa())
+
+        w_watch = _make_wallet_from_master_key(w_seed.keystore.xpub)
+        self.assertFalse(w_watch.can_enable_rpa())
+        with self.assertRaises(RuntimeError):
+            w_watch.enable_rpa()
+
+        # Abstract_Wallet default is False so GUIs may call unconditionally
+        self.assertFalse(wallet.Abstract_Wallet.can_enable_rpa(w_seed))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_enable_rpa_needs_no_password(self, _mock_write):
+        """Enabling RPA and showing the paycode are pubkey-only operations;
+        only scanning/extraction needs the password."""
+        w = _make_electrum_wallet()
+        w.update_password(None, 'topsecret')
+        w.enable_rpa()
+        self.assertTrue(w.is_rpa_enabled())
+        self.assertTrue(w.get_receiving_paycode().startswith('paycode:'))
+        # Scanning/extraction still requires the password. Note the keystore
+        # raises InvalidXKey (a BaseException!) for an undecrypted xprv --
+        # pre-existing BIP32_KeyStore behavior, identical to the old aux path.
+        with self.assertRaises((InvalidPassword, bitcoin.InvalidXKey)):
+            w.export_private_key_from_index((3, 0), None)
+        self.assertTrue(w.export_private_key_from_index((3, 0), 'topsecret'))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_same_paycode_after_xprv_restore(self, _mock_write):
+        """Export the xprv, restore it on 'another computer', enable RPA:
+        the paycode must be identical."""
+        a = _make_electrum_wallet()
+        a.enable_rpa()
+
+        xprv = a.keystore.get_master_private_key(None)
+        b = _make_wallet_from_master_key(xprv)
+        b.enable_rpa()
+
+        self.assertEqual(b.get_receiving_paycode(), a.get_receiving_paycode())
+        self.assertEqual(b.derive_pubkeys_rpa(3, 0), a.derive_pubkeys_rpa(3, 0))
+
+
+    @mock.patch.object(storage.WalletStorage, '_write')
     def test_get_addresses_includes_rpa_imported(self, _mock_write):
         """get_addresses() returns HD addresses plus any RPA-imported addresses."""
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
 
         addrs_before = w.get_addresses()
 
@@ -109,7 +192,7 @@ class TestRpaStandardWallet(unittest.TestCase):
     def test_add_input_sig_info_routes_rpa_imported_key(self, _mock_write):
         """add_input_sig_info routes RPA-imported addresses through keystore_rpa_imported."""
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
 
         w.import_rpa_private_key(_test_wif(), None)
         rpa_addr = w.keystore_rpa_imported.get_addresses()[0]
@@ -127,7 +210,7 @@ class TestRpaStandardWallet(unittest.TestCase):
 
 def _make_rpa_wallet_with_imported_key():
     w = _make_electrum_wallet()
-    w.enable_rpa(None)
+    w.enable_rpa()
     w.import_rpa_private_key(_test_wif(), None)
     return w, w.keystore_rpa_imported.get_addresses()[0]
 
@@ -224,7 +307,7 @@ class TestRpaImportedAddressSource(unittest.TestCase):
     @mock.patch.object(storage.WalletStorage, '_write')
     def test_lists_imported_key(self, _mock_write):
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
         w.import_rpa_private_key(_test_wif(), None)
         expected = PublicKey.from_WIF_privkey(_test_wif()).address
         self.assertEqual(w.get_rpa_imported_addresses(), [expected])
@@ -234,7 +317,7 @@ class TestRpaImportedAddressSource(unittest.TestCase):
         """Pins the gap-limit invariant: imported addresses are reachable via
         get_addresses() but never via the HD receiving/change lists."""
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
         w.import_rpa_private_key(_test_wif(), None)
         addr = w.get_rpa_imported_addresses()[0]
         self.assertIn(addr, w.get_addresses())
@@ -248,7 +331,7 @@ class TestRpaImportedAddressSource(unittest.TestCase):
         receiving list."""
         from .test_rpa_paycode_send import _fund_wallet
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
         w.import_rpa_private_key(_test_wif(), None)
         _fund_wallet(w, w.get_rpa_imported_addresses()[0])
 
@@ -306,5 +389,5 @@ class TestRpaScanHeight(unittest.TestCase):
     def test_rpa_height_is_int_when_enabled(self, _mock_write):
         """RpaManager relies on rpa_height always resolving to a height."""
         w = _make_electrum_wallet()
-        w.enable_rpa(None)
+        w.enable_rpa()
         self.assertIsInstance(w.rpa_height, int)
