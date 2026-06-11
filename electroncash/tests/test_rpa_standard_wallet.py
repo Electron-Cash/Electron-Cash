@@ -208,6 +208,56 @@ class TestRpaImportedAddressOps(unittest.TestCase):
         self.assertEqual(w.decrypt_message(pubkey_hex, encrypted, None), b'hello rpa')
 
 
+class TestRpaImportedAddressSource(unittest.TestCase):
+    """get_rpa_imported_addresses is the only address source for paycode keys.
+    The HD lists must stay pure: synchronize_sequence's gap-limit logic creates
+    a new HD address whenever the trailing entries are used, and RPA-imported
+    addresses are always used by construction."""
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_empty_without_rpa(self, _mock_write):
+        w = _make_electrum_wallet()
+        self.assertEqual(w.get_rpa_imported_addresses(), [])
+        # The Abstract_Wallet default is [] so GUIs may call unconditionally
+        self.assertEqual(wallet.Abstract_Wallet.get_rpa_imported_addresses(w), [])
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_lists_imported_key(self, _mock_write):
+        w = _make_electrum_wallet()
+        w.enable_rpa(None)
+        w.import_rpa_private_key(_test_wif(), None)
+        expected = PublicKey.from_WIF_privkey(_test_wif()).address
+        self.assertEqual(w.get_rpa_imported_addresses(), [expected])
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_rpa_imported_not_in_hd_address_lists(self, _mock_write):
+        """Pins the gap-limit invariant: imported addresses are reachable via
+        get_addresses() but never via the HD receiving/change lists."""
+        w = _make_electrum_wallet()
+        w.enable_rpa(None)
+        w.import_rpa_private_key(_test_wif(), None)
+        addr = w.get_rpa_imported_addresses()[0]
+        self.assertIn(addr, w.get_addresses())
+        self.assertNotIn(addr, w.get_receiving_addresses())
+        self.assertNotIn(addr, w.get_change_addresses())
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_synchronize_stable_after_rpa_import(self, _mock_write):
+        """Regression test for runaway HD address derivation: a funded (i.e.
+        used) RPA-imported address must not make synchronize() grow the HD
+        receiving list."""
+        from .test_rpa_paycode_send import _fund_wallet
+        w = _make_electrum_wallet()
+        w.enable_rpa(None)
+        w.import_rpa_private_key(_test_wif(), None)
+        _fund_wallet(w, w.get_rpa_imported_addresses()[0])
+
+        n_before = len(w.get_receiving_addresses())
+        for _i in range(3):
+            w.synchronize()
+        self.assertEqual(len(w.get_receiving_addresses()), n_before)
+
+
 class TestRpaScanHeight(unittest.TestCase):
     """rpa_height must always resolve to a server-independent height:
     stored value -> seed-creation-date estimate -> RPA genesis."""

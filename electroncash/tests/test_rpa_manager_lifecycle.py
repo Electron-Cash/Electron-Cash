@@ -127,6 +127,26 @@ class TestRpaManagerLifecycle(unittest.TestCase):
         self.assertFalse(any(isinstance(j, RpaManager) for j in net.jobs))
 
     @mock.patch.object(storage.WalletStorage, '_write')
+    @mock.patch.object(Abstract_Wallet, 'start_pruned_txo_cleaner_thread')
+    @mock.patch('electroncash.wallet.Synchronizer')
+    @mock.patch('electroncash.wallet.SPV')
+    def test_start_threads_subscribes_imported_addresses(
+            self, _mock_spv, _mock_sync, _mock_prune, _mock_write):
+        """RPA-imported addresses are not in the HD lists the Synchronizer
+        subscribes by itself, so start_threads must add them explicitly."""
+        from .test_rpa_standard_wallet import _test_wif
+        w = _make_rpa_enabled_wallet()
+        w.import_rpa_private_key(_test_wif(), None)
+        addr = w.get_rpa_imported_addresses()[0]
+        net = FakeNetwork()
+
+        w.start_threads(net)
+        try:
+            w.synchronizer.add.assert_any_call(addr)
+        finally:
+            w.stop_threads()
+
+    @mock.patch.object(storage.WalletStorage, '_write')
     def test_start_rpa_manager_mid_session(self, _mock_write):
         """start_rpa_manager() can wire up an RpaManager after start_threads."""
         w = _make_rpa_enabled_wallet()

@@ -458,6 +458,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def is_rpa_enabled(self) -> bool:
         return False
 
+    def get_rpa_imported_addresses(self):
+        """Addresses of one-time keys received via RPA/paycode. HD address
+        lists (get_receiving_addresses/get_change_addresses) must NOT include
+        these -- synchronize_sequence's gap-limit logic assumes pure HD lists."""
+        return []
+
     def get_master_public_key(self):
         """Subclasses that use master pubkeys should reimplement this"""
         return None
@@ -4501,8 +4507,9 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
     def start_threads(self, network):
         super().start_threads(network)
-        if self.synchronizer and self.keystore_rpa_imported:
-            for addr in self.keystore_rpa_imported.get_addresses():
+        if self.synchronizer:
+            # The synchronizer only subscribes the HD receiving/change lists
+            for addr in self.get_rpa_imported_addresses():
                 self.synchronizer.add(addr)
 
     def start_rpa_manager(self):
@@ -4635,11 +4642,13 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
             return self.keystore_rpa_imported.address_to_pubkey(address)
         return None
 
-    def get_addresses(self):
-        addrs = super().get_addresses()
+    def get_rpa_imported_addresses(self):
         if self.keystore_rpa_imported:
-            addrs = addrs + self.keystore_rpa_imported.get_addresses()
-        return addrs
+            return self.keystore_rpa_imported.get_addresses()
+        return []
+
+    def get_addresses(self):
+        return super().get_addresses() + self.get_rpa_imported_addresses()
 
     def is_mine(self, address):
         if super().is_mine(address):
