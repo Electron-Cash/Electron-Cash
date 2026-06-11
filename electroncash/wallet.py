@@ -4278,9 +4278,12 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
 def _open_legacy_rpa_wallet(storage):
     """Raises when an old 'rpa' wallet file is opened."""
     raise UnknownWalletType(
-        "This wallet file uses the legacy 'rpa' wallet type which is no longer supported.\n\n"
-        "To access your funds, open this wallet with an older version of Electron Cash "
-        "that supports the 'rpa' wallet type."
+        "This wallet file uses the legacy 'rpa' wallet type, which this version no longer"
+        " supports. Your keys and funds are intact in the file.\n\n"
+        "To recover: open this file with an older version of Electron Cash (4.4.5 or"
+        " earlier) and send your funds to a wallet created in this version. A standard"
+        " wallet with Reusable Payment Addresses enabled (Wallet Settings) provides a new"
+        " paycode."
     )
 
 

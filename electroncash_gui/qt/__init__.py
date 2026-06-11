@@ -68,6 +68,7 @@ from electroncash.util import (UserCancelled, PrintError, print_error,
                                get_new_wallet_name, Handlers)
 from electroncash import version
 from electroncash.address import Address
+from electroncash.wallet import UnknownWalletType
 
 from .installwizard import InstallWizard, GoBack
 
@@ -645,6 +646,15 @@ class ElectrumGui(QObject, PrintError):
                         # *Not* starting up. Propagate exception out to present
                         # error message box to user.
                         raise e
+                    if isinstance(e, UnknownWalletType):
+                        # Deliberate, user-actionable message (e.g. the legacy
+                        # 'rpa' wallet stub). Show it before silently moving on
+                        # to the wizard at a different path.
+                        self.warning(title=_('Unsupported Wallet'),
+                                     message=str(e) + "\n\n"
+                                     + _("Your wallet file has not been modified:")
+                                     + f"\n{path}\n\n"
+                                     + _("Electron Cash will now open the new-wallet wizard."))
                     # We're just starting up, so we are tolerant of bad wallets
                     # and just want to proceed to the InstallWizard so the user
                     # can either specify a different wallet or create a new one.
