@@ -275,22 +275,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.gui_object.token_metadata_updated_signal.connect(lambda x: self.update_tabs())
 
     def new_window_initialized(self):
-        needs_rpa_pwd = (
-            self.wallet.is_rpa_enabled()
-            and not self.wallet.rpa_pwd
-            and self.wallet.has_password()
+        ok = rpa.acquire_rpa_password(
+            self.wallet,
+            lambda: self.password_dialog(
+                _("To scan for incoming paycode payments in the background, "
+                  "please enter your password.") + "\n\n"
+                + _("If you cancel, paycode scanning stays paused for this "
+                    "session; everything else works normally.")),
+            self.show_error,
         )
-        if needs_rpa_pwd:
-            while not self.wallet.rpa_pwd:
-                password = self.password_dialog("To perform RPA syncing in the background, please enter your password.")
-                try:
-                    self.wallet.check_password(password)
-                    self.wallet.rpa_pwd = password
-                except Exception as e:
-                    self.show_error(str(e))
-                    self.clean_up()
-                    self.close()
-                    break
+        if not ok:
+            self.print_error("RPA scanning paused for this session (no password)")
 
     def setup_tx_rcv_sound(self):
         """Used only in the 'ard moné edition"""

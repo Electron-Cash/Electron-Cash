@@ -79,6 +79,10 @@ class RpaManager(ThreadJob):
         # Ensure we don't execute too often if polling
         if polling and time.time() - self.last_mempool_check < 10.0:
             return
+        # Make sure the password is available. If not, do nothing (scanning is
+        # paused until the user supplies it; see rpa_phase_1).
+        if self.wallet.has_password() and self.wallet.rpa_pwd is None:
+            return
         # Define the "grind string" (the RPA prefix)
         rpa_grind_string = self.wallet.get_grind_string()
         params = [rpa_grind_string]
@@ -204,6 +208,12 @@ class RpaManager(ThreadJob):
 
         limit_iters = 20
         iterct = 0
+
+        # Without the password we cannot extract private keys. Leave the queue
+        # intact so the txs are processed once the user supplies it, instead of
+        # dequeuing them into an InvalidPassword and losing them.
+        if self.wallet.has_password() and self.wallet.rpa_pwd is None:
+            return
 
         while not self.rpa_q_rawtx.empty():
             rawtx_tuple = self.rpa_q_rawtx.get()
