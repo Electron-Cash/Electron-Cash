@@ -211,6 +211,16 @@ def _swap_dummy_for_destination(tx: Transaction, rpa_dummy_address: Address, rpa
     tx.raw = None
 
 
+def _input_zero_signing_key(wallet, txin, password):
+    """Return (sec, compressed, pubkey_bytes) for the single key that signs
+    input 0. Works for any address the wallet holds a key for -- HD or
+    RPA-imported (export_private_key routes both, see Standard_Wallet)."""
+    wif = wallet.export_private_key(txin["address"], password)
+    _txin_type, sec, compressed = deserialize_privkey(wif)
+    pubkey = bytes.fromhex(public_key_from_private_key(sec, compressed))
+    return sec, compressed, pubkey
+
+
 def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=None, from_addr=None,
                                       change_addr=None, nocheck=False, password=None, locktime=None,
                                       op_return=None, op_return_raw=None, progress_callback=None, exit_event=None,
@@ -268,10 +278,9 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
     # Use the first input (input zero) for our shared secret
     input_zero = tx._inputs[0]
 
-    # Fetch our own private key for the coin
-    bitcoin_addr = input_zero["address"]
-    private_key_wif_format = wallet.export_private_key(bitcoin_addr, password)
-    private_key_int_format = int.from_bytes(Base58.decode_check(private_key_wif_format)[1:33], byteorder="big")
+    # Fetch our own private key for the coin; also used for signature grinding below
+    sec, compressed, pubkey = _input_zero_signing_key(wallet, input_zero, password)
+    private_key_int_format = int.from_bytes(sec, byteorder="big")
 
     # Grab the outpoint (the colon is intentionally omitted from the string)
     outpoint_string = str(input_zero["prevout_hash"]) + str(input_zero["prevout_n"])
@@ -304,30 +313,13 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
     # Now we need to sign the transaction after the outputs are known
     wallet.sign_transaction(tx, password)
 
-    # Setup wallet and keystore in preparation for signature grinding
-    my_keystore = wallet.get_keystore()
-
     # We assume one signature per input, for now...
     assert len(input_zero["signatures"]) == 1
     input_zero["signatures"] = [None]  # Clear sig since we must re-sign during grind below
-
-    # Keypair logic from transaction module
-    keypairs = my_keystore.get_tx_derivations(tx)
-    for k, v in keypairs.items():
-        keypairs[k] = my_keystore.get_private_key(v, password)
     txin = input_zero
-    pubkeys, x_pubkeys = tx.get_sorted_pubkeys(txin)
-    for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):
-        if pubkey in keypairs:
-            _pubkey = pubkey
-        elif x_pubkey in keypairs:
-            _pubkey = x_pubkey
-        else:
-            continue
-        sec, compressed = keypairs.get(_pubkey)
 
-    # Get the keys and preimage ready for signing
-    pubkey = bytes.fromhex(public_key_from_private_key(sec, compressed))
+    # Get the preimage ready for signing. (sec, compressed, pubkey) for input
+    # zero were already obtained above for the shared secret.
     nHashType = 0x00000041  # hardcoded, perhaps should be taken from unsigned input dict
     pre_hash = Hash(bfh(tx.serialize_preimage(0, nHashType, use_cache=False)))
 
