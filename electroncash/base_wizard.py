@@ -440,6 +440,10 @@ class BaseWizard(util.PrintError):
             else:
                 # Normal standard wallet
                 self.storage.put('seed_type', self.seed_type)
+                if self.seed_ts is not None:
+                    # Seed creation time (new seeds only; None on restore).
+                    # Used as the default RPA scan start if RPA is enabled.
+                    self.storage.put('seed_ts', self.seed_ts)
                 keys = self.keystores[0].dump()
                 self.storage.put('keystore', keys)
                 self.wallet = Standard_Wallet(self.storage)

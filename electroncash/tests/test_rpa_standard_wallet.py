@@ -6,6 +6,7 @@ from .. import keystore
 from .. import storage
 from .. import wallet
 from ..address import PublicKey
+from ..rpa import paycode as rpa_paycode
 from ..util import InvalidPassword
 
 
@@ -205,3 +206,55 @@ class TestRpaImportedAddressOps(unittest.TestCase):
         pubkey_hex = PublicKey.from_WIF_privkey(_test_wif()).to_ui_string()
         encrypted = bitcoin.encrypt_message(b'hello rpa', pubkey_hex)
         self.assertEqual(w.decrypt_message(pubkey_hex, encrypted, None), b'hello rpa')
+
+
+class TestRpaScanHeight(unittest.TestCase):
+    """rpa_height must always resolve to a server-independent height:
+    stored value -> seed-creation-date estimate -> RPA genesis."""
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_rpa_height_prefers_stored_value(self, _mock_write):
+        w = _make_electrum_wallet()
+        w.rpa_height = 812345
+        self.assertEqual(w.rpa_height, 812345)
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_rpa_height_falls_back_to_seed_ts(self, _mock_write):
+        """A stored seed creation date narrows the scan window."""
+        seed_ts = 1750000000  # mid-2025
+        ks = keystore.from_seed(_ELECTRUM_SEED, '', False)
+        store = storage.WalletStorage('if_this_exists_mocking_failed_648151893')
+        store.put('keystore', ks.dump())
+        store.put('gap_limit', 1)
+        store.put('seed_ts', seed_ts)
+        w = wallet.Standard_Wallet(store)
+        w.synchronize()
+
+        self.assertEqual(w.rpa_height,
+                         rpa_paycode.determine_best_rpa_start_height(seed_ts))
+        self.assertGreater(w.rpa_height,
+                           rpa_paycode.determine_best_rpa_start_height())
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_rpa_height_defaults_to_rpa_genesis(self, _mock_write):
+        """No seed_ts and no network attached: the start height must be
+        server-independent (regression test for the tip-100 silent miss)."""
+        w = _make_electrum_wallet()
+        self.assertEqual(w.rpa_height,
+                         rpa_paycode.determine_best_rpa_start_height())
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_reset_rpa_scan_height(self, _mock_write):
+        w = _make_electrum_wallet()
+        w.rpa_height = 812345
+        w.reset_rpa_scan_height()
+        self.assertIsNone(w.storage.get('rpa_height'))
+        self.assertEqual(w.rpa_height,
+                         rpa_paycode.determine_best_rpa_start_height())
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_rpa_height_is_int_when_enabled(self, _mock_write):
+        """RpaManager relies on rpa_height always resolving to a height."""
+        w = _make_electrum_wallet()
+        w.enable_rpa(None)
+        self.assertIsInstance(w.rpa_height, int)

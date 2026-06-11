@@ -103,9 +103,10 @@ class RpaManager(ThreadJob):
         if not server_height:
             return
 
+        # The wallet's rpa_height property falls back to a height derived from
+        # the seed creation date (or RPA genesis) when no scan has run yet.
         rpa_height = self.wallet.rpa_height
-        if rpa_height is None:
-            self.wallet.rpa_height = rpa_height = server_height - 100
+        assert rpa_height is not None, "wallet.rpa_height must always resolve to a height"
 
         if self.scan_start_height is None:
             self.scan_start_height = rpa_height

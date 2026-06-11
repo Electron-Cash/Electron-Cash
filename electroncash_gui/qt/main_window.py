@@ -1623,6 +1623,46 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.tabs.setCurrentIndex(idx)
         old_tab.setParent(None)  # allow Python GC
 
+    def prompt_rpa_scan_start(self):
+        """Ask when to start scanning for paycode payments. Shown on first RPA
+        enable when the seed creation date is unknown (restored/legacy wallet).
+        Cancelling keeps the safe default of scanning from RPA genesis."""
+        d = WindowModalDialog(self.top_level_window(), _('Paycode Scan Start'))
+        vbox = QVBoxLayout(d)
+        label = QLabel(_('When did you first create this wallet\'s seed?\n\n'
+                         'Scanning for paycode payments starts from this date. A later '
+                         'date speeds up scanning, but payments received before it will '
+                         'not be found.\n\n'
+                         'If this wallet has never used paycodes before, choose '
+                         '"Start from today". If unsure, press Cancel to scan from the '
+                         'earliest possible date.'))
+        label.setWordWrap(True)
+        vbox.addWidget(label)
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        # RPA server support began ~Jan 2024; nothing to find before that
+        date_edit.setMinimumDate(QDate(2024, 1, 1))
+        date_edit.setMaximumDate(QDate.currentDate())
+        date_edit.setDate(QDate.currentDate().addDays(-14))
+        vbox.addWidget(date_edit)
+        from_today = [False]
+        def on_today():
+            from_today[0] = True
+            d.accept()
+        today_button = QPushButton(_('Start from today'))
+        today_button.clicked.connect(on_today)
+        vbox.addLayout(Buttons(CancelButton(d), today_button, OkButton(d)))
+        if not d.exec_():
+            return  # cancelled: scan from RPA genesis (the safe default)
+        if from_today[0]:
+            server_height = self.network and self.network.get_server_height()
+            if server_height:
+                self.wallet.rpa_height = server_height
+        else:
+            # Back-date by one day for safety, like the old RPA wizard did
+            ts = int(time.mktime(date_edit.date().toPyDate().timetuple())) - 86400
+            self.wallet.rpa_height = rpa.paycode.determine_best_rpa_start_height(ts)
+
     @rate_limited(0.250, ts_after=True)  # this function potentially re-computes the QR widget, so it's rate limited to once every 250ms
     def check_and_reset_receive_address_if_needed(self):
         ''' Check to make sure the receive tab is kosher and doesn't contain
@@ -5412,6 +5452,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     def on_enable_success(_result):
                         self.wallet.rpa_pwd = password
                         self.wallet.storage.write()  # flush from UI thread; enable_rpa runs on QThread (daemon) so its storage.write() is a no-op
+                        if (self.wallet.seed_ts is None
+                                and self.wallet.storage.get('rpa_height') is None):
+                            # Seed creation date unknown (restored/legacy wallet):
+                            # let the user narrow the scan window.
+                            self.prompt_rpa_scan_start()
                         self.wallet.start_rpa_manager()
                         self.rebuild_receive_tab()
 

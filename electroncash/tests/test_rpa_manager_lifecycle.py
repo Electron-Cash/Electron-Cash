@@ -155,3 +155,35 @@ class TestRpaManagerLifecycle(unittest.TestCase):
 
         self.assertIsNone(w.rpa_manager)
         self.assertFalse(any(isinstance(j, RpaManager) for j in net.jobs))
+
+
+class ConnectedFakeNetwork(FakeNetwork):
+    """rebuild_history refuses to run without a connected server."""
+
+    def is_connected(self):
+        return True
+
+
+class TestRebuildHistoryResetsRpaHeight(unittest.TestCase):
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    @mock.patch.object(Abstract_Wallet, 'start_pruned_txo_cleaner_thread')
+    @mock.patch('electroncash.wallet.Synchronizer')
+    @mock.patch('electroncash.wallet.SPV')
+    def test_rebuild_history_resets_rpa_height(
+            self, _mock_spv, _mock_sync, _mock_prune, _mock_write):
+        """Wallet > Rebuild History must restart the RPA scan from scratch."""
+        w = _make_rpa_enabled_wallet()
+        net = ConnectedFakeNetwork()
+        w.start_threads(net)
+        try:
+            w.rpa_height = 899999
+            self.assertEqual(w.storage.get('rpa_height'), 899999)
+
+            w.rebuild_history()
+
+            self.assertIsNone(w.storage.get('rpa_height'))
+            self.assertIsNotNone(w.rpa_manager)
+            self.assertIn(w.rpa_manager, net.jobs)
+        finally:
+            w.stop_threads()

@@ -4460,6 +4460,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     def __init__(self, storage):
         self.keystore_rpa_aux = None
         self.keystore_rpa_imported = None
+        self.seed_ts = storage.get('seed_ts')  # seed creation time if known; default RPA scan start
         super().__init__(storage)
 
     def pubkeys_to_address(self, pubkey):
@@ -4570,12 +4571,27 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
     # --- RPA scanning height ---
 
     @property
-    def rpa_height(self):
-        return self.storage.get('rpa_height')  # None → rpa_manager initialises to server_height - 100
+    def rpa_height(self) -> int:
+        height = self.storage.get('rpa_height')
+        if height is not None:
+            return height
+        if self.seed_ts is not None:
+            # No payments can predate the seed's creation
+            return rpa.determine_best_rpa_start_height(self.seed_ts)
+        return rpa.determine_best_rpa_start_height()
 
     @rpa_height.setter
     def rpa_height(self, value: int):
         self.storage.put('rpa_height', value)
+
+    def reset_rpa_scan_height(self):
+        """Forget the RPA scan progress; rpa_height falls back to the
+        seed-creation-date estimate, or RPA genesis if unknown."""
+        self.storage.put('rpa_height', None)
+
+    def rebuild_history(self):
+        self.reset_rpa_scan_height()
+        super().rebuild_history()
 
     # --- RPA prefix size ---
 
@@ -4588,7 +4604,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
         if value not in self._RPA_VALID_PREFIX_SIZES:
             raise ValueError(f"Invalid RPA prefix size: {value!r}")
         if value != self.get_rpa_prefix_size():
-            self.storage.put('rpa_height', None)  # force full rescan under new prefix
+            self.reset_rpa_scan_height()  # force full rescan under new prefix
         self.storage.put('rpa_prefix_size', value)
         self.storage.write()
 
