@@ -172,6 +172,18 @@ class TestRpaStandardWallet(unittest.TestCase):
 
 
     @mock.patch.object(storage.WalletStorage, '_write')
+    def test_get_keystores_master_only(self, _mock_write):
+        """get_keystores() must stay parallel to get_master_public_keys() —
+        the GUI master-key dialog indexes one list with the other ('Show XPrv'
+        IndexError regression). RPA-imported inputs are signed by the
+        sign_transaction override instead."""
+        w = _make_electrum_wallet()
+        w.enable_rpa()
+        w.import_rpa_private_key(_test_wif(), None)
+        self.assertEqual(w.get_keystores(), [w.keystore])
+        self.assertEqual(len(w.get_master_public_keys()), len(w.get_keystores()))
+
+    @mock.patch.object(storage.WalletStorage, '_write')
     def test_get_addresses_includes_rpa_imported(self, _mock_write):
         """get_addresses() returns HD addresses plus any RPA-imported addresses."""
         w = _make_electrum_wallet()

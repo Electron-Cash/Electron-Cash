@@ -4675,11 +4675,15 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
     # --- Signing: route imported RPA keys through keystore_rpa_imported ---
 
-    def get_keystores(self):
-        ks = super().get_keystores()
-        if self.keystore_rpa_imported and self.keystore_rpa_imported.keypairs:
-            ks = ks + [self.keystore_rpa_imported]
-        return ks
+    def sign_transaction(self, tx, password, *, use_cache=False):
+        super().sign_transaction(tx, password, use_cache=use_cache)
+        # keystore_rpa_imported is deliberately NOT in get_keystores():
+        # consumers (GUI master-key dialog, watching-only logic, multisig
+        # cosigner lists) treat that as the list of *master* keystores,
+        # parallel to get_master_public_keys(). Sign RPA-imported inputs here.
+        k = self.keystore_rpa_imported
+        if k and k.keypairs and k.can_sign(tx):
+            k.sign_transaction(tx, password, use_cache=use_cache)
 
     def add_input_sig_info(self, txin, address):
         pubkey = self._rpa_imported_pubkey(address)
