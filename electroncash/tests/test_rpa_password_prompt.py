@@ -82,6 +82,45 @@ class TestAcquireRpaPassword(unittest.TestCase):
         show_error.assert_not_called()
 
     @mock.patch.object(storage.WalletStorage, '_write')
+    def test_cached_password_used_without_prompt(self, _mock_write):
+        """A valid cached password (e.g. from wallet unlock at startup) is used
+        silently -- the user is never prompted."""
+        w = _make_rpa_wallet('topsecret')
+        request_password = mock.Mock()
+        show_error = mock.Mock()
+        result = rpa.acquire_rpa_password(w, request_password, show_error,
+                                          cached_password='topsecret')
+        self.assertTrue(result)
+        self.assertEqual(w.rpa_pwd, 'topsecret')
+        request_password.assert_not_called()
+        show_error.assert_not_called()
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_no_cached_password_falls_back_to_prompt(self, _mock_write):
+        """cached_password=None (nothing cached) prompts as usual."""
+        w = _make_rpa_wallet('topsecret')
+        request_password = mock.Mock(return_value='topsecret')
+        result = rpa.acquire_rpa_password(w, request_password, mock.Mock(),
+                                          cached_password=None)
+        self.assertTrue(result)
+        self.assertEqual(w.rpa_pwd, 'topsecret')
+        request_password.assert_called_once()
+
+    @mock.patch.object(storage.WalletStorage, '_write')
+    def test_invalid_cached_password_falls_back_to_prompt(self, _mock_write):
+        """A stale/invalid cached password must not loop or raise: fall back to
+        the dialog instead."""
+        w = _make_rpa_wallet('topsecret')
+        request_password = mock.Mock(return_value='topsecret')
+        show_error = mock.Mock()
+        result = rpa.acquire_rpa_password(w, request_password, show_error,
+                                          cached_password='wrong')
+        self.assertTrue(result)
+        self.assertEqual(w.rpa_pwd, 'topsecret')
+        request_password.assert_called_once()
+        show_error.assert_not_called()
+
+    @mock.patch.object(storage.WalletStorage, '_write')
     def test_unexpected_error_gives_up_cleanly(self, _mock_write):
         """Non-password errors must not retry-loop forever (or close anything)."""
         w = _make_rpa_wallet('topsecret')

@@ -287,6 +287,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 + _("If you cancel, paycode scanning stays paused for this "
                     "session; everything else works normally.")),
             self.show_error,
+            # Reuse the password from wallet unlock at startup, if still cached,
+            # so the user isn't asked for the same password twice.
+            cached_password=self.gui_object.get_cached_password(self.wallet),
         )
         if not ok:
             self.print_error("RPA scanning paused for this session (no password)")
