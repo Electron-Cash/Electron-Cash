@@ -618,6 +618,9 @@ class MyTreeWidget(QTreeWidget):
         self.header().customContextMenuRequested.connect(self.create_header_context_menu)
 
         self.setUniformRowHeights(True)
+        self.setAlternatingRowColors(True)
+        if not ColorScheme.dark_scheme:
+            self.setStyleSheet("QTreeView { alternate-background-color: #e8e8e8; }")
         # extend the syntax for consistency
         self.addChild = self.addTopLevelItem
         self.insertChild = self.insertTopLevelItem
