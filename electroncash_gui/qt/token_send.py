@@ -1036,7 +1036,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             spec.send_satoshis = self.amount_e.get_amount() or 0
         spec.token_utxos = copy.deepcopy(self.utxos_by_name)
         spec.non_token_utxos = {self.get_outpoint_longname(x): x
-                                for x in self.wallet.get_spendable_coins(None, self.parent.config)}
+                                for x in self.wallet.get_spendable_coins(None, self.parent.config)
+                                if not x.get('token_data')}
         spec.send_fungible_amounts = {tid: amt for tid, amt in self.token_fungible_to_spend.items()}
 
         # Gather tx inputs
