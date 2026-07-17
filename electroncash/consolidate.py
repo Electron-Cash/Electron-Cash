@@ -106,6 +106,14 @@ class AddressConsolidator:
                 "signatures": [None],
                 "num_sig": 1,
             }
+        elif (isinstance(self.wallet, wallet.Standard_Wallet)
+                and self.wallet._rpa_imported_pubkey(address) is not None):
+            pubkey = self.wallet._rpa_imported_pubkey(address)
+            sig_info = {
+                "x_pubkeys": [pubkey.to_ui_string()],
+                "signatures": [None],
+                "num_sig": 1,
+            }
         elif isinstance(self.wallet, wallet.Multisig_Wallet):
             derivation = self.wallet.get_address_index(address)
             sig_info = {

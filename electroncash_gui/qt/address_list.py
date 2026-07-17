@@ -169,11 +169,20 @@ class AddressList(MyTreeWidget, PrintError):
         else:
             fx = None
         account_item = self
-        sequences = [0,1] if change_addresses else [0]
+        # Sections: (title, address list, is_change, hide_predicate). The
+        # hide_predicate decides which entries get tucked under the collapsed
+        # "Used"/"Empty" sub-item. The paycode section never hides anything:
+        # every paycode address is used by construction, so receiving-style
+        # hiding would bury all of them.
+        sections = [(_("Receiving"), receiving_addresses, False, self.wallet.is_used)]
+        if change_addresses:
+            sections.append((_("Change"), change_addresses, True, self.wallet.is_empty))
+        rpa_addresses = list(self.wallet.get_rpa_imported_addresses())
+        if rpa_addresses:
+            sections.append((_("Paycode payments"), rpa_addresses, False, None))
         items_to_re_select = []
-        for is_change in sequences:
-            if len(sequences) > 1:
-                name = _("Receiving") if not is_change else _("Change")
+        for name, addr_list, is_change, hide_predicate in sections:
+            if len(sections) > 1:
                 seq_item = QTreeWidgetItem( [ name, '', '', '', '', ''] )
                 account_item.addChild(seq_item)
                 if not had_item_count: # first time we create this widget, auto-expand the default address list
@@ -183,7 +192,6 @@ class AddressList(MyTreeWidget, PrintError):
                 seq_item = account_item
             hidden_item = QTreeWidgetItem( [ _("Empty") if is_change else _("Used"), '', '', '', '', ''] )
             has_hidden = False
-            addr_list = change_addresses if is_change else receiving_addresses
             # Cash Account support - we do this here with the already-prepared addr_list for performance reasons
             ca_list_all = self.wallet.cashacct.get_cashaccounts(addr_list)
             ca_by_addr = defaultdict(list)
@@ -193,10 +201,7 @@ class AddressList(MyTreeWidget, PrintError):
             # / cash account
             for n, address in enumerate(addr_list):
                 num = len(self.wallet.get_address_history(address))
-                if is_change:
-                    is_hidden = self.wallet.is_empty(address)
-                else:
-                    is_hidden = self.wallet.is_used(address)
+                is_hidden = bool(hide_predicate and hide_predicate(address))
                 balance = sum(self.wallet.get_addr_balance(address))
                 address_text = address.to_ui_string()
                 # Cash Accounts
