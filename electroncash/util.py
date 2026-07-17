@@ -502,7 +502,10 @@ def make_dir(path):
     if not os.path.exists(path):
         if os.path.islink(path):
             raise BaseException('Dangling link: ' + path)
-        os.mkdir(path)
+        try:
+            os.mkdir(path)
+        except FileExistsError:
+            return
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
 
