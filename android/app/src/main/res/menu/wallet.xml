@@ -7,34 +7,34 @@
             android:title="@string/Wallet_information" />
         <item
             android:id="@+id/menuChangePassword"
-            android:title="@string/Change_password"/>
+            android:title="@string/Change_password" />
         <item
             android:id="@+id/menuExport"
-            android:title="@string/export_wallet"/>
+            android:title="@string/export_wallet" />
         <item
             android:id="@+id/menuUseChange"
-            android:title="@string/use_change"
-            android:checkable="true"/>
+            android:checkable="true"
+            android:title="@string/use_change" />
         <item
             android:id="@+id/menuClose"
-            android:title="@string/close_wallet"/>
+            android:title="@string/close_wallet" />
     </group>
 
     <group android:id="@+id/menuGroupTransaction">
         <item
             android:id="@+id/menuSignTx"
-            android:title="@string/sign_transaction"/>
+            android:title="@string/sign_transaction" />
         <item
             android:id="@+id/menuLoadTx"
-            android:title="@string/load_transaction"/>
-            
-             <item
-        android:id="@+id/menuLoadTxFromFile"
-        android:title="Load tx from file"/>
-        
+            android:title="@string/load_transaction" />
+
+        <item
+            android:id="@+id/menuLoadTxFromFile"
+            android:title="Load tx from file" />
+
         <item
             android:id="@+id/menuSweep"
-            android:title="@string/sweep_private"/>
+            android:title="@string/sweep_private" />
     </group>
 
 </menu>

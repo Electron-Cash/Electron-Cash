@@ -288,6 +288,7 @@
 
         </LinearLayout>
     </ScrollView>
+
     <LinearLayout
         android:id="@+id/buttonRow"
         android:layout_width="match_parent"

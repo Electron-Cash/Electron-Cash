@@ -35,24 +35,24 @@ class ColdLoadDialog : AlertDialogFragment() {
         }
         startActivityForResult(intent, REQUEST_OPEN_TX_FILE)
     }
-    
+
     private fun getDisplayName(uri: android.net.Uri): String? {
-    requireContext().contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (nameIndex >= 0 && cursor.moveToFirst()) {
-            return cursor.getString(nameIndex)
+        requireContext().contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                return cursor.getString(nameIndex)
+            }
         }
+        return null
     }
-    return null
-}
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = LoadBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.load_transaction)
-            .setView(binding.root)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setNeutralButton(R.string.scan_qr, null)
-            .setPositiveButton(R.string.OK, null)
+                .setView(binding.root)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setNeutralButton(R.string.scan_qr, null)
+                .setPositiveButton(R.string.OK, null)
     }
 
     override fun onShowDialog() {
@@ -80,68 +80,68 @@ class ColdLoadDialog : AlertDialogFragment() {
         val tx = txFromHex(binding.etTransaction.text.toString())
         updateStatusText(binding.tvStatus, tx)
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
-            canSign(tx) || canBroadcast(tx)
+                canSign(tx) || canBroadcast(tx)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-    if (requestCode == REQUEST_OPEN_TX_FILE) {
-        if (resultCode == Activity.RESULT_OK) {
-            val uri = data?.data
-            if (uri != null) {
-                val filename = getDisplayName(uri)
-                if (filename == null || !filename.endsWith(".txn", ignoreCase = true)) {
-                    Toast.makeText(
-                        requireContext(),
-                        "Please select a .txn transaction file",
-                        Toast.LENGTH_LONG
-                    ).show()
+        if (requestCode == REQUEST_OPEN_TX_FILE) {
+            if (resultCode == Activity.RESULT_OK) {
+                val uri = data?.data
+                if (uri != null) {
+                    val filename = getDisplayName(uri)
+                    if (filename == null || !filename.endsWith(".txn", ignoreCase = true)) {
+                        Toast.makeText(
+                                requireContext(),
+                                "Please select a .txn transaction file",
+                                Toast.LENGTH_LONG
+                        ).show()
 
-                    if (arguments?.getBoolean("openFileImmediately") == true) {
-                        dismiss()
+                        if (arguments?.getBoolean("openFileImmediately") == true) {
+                            dismiss()
+                        }
+                        return
                     }
-                    return
+
+                    try {
+                        val text = requireContext().contentResolver.openInputStream(uri)?.use { input ->
+                            input.bufferedReader().readText()
+                        }
+                        val txHex = libTransaction.callAttr("tx_from_str", text ?: "").toString()
+                        binding.etTransaction.setText(txHex)
+
+                        if (arguments?.getBoolean("openFileImmediately") == true) {
+                            onOK()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                                requireContext(),
+                                "Invalid transaction file",
+                                Toast.LENGTH_LONG
+                        ).show()
+
+                        if (arguments?.getBoolean("openFileImmediately") == true) {
+                            dismiss()
+                        }
+                    }
                 }
-
-                try {
-                    val text = requireContext().contentResolver.openInputStream(uri)?.use { input ->
-                        input.bufferedReader().readText()
-                    }
-                    val txHex = libTransaction.callAttr("tx_from_str", text ?: "").toString()
-                    binding.etTransaction.setText(txHex)
-
-                    if (arguments?.getBoolean("openFileImmediately") == true) {
-                        onOK()
-                    }
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        requireContext(),
-                        "Invalid transaction file",
-                        Toast.LENGTH_LONG
-                    ).show()
-
-                    if (arguments?.getBoolean("openFileImmediately") == true) {
-                        dismiss()
-                    }
-                }
+            } else if (arguments?.getBoolean("openFileImmediately") == true) {
+                dismiss()
             }
-        } else if (arguments?.getBoolean("openFileImmediately") == true) {
-            dismiss()
+            return
         }
-        return
-    }
 
-    val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
-    if (result != null && result.contents != null) {
-        val txHex: String = try {
-            baseDecode(result.contents, 43)
-        } catch (e: PyException) {
-            result.contents
+        val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
+        if (result != null && result.contents != null) {
+            val txHex: String = try {
+                baseDecode(result.contents, 43)
+            } catch (e: PyException) {
+                result.contents
+            }
+            binding.etTransaction.setText(txHex)
+        } else {
+            super.onActivityResult(requestCode, resultCode, data)
         }
-        binding.etTransaction.setText(txHex)
-    } else {
-        super.onActivityResult(requestCode, resultCode, data)
     }
-}
 
     fun onOK() {
         val txHex = binding.etTransaction.text.toString()
@@ -164,17 +164,16 @@ class ColdLoadDialog : AlertDialogFragment() {
     }
 
     private fun signLoadedTransaction(txHex: String) {
-    val arguments = Bundle().apply {
-        putString("txHex", txHex)
-        putBoolean("unbroadcasted", true)
+        val arguments = Bundle().apply {
+            putString("txHex", txHex)
+            putBoolean("unbroadcasted", true)
+        }
+        val dialog = SendDialog()
+        showDialog(this, dialog.apply { setArguments(arguments) })
+        dismiss()
     }
-    val dialog = SendDialog()
-    showDialog(this, dialog.apply { setArguments(arguments) })
-    dismiss()
-}
-    
-    
-    
+
+
 }
 
 private fun updateStatusText(idTxStatus: TextView, tx: PyObject) {
@@ -202,8 +201,8 @@ class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SignedTransactionBinding.inflate(LayoutInflater.from(context))
         builder.setView(binding.root)
-            .setNegativeButton(R.string.close, null)
-            .setPositiveButton(R.string.send, null)
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.send, null)
     }
 
     override fun onShowDialog() {
@@ -253,10 +252,10 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SweepBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.sweep_private)
-            .setView(binding.root)
-            .setNeutralButton(R.string.scan_qr, null)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(android.R.string.ok, null)
+                .setView(binding.root)
+                .setNeutralButton(R.string.scan_qr, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, null)
     }
 
     override fun onShowDialog() {
@@ -308,12 +307,12 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
 }
 
 fun txFromHex(hex: String) =
-    libTransaction.callAttr("Transaction", hex, Kwarg("sign_schnorr", signSchnorr()))!!
+        libTransaction.callAttr("Transaction", hex, Kwarg("sign_schnorr", signSchnorr()))!!
 
 fun canSign(tx: PyObject): Boolean {
     return try {
         !tx.callAttr("is_complete").toBoolean() &&
-            daemonModel.wallet!!.callAttr("can_sign", tx).toBoolean()
+                daemonModel.wallet!!.callAttr("can_sign", tx).toBoolean()
     } catch (e: PyException) {
         false
     }
