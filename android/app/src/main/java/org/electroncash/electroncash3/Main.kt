@@ -140,7 +140,7 @@ class MainActivity : AppCompatActivity(R.layout.main) {
             invalidateOptionsMenu()
             clearFragments()
             binding.navBottom.selectedItemId = if (walletName == null) R.id.navNoWallet
-                                       else R.id.navTransactions
+            else R.id.navTransactions
         }
     }
 
@@ -204,9 +204,11 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         } else if (item.itemId == Menu.NONE) {
             val walletName = item.title.toString()
             if (walletName != daemonModel.walletName) {
-                showDialog(this, WalletOpenDialog().apply { arguments = Bundle().apply {
-                    putString("walletName", walletName)
-                }})
+                showDialog(this, WalletOpenDialog().apply {
+                    arguments = Bundle().apply {
+                        putString("walletName", walletName)
+                    }
+                })
             }
         } else if (item.itemId == R.id.navAbout) {
             showDialog(this, AboutDialog())
@@ -222,7 +224,7 @@ class MainActivity : AppCompatActivity(R.layout.main) {
             menuInflater.inflate(R.menu.wallet, menu)
             MenuCompat.setGroupDividerEnabled(menu, true)
             menu.findItem(R.id.menuUseChange)!!.isChecked =
-                wallet.get("use_change")!!.toBoolean()
+                    wallet.get("use_change")!!.toBoolean()
         }
         return true
     }
@@ -239,20 +241,40 @@ class MainActivity : AppCompatActivity(R.layout.main) {
                     wallet.get("storage")!!.callAttr("put", "use_change", useChange)
                 }
             }
+
             R.id.menuChangePassword -> showDialog(this, PasswordChangeDialog())
-            R.id.menuWalletInformation -> { showDialog(this, WalletInformationDialog()) }
+            R.id.menuWalletInformation -> {
+                showDialog(this, WalletInformationDialog())
+            }
+
             R.id.menuSignTx -> {
                 try {
                     showDialog(this, SendDialog().apply {
                         arguments = Bundle().apply { putBoolean("unbroadcasted", true) }
                     })
-                } catch (e: ToastException) { e.show() }
+                } catch (e: ToastException) {
+                    e.show()
+                }
             }
-            R.id.menuLoadTx -> { showDialog(this, ColdLoadDialog()) }
+
+            R.id.menuLoadTx -> {
+                showDialog(this, ColdLoadDialog())
+            }
+
+
+            R.id.menuLoadTxFromFile -> {
+                showDialog(this, ColdLoadDialog().apply {
+                    arguments = Bundle().apply {
+                        putBoolean("openFileImmediately", true)
+                    }
+                })
+            }
+
             R.id.menuSweep -> showDialog(this, SweepDialog())
             R.id.menuExport -> showDialog(this, WalletExportDialog().apply {
                 arguments = Bundle().apply { putString("walletName", daemonModel.walletName) }
             })
+
             R.id.menuClose -> showDialog(this, WalletCloseDialog())
             else -> throw Exception("Unknown item $item")
         }
@@ -304,7 +326,9 @@ class MainActivity : AppCompatActivity(R.layout.main) {
                             showDialog(this, dialog)
                         }
                         dialog.onUri(uri.toString())
-                    } catch (e: ToastException) { e.show() }
+                    } catch (e: ToastException) {
+                        e.show()
+                    }
                 }
             }
         }
@@ -345,8 +369,8 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         } else {
             frag = FRAGMENTS[id]!!.java.getDeclaredConstructor().newInstance()
             supportFragmentManager.beginTransaction()
-                .add(binding.flContent.id, frag, fragTag(id))
-                .commitNow()
+                    .add(binding.flContent.id, frag, fragTag(id))
+                    .commitNow()
             return frag
         }
     }
@@ -376,31 +400,31 @@ class WalletNotOpenFragment : Fragment(), MainFragment {
 
 class AboutDialog : AlertDialogFragment() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
-        with (builder) {
+        with(builder) {
             val version = app.packageManager.getPackageInfo(app.packageName, 0).versionName
             setTitle(getString(R.string.app_name) + " " + version)
             val message = SpannableStringBuilder()
             listOf(R.string.copyright_2017, R.string.made_with, R.string.for_support)
-                .forEachIndexed { i, stringId ->
-                    if (i != 0) {
-                        message.append("\n\n")
+                    .forEachIndexed { i, stringId ->
+                        if (i != 0) {
+                            message.append("\n\n")
+                        }
+                        @Suppress("DEPRECATION")
+                        message.append(Html.fromHtml(getString(stringId)))
                     }
-                    @Suppress("DEPRECATION")
-                    message.append(Html.fromHtml(getString(stringId)))
-                }
             setMessage(message)
         }
     }
 
     override fun onShowDialog() {
         dialog.findViewById<TextView>(android.R.id.message)!!.movementMethod =
-            LinkMovementMethod.getInstance()
+                LinkMovementMethod.getInstance()
     }
 }
 
 
 // Not happy about this one. Didn't figure out how the view binding works when inhereting PasswordDialog
-class WalletOpenDialog: TaskLauncherDialog<String>() {
+class WalletOpenDialog : TaskLauncherDialog<String>() {
     var password: String = ""
     val walletName by lazy { arguments!!.getString("walletName")!! }
     private var _binding: WalletOpenBinding? = null
@@ -419,13 +443,14 @@ class WalletOpenDialog: TaskLauncherDialog<String>() {
         daemonModel.commands.callAttr("select_wallet", result)
         (activity as MainActivity).updateDrawer()
     }
+
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = WalletOpenBinding.inflate(LayoutInflater.from(context))
         builder.setView(binding.root)
                 .setNeutralButton(R.string.Delete, null)
                 .setTitle(R.string.Enter_password)
-            .setPositiveButton(android.R.string.ok, null)
-            .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNegativeButton(android.R.string.cancel, null)
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): AlertDialog {
@@ -460,7 +485,7 @@ class WalletOpenDialog: TaskLauncherDialog<String>() {
         binding.etPassword.setOnEditorActionListener { _, actionId: Int, event: KeyEvent? ->
             // See comments in ConsoleActivity.createInput.
             if (actionId == EditorInfo.IME_ACTION_DONE ||
-                event?.action == KeyEvent.ACTION_UP) {
+                    event?.action == KeyEvent.ACTION_UP) {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             }
             true
@@ -486,15 +511,15 @@ class WalletDeleteConfirmDialog : AlertDialogFragment() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         val walletName = arguments!!.getString("walletName")!!
         val message = getString(R.string.are_you_sure_you_want_to_delete, walletName) +
-                      "\n\n" + getString(R.string.if_your)
+                "\n\n" + getString(R.string.if_your)
         builder.setTitle(R.string.confirm_delete)
-            .setMessage(message)
-            .setPositiveButton(R.string.delete, { _, _ ->
-                showDialog(activity!!, WalletDeleteDialog().apply {
-                    arguments = Bundle().apply { putString("walletName", walletName) }
+                .setMessage(message)
+                .setPositiveButton(R.string.delete, { _, _ ->
+                    showDialog(activity!!, WalletDeleteDialog().apply {
+                        arguments = Bundle().apply { putString("walletName", walletName) }
+                    })
                 })
-            })
-            .setNegativeButton(android.R.string.cancel, null)
+                .setNegativeButton(android.R.string.cancel, null)
     }
 }
 
@@ -517,11 +542,11 @@ class WalletDeleteDialog : WalletCloseDialog() {
 class WalletCloseConfirmDialog : AlertDialogFragment() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         builder.setTitle(daemonModel.walletName!!)
-            .setMessage(R.string.do_you_want_to_close)
-            .setPositiveButton(R.string.close_wallet, { _, _ ->
-                showDialog(activity!!, WalletCloseDialog())
-            })
-            .setNegativeButton(android.R.string.cancel, null)
+                .setMessage(R.string.do_you_want_to_close)
+                .setPositiveButton(R.string.close_wallet, { _, _ ->
+                    showDialog(activity!!, WalletCloseDialog())
+                })
+                .setNegativeButton(android.R.string.cancel, null)
     }
 }
 
@@ -544,7 +569,7 @@ open class WalletCloseDialog : TaskDialog<Unit>() {
     }
 
     override fun onPostExecute(result: Unit) {
-        with (activity as MainActivity) {
+        with(activity as MainActivity) {
             updateDrawer()
             openDrawer()
         }
@@ -562,9 +587,9 @@ class PasswordChangeDialog : TaskLauncherDialog<String>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = PasswordChangeBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.Change_password)
-            .setView(binding.root)
-            .setPositiveButton(android.R.string.ok, null)
-            .setNegativeButton(android.R.string.cancel, null)
+                .setView(binding.root)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNegativeButton(android.R.string.cancel, null)
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): AlertDialog {
@@ -578,7 +603,7 @@ class PasswordChangeDialog : TaskLauncherDialog<String>() {
         binding.etPassword.setOnEditorActionListener { _, actionId: Int, event: KeyEvent? ->
             // See comments in ConsoleActivity.createInput.
             if (actionId == EditorInfo.IME_ACTION_DONE ||
-                event?.action == KeyEvent.ACTION_UP) {
+                    event?.action == KeyEvent.ACTION_UP) {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             }
             true
@@ -599,7 +624,8 @@ class PasswordChangeDialog : TaskLauncherDialog<String>() {
                 ToastException(R.string.incorrect_password, Toast.LENGTH_SHORT) else e
         }
     }
-    fun onPassword(password: String) : String {
+
+    fun onPassword(password: String): String {
         val wallet = daemonModel.wallet!!
         wallet.callAttr("update_password", password, newPassword, Kwarg("encrypt", true))
         toast(R.string.password_was, Toast.LENGTH_SHORT)
@@ -700,7 +726,7 @@ class WalletExportDialog : TaskLauncherDialog<Uri>() {
         waitForSave()
         val exportFile = File(exportFilePath)
         val exportFileUri: Uri = FileProvider.getUriForFile(app,
-            "org.electroncash.wallet.wallet_exports", exportFile)
+                "org.electroncash.wallet.wallet_exports", exportFile)
         daemonModel.commands.callAttr("copy_wallet", walletName, exportFilePath)
         return exportFileUri
     }
@@ -722,14 +748,16 @@ class SeedPasswordDialog : PasswordDialog<SeedResult>() {
     override fun onPassword(password: String): SeedResult {
         val keystore = daemonModel.wallet!!.callAttr("get_keystore")!!
         return SeedResult(keystore.callAttr("get_seed", password).toString(),
-                              keystore.callAttr("get_passphrase", password).toString())
+                keystore.callAttr("get_passphrase", password).toString())
     }
 
     override fun onPostExecute(result: SeedResult) {
-        showDialog(activity!!, SeedDialog().apply { arguments = Bundle().apply {
-            putString("seed", result.seed)
-            putString("passphrase", result.passphrase)
-        }})
+        showDialog(activity!!, SeedDialog().apply {
+            arguments = Bundle().apply {
+                putString("seed", result.seed)
+                putString("passphrase", result.passphrase)
+            }
+        })
     }
 }
 
@@ -753,9 +781,9 @@ class WalletInformationDialog : AlertDialogFragment() {
     private var _binding: WalletInformationBinding? = null
     private val binding get() = _binding!!
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
     ): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         return binding.root
@@ -769,7 +797,7 @@ class WalletInformationDialog : AlertDialogFragment() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = WalletInformationBinding.inflate(LayoutInflater.from(context))
         builder.setView(binding.root)
-            .setPositiveButton(android.R.string.ok, null)
+                .setPositiveButton(android.R.string.ok, null)
 
         if (daemonModel.wallet!!.callAttr("has_seed").toBoolean()) {
             builder.setNeutralButton(R.string.show_seed, null)
@@ -817,6 +845,7 @@ class WalletInformationDialog : AlertDialogFragment() {
                                             position: Int, id: Long) {
                     binding.walletMasterKey.setText(mpks[position].toString())
                 }
+
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
         } else {

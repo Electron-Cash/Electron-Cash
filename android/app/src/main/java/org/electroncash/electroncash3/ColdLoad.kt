@@ -1,16 +1,15 @@
 package org.electroncash.electroncash3
 
+import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
-import androidx.viewbinding.ViewBinding
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
@@ -19,20 +18,33 @@ import com.google.zxing.integration.android.IntentIntegrator
 import org.electroncash.electroncash3.databinding.LoadBinding
 import org.electroncash.electroncash3.databinding.SignedTransactionBinding
 import org.electroncash.electroncash3.databinding.SweepBinding
-import org.electroncash.electroncash3.databinding.WalletInformationBinding
+import android.provider.OpenableColumns
 
+private const val REQUEST_OPEN_TX_FILE = 2001
 
 val libTransaction by lazy { libMod("transaction") }
-
-
-// This provides a dialog to allow users to input a string, which is then broadcast
-// on the bitcoin cash network. Strings are not validated,
-// but broadcast_transaction should throw error which is toasted.
-// Valid transaction quickly show up in transactions.
 
 class ColdLoadDialog : AlertDialogFragment() {
     private var _binding: LoadBinding? = null
     private val binding get() = _binding!!
+
+    private fun openTransactionFile() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQUEST_OPEN_TX_FILE)
+    }
+
+    private fun getDisplayName(uri: android.net.Uri): String? {
+        requireContext().contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                return cursor.getString(nameIndex)
+            }
+        }
+        return null
+    }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = LoadBinding.inflate(LayoutInflater.from(context))
@@ -45,17 +57,22 @@ class ColdLoadDialog : AlertDialogFragment() {
 
     override fun onShowDialog() {
         super.onShowDialog()
-        binding.etTransaction.addAfterTextChangedListener{ updateUI() }
+        binding.etTransaction.addAfterTextChangedListener { updateUI() }
         updateUI()
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { onOK() }
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
+
         binding.btnPaste.setOnClickListener {
             val clipdata = getSystemService(ClipboardManager::class).primaryClip
-            if (clipdata != null && clipdata.getItemCount() > 0) {
+            if (clipdata != null && clipdata.itemCount > 0) {
                 val cliptext = clipdata.getItemAt(0)
                 binding.etTransaction.setText(cliptext.text)
             }
+        }
+
+        if (arguments?.getBoolean("openFileImmediately") == true) {
+            openTransactionFile()
         }
     }
 
@@ -63,14 +80,58 @@ class ColdLoadDialog : AlertDialogFragment() {
         val tx = txFromHex(binding.etTransaction.text.toString())
         updateStatusText(binding.tvStatus, tx)
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
-            canSign(tx) || canBroadcast(tx)
+                canSign(tx) || canBroadcast(tx)
     }
 
-    // Receives the result of a QR scan.
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_OPEN_TX_FILE) {
+            if (resultCode == Activity.RESULT_OK) {
+                val uri = data?.data
+                if (uri != null) {
+                    val filename = getDisplayName(uri)
+                    if (filename == null || !filename.endsWith(".txn", ignoreCase = true)) {
+                        Toast.makeText(
+                                requireContext(),
+                                "Please select a .txn transaction file",
+                                Toast.LENGTH_LONG
+                        ).show()
+
+                        if (arguments?.getBoolean("openFileImmediately") == true) {
+                            dismiss()
+                        }
+                        return
+                    }
+
+                    try {
+                        val text = requireContext().contentResolver.openInputStream(uri)?.use { input ->
+                            input.bufferedReader().readText()
+                        }
+                        val txHex = libTransaction.callAttr("tx_from_str", text ?: "").toString()
+                        binding.etTransaction.setText(txHex)
+
+                        if (arguments?.getBoolean("openFileImmediately") == true) {
+                            onOK()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                                requireContext(),
+                                "Invalid transaction file",
+                                Toast.LENGTH_LONG
+                        ).show()
+
+                        if (arguments?.getBoolean("openFileImmediately") == true) {
+                            dismiss()
+                        }
+                    }
+                }
+            } else if (arguments?.getBoolean("openFileImmediately") == true) {
+                dismiss()
+            }
+            return
+        }
+
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null && result.contents != null) {
-            // Try to decode the QR content as Base43; if that fails, treat it as is
             val txHex: String = try {
                 baseDecode(result.contents, 43)
             } catch (e: PyException) {
@@ -88,9 +149,11 @@ class ColdLoadDialog : AlertDialogFragment() {
 
         try {
             if (canBroadcast(tx)) {
-                showDialog(this, SignedTransactionDialog().apply { arguments = Bundle().apply {
-                    putString("txHex", txHex)
-                }})
+                showDialog(this, SignedTransactionDialog().apply {
+                    arguments = Bundle().apply {
+                        putString("txHex", txHex)
+                    }
+                })
                 dismiss()
             } else {
                 signLoadedTransaction(txHex)
@@ -107,7 +170,10 @@ class ColdLoadDialog : AlertDialogFragment() {
         }
         val dialog = SendDialog()
         showDialog(this, dialog.apply { setArguments(arguments) })
+        dismiss()
     }
+
+
 }
 
 private fun updateStatusText(idTxStatus: TextView, tx: PyObject) {
@@ -123,7 +189,6 @@ private fun updateStatusText(idTxStatus: TextView, tx: PyObject) {
     }
 }
 
-
 class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
     private var _binding: SignedTransactionBinding? = null
     private val binding get() = _binding!!
@@ -136,8 +201,8 @@ class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SignedTransactionBinding.inflate(LayoutInflater.from(context))
         builder.setView(binding.root)
-               .setNegativeButton(R.string.close, null)
-               .setPositiveButton(R.string.send, null)
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.send, null)
     }
 
     override fun onShowDialog() {
@@ -174,7 +239,6 @@ fun hideDescription(dialog: DialogFragment, descriptionLabel: TextView, descript
     }
 }
 
-
 class SweepDialog : TaskLauncherDialog<PyObject>() {
     private var _binding: SweepBinding? = null
     private val binding get() = _binding!!
@@ -188,10 +252,10 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SweepBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.sweep_private)
-            .setView(binding.root)
-            .setNeutralButton(R.string.scan_qr, null)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(android.R.string.ok, null)
+                .setView(binding.root)
+                .setNeutralButton(R.string.scan_qr, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, null)
     }
 
     override fun onShowDialog() {
@@ -223,7 +287,6 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
     }
 
     override fun onPostExecute(result: PyObject) {
-        // Convert objects to serializable form so we can pass them in an argument.
         val inputs = result.asList()[0]
         for (i in inputs.asList()) {
             val iMap = i.asMap()
@@ -237,18 +300,19 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
                 putString("inputs", inputs.repr())
                 putString("sweepKeypairs", result.asList()[1].repr())
             })
-        } catch (e: ToastException) { e.show() }
+        } catch (e: ToastException) {
+            e.show()
+        }
     }
 }
 
-
 fun txFromHex(hex: String) =
-    libTransaction.callAttr("Transaction", hex, Kwarg("sign_schnorr", signSchnorr()))!!
+        libTransaction.callAttr("Transaction", hex, Kwarg("sign_schnorr", signSchnorr()))!!
 
 fun canSign(tx: PyObject): Boolean {
     return try {
         !tx.callAttr("is_complete").toBoolean() &&
-        daemonModel.wallet!!.callAttr("can_sign", tx).toBoolean()
+                daemonModel.wallet!!.callAttr("can_sign", tx).toBoolean()
     } catch (e: PyException) {
         false
     }
