@@ -24,17 +24,38 @@ import com.chaquo.python.PyObject.fromJava
 import com.google.zxing.integration.android.IntentIntegrator
 import org.electroncash.electroncash3.databinding.SendBinding
 import kotlin.math.pow
+import android.app.Activity 
 
 
 val libPaymentRequest by lazy { libMod("paymentrequest") }
 val libStorage by lazy { libMod("storage") }
 
 val MIN_FEE = 1  // sat/byte
+private const val REQUEST_SAVE_TX_FILE = 2002
 
 
 class SendDialog : TaskLauncherDialog<Unit>() {
     private var _binding: SendBinding? = null
     private val binding get() = _binding!!
+
+    private fun saveTransactionFile() {
+    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "application/octet-stream"
+        putExtra(Intent.EXTRA_TITLE, "transaction.txn")
+    }
+    startActivityForResult(intent, REQUEST_SAVE_TX_FILE)
+}
+
+    private fun getTransactionJsonForFile(): String {
+    model.tx.waitUntilComplete()
+    val tx = model.tx.value!!.get()
+    return py.getModule("json").callAttr(
+        "dumps",
+        tx.callAttr("as_dict"),
+        Kwarg("indent", 4)
+    ).toString() + "\n"
+    }  
 
     val wallet = daemonModel.wallet!!
 
@@ -116,23 +137,20 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
-        _binding = SendBinding.inflate(LayoutInflater.from(context))
-        buildCategorySpinner()
-        buildNftSpinner()
-        if (!unbroadcasted) {
-            builder.setPositiveButton(R.string.send, null)
-        } else {
-            builder.setTitle(R.string.sign_transaction)
-                .setPositiveButton(R.string.sign, null)
-            binding.tvTitle.visibility = View.GONE
-            binding.header.removeView(binding.spnCoinType)
-            binding.sendRow.addView(binding.spnCoinType)
-            binding.sendRow.visibility = View.VISIBLE
-        }
-        builder.setView(binding.root)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setNeutralButton(R.string.scan_qr, null)
+    _binding = SendBinding.inflate(LayoutInflater.from(context))
+    buildCategorySpinner()
+    buildNftSpinner()
+
+    if (unbroadcasted) {
+        builder.setTitle(R.string.sign_transaction)
+        binding.tvTitle.visibility = View.GONE
+        binding.header.removeView(binding.spnCoinType)
+        binding.sendRow.addView(binding.spnCoinType)
+        binding.sendRow.visibility = View.VISIBLE
     }
+
+    builder.setView(binding.root)
+}
 
     private fun buildCategorySpinner() {
         val categoryLabels = getCategoryOptions()
@@ -348,7 +366,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
              (binding.btnContacts as View).visibility = View.GONE
              amountBox.isEditable = false
              binding.btnMax.isEnabled = false
-             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
+             binding.btnScanQr.visibility = View.GONE
         }
 
         val spinner: Spinner = binding.spnCoinType
@@ -375,7 +393,11 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
         updateUI()
 
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
+        binding.btnScanQr.setOnClickListener { scanQR(this) }
+        binding.btnSaveTxFile.setOnClickListener { saveTransactionFile() }
+        binding.btnCancel.setOnClickListener { dismiss() }
+        binding.btnSend.setText(if (unbroadcasted) R.string.sign else R.string.send)
+        binding.btnSend.setOnClickListener { launchTask() }
         model.tx.observe(this, Observer { onTx(it) })
     }
 
@@ -565,15 +587,36 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         fun get() = tx ?: throw error!!
     }
 
-    // Receives the result of a QR scan.
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
-        if (result != null && result.contents != null) {
-            onUri(result.contents)
-        } else {
-            super.onActivityResult(requestCode, resultCode, data)
+    if (requestCode == REQUEST_SAVE_TX_FILE) {
+        if (resultCode == Activity.RESULT_OK) {
+            val uri = data?.data
+            if (uri != null) {
+                try {
+                    requireContext().contentResolver.openOutputStream(uri)?.use { output ->
+                        val txJson = getTransactionJsonForFile()
+                        output.write(txJson.toByteArray())
+                    }
+                    Toast.makeText(requireContext(), "Saved transaction", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        requireContext(),
+                        e.message ?: "Unable to save file",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
         }
+        return
     }
+
+    val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
+    if (result != null && result.contents != null) {
+        onUri(result.contents)
+    } else {
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+}
 
     fun onUri(uri: String) {
         try {
