@@ -254,10 +254,14 @@ fi
 
 export GCC_STRIP_BINARIES="${GCC_STRIP_BINARIES:-0}"
 
-export SHA256_PROG=`which sha256sum || which gsha256sum`
-if [ -z "$SHA256_PROG" ]; then
-    fail "Please install sha256sum or gsha256sum"
+if [ "$BUILD_TYPE" = "darwin" ]; then
+    # macOS: Use shasum -a 256 as the SHA256_PROG
+    export SHA256_PROG="shasum -a 256"
+else
+    export SHA256_PROG=`which sha256sum || which gsha256sum`
 fi
+[ $(echo hello | $SHA256_PROG | cut -f 1 -d " ") = "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03" ] \
+  || fail "Missing or bad sha256sum; Please install sha256sum or gsha256sum"
 
 export SORT_PROG=`which gsort || which sort`
 if [ -z "$SORT_PROG" ]; then
