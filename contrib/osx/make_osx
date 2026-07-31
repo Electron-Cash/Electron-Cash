@@ -231,11 +231,14 @@ contrib/make_zlib && contrib/make_libevent && contrib/make_openssl && contrib/ma
 
 info "Installing requirements..."
 python3 -m pip install -r ./contrib/deterministic-build/requirements.txt --user || fail "Could not install requirements"
-python3 -m pip install -r ./contrib/deterministic-build/requirements-binaries.txt --user || fail "Could not install binary requirements"
+#python3 -m pip install -r ./contrib/deterministic-build/requirements-binaries.txt --user || fail "Could not install binary requirements"
+# Note that on macos the deterministic requirements-binaries now fails, fall back to simple requirements. We are not deterministic anyway on this platform so it's fine.
+python3 -m pip install -r ./contrib/requirements/requirements-binaries-osx-sonoma.txt --user || fail "Could not install binary requirements"
 
 info "Installing hardware wallet requirements..."
-python3 -m pip install -r ./contrib/deterministic-build/requirements-hw.txt --user || \
-fail "Could not install hardware wallet requirements"
+#python3 -m pip install -r ./contrib/deterministic-build/requirements-hw.txt --user || fail "Could not install hardware wallet requirements"
+# Note that on macos the deterministic requirements-hw now fails, fall back to simple requirements. We are not deterministic anyway on this platform so it's fine.
+python3 -m pip install -r ./contrib/requirements/requirements-hw.txt --user || fail "Could not install hardware wallet requirements"
 
 info "Building $PACKAGE..."
 python3 setup.py install --user > /dev/null || fail "Could not build $PACKAGE"
