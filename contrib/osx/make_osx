@@ -76,7 +76,8 @@ have_brew=`which brew`
 have_macports=`which port`
 if [ -n "$have_brew" ]; then
     info "Ensuring build prerequisites are installed via brew"
-    for a in autoconf automake coreutils gettext libtool openssl@1.1 readline sqlite3 xz zlib swig ; do
+    brew info openssl@1.1 > /dev/null 2>&1 && OPENSSL="openssl@1.1" || OPENSSL=openssl
+    for a in autoconf automake coreutils gettext libtool $OPENSSL readline sqlite3 xz zlib swig ; do
         brew list $a > /dev/null 2>&1
         if [ "$?" != "0" ]; then
             info "Installing $a"
