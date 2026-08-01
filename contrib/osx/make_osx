@@ -198,10 +198,10 @@ info "Making locale..."
 python3 ./contrib/make_locale || fail "Failed to make locale..."
 
 info "Downloading libusb..."
-curl -L https://github.com/cculianu/Electron-Cash-Build-Tools/releases/download/v1.0/libusb-1.0.21.el_capitan.bottle.tar.gz | \
-    tar xz --directory $BUILDDIR || fail "Could not download libusb"
-verify_hash $BUILDDIR/libusb/1.0.21/lib/libusb-1.0.dylib d147e7382dfa676d93e8b17d160d50f68e4b01f58f3647c90a8899a7a0519ca3  # this exits on failure
-cp -fp $BUILDDIR/libusb/1.0.21/lib/libusb-1.0.dylib contrib/osx || fail "Could not copy libusb"
+curl -L https://github.com/cculianu/Electron-Cash-Build-Tools/releases/download/v1.0/libusb-1.0.dylib.gz | \
+    gunzip -c > $BUILDDIR/libusb-1.0.dylib || fail "Could not download libusb"
+verify_hash $BUILDDIR/libusb-1.0.dylib c8735d48dd6d01681303b157e794c9d4cdc16f14e15ee0751afdf6020db03ae1  # this exits on failure
+mv -vf $BUILDDIR/libusb-1.0.dylib contrib/osx/. || fail "Could not move libusb into place"
 
 # Build ZBar
 contrib/make_zbar && mv -vf electroncash/libzbar.0.dylib contrib/osx/. || fail "Could not build ZBar"
