@@ -78,7 +78,9 @@ if [ -n "$have_brew" ]; then
     info "Ensuring build prerequisites are installed via brew"
     brew info openssl@1.1 > /dev/null 2>&1 && OPENSSL="openssl@1.1" || OPENSSL=openssl
     brew info autoconf-archive > /dev/null 2>&1 && AUTOCONF_ARCHIVE="autoconf-archive" || AUTOCONF_ARCHIVE=""
-    for a in autoconf $AUTOCONF_ARCHIVE automake coreutils gettext libtool $OPENSSL readline sqlite3 xz zlib swig ; do
+    brew info libiconv > /dev/null 2>&1 && LIBICONV="libiconv" || LIBICONV=""
+    for a in autoconf $AUTOCONF_ARCHIVE automake coreutils gettext $LIBICONV libtool $OPENSSL readline sqlite3 xz zlib \
+             swig ; do
         brew list $a > /dev/null 2>&1
         if [ "$?" != "0" ]; then
             info "Installing $a"
