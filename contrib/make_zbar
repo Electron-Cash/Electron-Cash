@@ -35,7 +35,9 @@ elif [ "$BUILD_TYPE" = "darwin" ] ; then
         brew info libiconv | grep -E '^Installed' > /dev/null || fail "libiconv missing -- please install it with: brew install libiconv"
         brew_pfx=$(brew --prefix)
         [ -n "${brew_pfx}" ] || fail "Cannot determine path to HomeBrew libiconv"
-        EXTRA_FLAGS+=" --with-libiconv-prefix=${brew_pfx}"
+        iconv_dir="${brew_pfx}/opt/libiconv"
+        [ -d "${iconv_dir}/lib" ] || fail "Libiconv seems to be missing from brew"
+        EXTRA_FLAGS+=" --with-libiconv-prefix=${iconv_dir}"
     else
         fail "Could not determine if using MacPots or HomeBrew -- please install one of them and then install libiconv"
     fi
