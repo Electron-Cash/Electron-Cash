@@ -522,17 +522,18 @@ class Network(util.DaemonThread):
                 n_defunct += 1
         self.print_error('sent subscriptions to', self.interface.server, len(old_reqs),"reqs", len(self.subscribed_addresses), "subs", n_defunct, "defunct subs")
 
-    def request_fee_estimates(self):
-        self.print_error("request_fee_estimates called: DISABLED in network.py")
-        return
-        # We disable fee estimates. BCH doesn't need this code. For now 1 sat/B
-        # is enough.
+    def request_fee_estimates(self, is_disabled=True):
+        """ We disable fee estimates. BCH doesn't need this code.
+        For now 1 sat/B is enough. """
+        if is_disabled:
+            self.print_error("request_fee_estimates called: DISABLED in network.py")
+            return
         self.config.requested_fee_estimates()
         try:
             for i in bitcoin.FEE_TARGETS:
                 self.queue_request('blockchain.estimatefee', [i])
         except AssertionError:
-            '''No interface available.'''
+            self.print_error("No interface available.")
 
     def get_status_value(self, key):
         if key == 'status':
