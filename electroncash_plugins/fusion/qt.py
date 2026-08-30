@@ -46,7 +46,7 @@ from electroncash_gui.qt.amountedit import BTCAmountEdit
 from electroncash_gui.qt.main_window import ElectrumWindow, StatusBarButton
 from electroncash_gui.qt.popup_widget import ShowPopupLabel, KillPopupLabel
 from electroncash_gui.qt.util import (
-    Buttons, CancelButton, CloseButton, ColorScheme, OkButton, WaitingDialog, WindowModalDialog)
+    Buttons, CancelButton, CloseButton, ColorScheme, OkButton, WaitingDialog, WindowModalDialog, HelpButton)
 from electroncash_gui.qt.utils import PortValidator, UserPortValidator
 
 from .conf import Conf, Global
@@ -1184,17 +1184,20 @@ class WalletSettingsDialog(WindowModalDialog):
         main_layout.addWidget(gb)
 
 
-        box = QGroupBox(_("Self-Fusing"))
+        box = QGroupBox(_("Fuse Faster"))
         main_layout.addWidget(box)
         slayout = QVBoxLayout(box)
 
-        lbl = QLabel(_("Allow this wallet to participate multiply in the same fusion round?"))
+        label_box = QHBoxLayout()
+        lbl = QLabel(_("Faster gets multiple fuses from this wallet in one transaction, possibly lowering privacy."))
         lbl.setWordWrap(True)
-        slayout.addWidget(lbl)
+        label_box.addWidget(lbl)
+        label_box.addWidget(HelpButton("Setting this to 'Faster' reduces your privacy, but makes Fusion more likely if not enough others are currently running CashFusion."))
+        slayout.addLayout(label_box) ; del label_box
         box = QHBoxLayout(); box.setContentsMargins(0,0,0,0)
         self.combo_self_fuse = QComboBox()
-        self.combo_self_fuse.addItem(_('No'), 1)
-        self.combo_self_fuse.addItem(_('Yes - as up to two players'), 2)
+        self.combo_self_fuse.addItem(_('Faster'), 1)
+        self.combo_self_fuse.addItem(_('Safer'), 2)
         box.addStretch(1)
         box.addWidget(self.combo_self_fuse)
         slayout.addLayout(box) ; del box
