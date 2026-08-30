@@ -3396,26 +3396,29 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         """ Must be reimplemented in subclasses """
         raise RuntimeError("'get_keystores' is not implemented in this class: " + str(type(self)))
 
+    def set_wallet_advice(self, keystore, tx):
+        # setup "wallet advice" so Xpub wallets know how to sign 'fd' type tx inputs
+        # by giving them the sequence number ahead of time
+        if isinstance(keystore, BIP32_KeyStore):
+            for txin in tx.inputs():
+                for x_pubkey in txin['x_pubkeys']:
+                    try:
+                        _, addr = xpubkey_to_address(x_pubkey)
+                    except BadXPubKey:
+                        # Bad xpubkey can happen due to bad heuristic in Transaction.parse_scriptSig, See: #2958
+                        continue
+                    try:
+                        c, index = self.get_address_index(addr)
+                    except:
+                        continue
+                    if index is not None:
+                        keystore.set_wallet_advice(addr, [c,index])
+
     def can_sign(self, tx):
         if tx.is_complete():
             return False
         for k in self.get_keystores():
-            # setup "wallet advice" so Xpub wallets know how to sign 'fd' type tx inputs
-            # by giving them the sequence number ahead of time
-            if isinstance(k, BIP32_KeyStore):
-                for txin in tx.inputs():
-                    for x_pubkey in txin['x_pubkeys']:
-                        try:
-                            _, addr = xpubkey_to_address(x_pubkey)
-                        except BadXPubKey:
-                            # Bad xpubkey can happen due to bad heuristic in Transaction.parse_scriptSig, See: #2958
-                            continue
-                        try:
-                            c, index = self.get_address_index(addr)
-                        except:
-                            continue
-                        if index is not None:
-                            k.set_wallet_advice(addr, [c,index])
+            self.set_wallet_advice(k, tx)
             if k.can_sign(tx):
                 return True
         return False
@@ -3529,6 +3532,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # sign
         for k in self.get_keystores():
             try:
+                self.set_wallet_advice(k, tx)
                 if k.can_sign(tx):
                     k.sign_transaction(tx, password, use_cache=use_cache)
             except UserCancelled:
