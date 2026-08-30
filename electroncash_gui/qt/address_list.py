@@ -75,7 +75,7 @@ class AddressList(MyTreeWidget, PrintError):
 
         if not __class__._cashacct_icon:
             # lazy init the icon
-            __class__._cashacct_icon = QIcon(":icons/cashacct-logo.png")  # TODO: make this an SVG
+            __class__._cashacct_icon = QIcon(":icons/cashacct-logo.svg")  # TODO: make this an SVG
 
     def diagnostic_name(self):
         return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"

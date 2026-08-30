@@ -66,7 +66,7 @@ class ContactList(PrintError, MyTreeWidget):
         self.monospace_font = QFont(MONOSPACE_FONT)
         self.cleaned_up = False
         self.do_update_signal.connect(self.update)
-        self.icon_cashacct = QIcon(":icons/cashacct-logo.png" if not ColorScheme.dark_scheme else ":icons/cashacct-button-darkmode.png")
+        self.icon_cashacct = QIcon(":icons/cashacct-logo.svg")
         self.icon_openalias = QIcon(":icons/openalias-logo.svg")
         self.icon_contacts = QIcon(":icons/tab_contacts.png")
         self.icon_unverif = QIcon(":/icons/unconfirmed.svg")
@@ -245,11 +245,11 @@ class ContactList(PrintError, MyTreeWidget):
         menu.addAction(self.icon_cashacct,
                        _("Register Cash Account..."), self.parent.register_new_cash_account)
         menu.addSeparator()
-        menu.addAction(QIcon(":icons/import.svg" if not ColorScheme.dark_scheme else ":icons/import_dark_theme.svg"),
+        menu.addAction(QIcon(":icons/import.svg"),
                        _("Import file"), self.import_contacts)
         if not self.parent.contacts.empty:
-            menu.addAction(QIcon(":icons/save.svg" if not ColorScheme.dark_scheme else ":icons/save_dark_theme.svg"),
-                           _("Export file"), self.export_contacts)
+            menu.addAction(QIcon(":icons/save.svg"),
+                       _("Export file"), self.export_contacts)
 
         menu.addSeparator()
         a = menu.addAction(_("Show My Cash Accounts"), self.toggle_show_my_cashaccts)
