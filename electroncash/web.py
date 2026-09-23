@@ -29,9 +29,9 @@ import sys
 import threading
 import urllib
 
-from .rpa import addr as rpa_addr
 from .address import Address
 from . import bitcoin
+from . import cashaddr
 from . import networks
 from .util import format_satoshis_plain, bh2u, bfh, print_error, do_in_main_thread
 from . import cashacct
@@ -270,7 +270,7 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
     is_paycode = u.scheme == net.RPA_PREFIX
 
     if is_paycode:
-        rprefix, addr_hash = rpa_addr.decode(net.RPA_PREFIX + ":" + address)
+        rprefix, addr_hash = cashaddr.decode_rpa(net.RPA_PREFIX + ":" + address)
 
 
     # python for android fails to parse query
