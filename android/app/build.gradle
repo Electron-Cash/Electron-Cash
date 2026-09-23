@@ -23,12 +23,15 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    compileSdkVersion 34
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    compileSdkVersion 36
 
     defaultConfig {
         applicationId "org.electroncash.wallet"
         minSdkVersion 21
-        targetSdkVersion 34
+        targetSdkVersion 36
 
         def ecVersion = null
         file("$REPO_ROOT/electroncash/version.py").eachLine {
