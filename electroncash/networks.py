@@ -48,6 +48,9 @@ class AbstractNet:
     DEFAULT_UNIT = "BCH"
     RPA_START_HEIGHT = 0
     PAYTACA_HOST = ""
+    # Verification chunk: headers needed for MTP calculation at checkpoint
+    # We need 11 headers: checkpoint - 10 through checkpoint (inclusive)
+    VERIFICATION_CHUNK_SIZE = 11
 
 
 class MainNet(AbstractNet):
@@ -187,6 +190,7 @@ class ScaleNet(TestNet):
 
     VERIFICATION_BLOCK_MERKLE_ROOT = "41eb32849a353fcb408c8b25e84578c714dbdc5ee774d0fbe25e85755250df6a"
     VERIFICATION_BLOCK_HEIGHT = 2016
+    VERIFICATION_CHUNK_SIZE = 147 # For CW-144 initialization
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
 
