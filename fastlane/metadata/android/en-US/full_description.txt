@@ -1,0 +1,18 @@
+Electron Cash is a full-featured SPV wallet for Bitcoin Cash. Forked from <a href="https://f-droid.org/packages/org.electrum.electrum/">Electrum Bitcoin Wallet</a>.
+
+It's secure, feature rich and trusted by the Bitcoin Cash community since 2017.
+
+<b>Features:</b>
+<ul>
+<li><b>Safe:</b> Your private keys are encrypted and never leave your device.</li>
+<li><b>Forgiving:</b> Your wallet can be recovered from a secret phrase.</li>
+<li><b>Instant On:</b> Electron Cash is fast, because it uses servers that index the Bitcoin Cash blockchain.</li>
+<li><b>No Lock-In:</b> You can export your private keys and use them in other Bitcoin Cash clients.</li>
+<li><b>No Downtimes:</b> Electron Cash servers are decentralized and redundant. Your wallet is never down.</li>
+<li><b>Proof Checking:</b> Electron Cash verifies all the transactions in your history using SPV.</li>
+<li><b>Cold Storage:</b> Keep your private keys offline and go online with a watching-only wallet.</li>
+<li><b>Multisig:</b> Split the permission to spend your coins between several wallets.</li>
+<li><b>Privacy:</b> Add privacy with CashFusion coinjoins and receive funds with stealth (RPA) addresses.</li>
+<li><b>CashTokens:</b> Use CashTokens, the built-in token system for the Bitcoin Cash network.</li>
+</ul>
+
