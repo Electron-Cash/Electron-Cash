@@ -1,5 +1,9 @@
 # Electron Cash Android app
 
+[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+     alt="Get it on F-Droid"
+     height="75">](https://f-droid.org/packages/org.electroncash.wallet/)
+
 For users: You must run a TOR app first before starting Electron Cash android, in order to use Cash Fusion.
 
 To start developing the app, just open this directory in Android Studio.
