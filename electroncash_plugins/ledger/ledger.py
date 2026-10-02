@@ -623,7 +623,11 @@ class LedgerPlugin(HW_PluginBase):
             # BaseWizard expects this Exception to re-try
             raise OSError(_('Device id not found or was changed'))
         client.handler = self.create_handler(wizard)
-        client.get_xpub("m/44'/0'", 'standard') # TODO replace by direct derivation once Nano S > 1.1
+        # Sanity-check the device. get_xpub() also derives the parent node, and
+        # since v2.4.10 the Ledger Bitcoin Cash app only derives paths under
+        # m/*/145', m/*/0', m/45' and m/4541509', so the old m/44'/0' probe
+        # (parent m/44') failed with "Invalid status 6f00".
+        client.get_xpub("m/44'/145'/0'", 'standard')
 
     def get_xpub(self, device_id, derivation, xtype, wizard):
         devmgr = self.device_manager()
