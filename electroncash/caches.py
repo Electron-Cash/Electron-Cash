@@ -2,7 +2,7 @@
 #
 # Electron Cash - A Bitcoin Cash SPV Wallet
 #
-# This file Copyright (C) 2019-2026 Calin Culianu <calin.culianu@gmail.com>
+# This file Copyright (C) 2019 Calin Culianu <calin.culianu@gmail.com>
 # License: MIT License
 #
 import time
@@ -13,9 +13,8 @@ import math
 from collections import defaultdict
 from .util import PrintError, print_error
 
-
 class ExpiringCache:
-    """ A fast cache useful for storing tens of thousands of lightweight items.
+    ''' A fast cache useful for storing tens of thousands of lightweight items.
 
     Use this class to cache the results of functions or other computations
     when:
@@ -51,7 +50,7 @@ class ExpiringCache:
     expire items when the cache overflows (so that get and put never stall
     to manage the cache's size and/or to flush old items).  This background
     thread runs every 10 seconds -- so caches may temporarily overflow past
-    their maxlen for up to 10 seconds. """
+    their maxlen for up to 10 seconds. '''
     def __init__(self, *, maxlen=10000, name="An Unnamed Cache", timeout=None):
         assert maxlen > 0
         timeout = (isinstance(timeout, (float, int)) and timeout > 0.0 and timeout) or None
@@ -60,7 +59,6 @@ class ExpiringCache:
         self.name = name
         self.d = dict()
         _ExpiringCacheMgr.add_cache(self)
-
     def get(self, key, default=None):
         res = self.d.get(key)
         if res is not None:
@@ -69,26 +67,21 @@ class ExpiringCache:
             return res[1]
         # cache miss
         return default
-
     def put(self, key, value):
         self.d[key] = [_ExpiringCacheMgr.tick, value]
-
     def size_bytes(self):
-        """ Returns the cache's memory usage in bytes. This is done by doing a
-        deep, recursive examination of the cache contents. """
+        ''' Returns the cache's memory usage in bytes. This is done by doing a
+        deep, recursive examination of the cache contents. '''
         return get_object_size(
             self.d.copy()  # prevent iterating over a mutating dict.
         )
-
     def copy_dict(self):
         ''' Returns a copy of the cache contents. Useful for seriliazing
         or otherwise examining the cache. The returned dict format is:
         d[item_key] -> [tick, item_value]'''
         return self.d.copy()
-
     def __len__(self):
         return len(self.d)
-
     def __repr__(self):
         name, address, length, maxlen, timeout = (
             self.name, '0x{:x}'.format(id(self)), len(self), self.maxlen,
@@ -96,12 +89,10 @@ class ExpiringCache:
                 if self.timeout_ticks
                 else self.timeout_ticks)
         )
-        return (f'<{__class__.__name__} "{name}" at {address}, {length} item{"s" if length != 1 else ""}'
-                f' (maxlen={maxlen} timeout={timeout})>')
-
+        return (f'<{__class__.__name__} "{name}" at {address}, {length} item{"s" if length != 1 else ""} (maxlen={maxlen} timeout={timeout})>')
 
 class _ExpiringCacheMgr(PrintError):
-    """Do not use this class directly. Instead, just create ExpiringCache
+    '''Do not use this class directly. Instead just create ExpiringCache
     instances and that will handle the creation of this object automatically
     and its lifecycle.
 
@@ -110,7 +101,7 @@ class _ExpiringCacheMgr(PrintError):
     overflowing extant caches.
 
     Note that after the last cache is gc'd the manager thread will exit and
-    this singleton object also will expire and clean itself up automatically."""
+    this singleton object also will expire and clean itself up automatically.'''
 
     # This lock is used to lock _instance and self.caches.
     # NOTE: This lock *must* be a recursive lock as the gc callback function
@@ -178,13 +169,12 @@ class _ExpiringCacheMgr(PrintError):
 
     def mgr_thread(self):
         cls = type(self)
-        if cls.debug:
-            self.print_error("thread started")
+        #self.print_error("thread started")
         try:
             while True:
                 try:
                     x = self.q.get(timeout=self.tick_interval)
-                    return  # we got a stop signal
+                    return # we got a stop signal
                 except queue.Empty:
                     # normal condition, we slept with nothing to do
                     pass
@@ -211,7 +201,7 @@ class _ExpiringCacheMgr(PrintError):
 
     @classmethod
     def _try_to_expire_old_items(cls, d_orig, num):
-        d = d_orig.copy()  # yes, this is slow but this makes it so that we don't need locks.
+        d = d_orig.copy()  # yes, this is slow but this makes it so we don't need locks.
         if len(d) < num or num <= 0:
             # cache modified from underneath our feet. We abort gracefully and complain.
             print_error(f'[{__class__.__name__}] Cache data may have been removed by another thread. Aborting flush operation and will try again later...')
@@ -219,7 +209,7 @@ class _ExpiringCacheMgr(PrintError):
 
         # bin the cache.dict items by 'tick' (when they were last accessed)
         bins = defaultdict(list)
-        for k, v in d.items():
+        for k,v in d.items():
             tick = v[0]
             bins[tick].append(k)
         del d
@@ -268,20 +258,24 @@ class _ExpiringCacheMgr(PrintError):
 
 
 def get_object_size(obj_0):
-    """Debug tool -- returns the amount of memory taken by an object in bytes
+    ''' Debug tool -- returns the amount of memory taken by an object in bytes
     by deeply examining its contents recursively (more accurate than
-    sys.getsizeof as a result)."""
+    sys.getsizeof as a result). '''
     import sys
     import warnings
-    from collections import deque
     from numbers import Number
+    from collections import Set, Mapping, deque
 
-    zero_depth_bases = (str, bytes, Number, range, bytearray)
+    try: # Python 2
+        zero_depth_bases = (basestring, Number, xrange, bytearray)
+        iteritems = 'iteritems'
+    except NameError: # Python 3
+        zero_depth_bases = (str, bytes, Number, range, bytearray)
+        iteritems = 'items'
 
     def getsize(obj_0):
         """Recursively iterate to sum size of object & members."""
         _seen_ids = set()
-
         def inner(obj):
             obj_id = id(obj)
             if obj_id in _seen_ids:
@@ -289,22 +283,19 @@ def get_object_size(obj_0):
             _seen_ids.add(obj_id)
             size = sys.getsizeof(obj)
             if isinstance(obj, zero_depth_bases):
-                pass  # bypass remaining control flow and return
-            elif isinstance(obj, (tuple, list, set, deque)):
+                pass # bypass remaining control flow and return
+            elif isinstance(obj, (tuple, list, Set, deque)):
                 size += sum(inner(i) for i in obj)
-            elif isinstance(obj, dict):
+            elif isinstance(obj, Mapping) or hasattr(obj, iteritems):
                 try:
-                    size += sum(inner(k) + inner(v) for k, v in obj.items())
+                    size += sum(inner(k) + inner(v) for k, v in getattr(obj, iteritems)())
                 except Exception as e:
-                    warnings.warn(f"warning: unable to process object '{obj}' due to exception: {repr(e)}",
-                                  RuntimeWarning, stacklevel=2)
+                    warnings.warn(f"warning: unable to process object '{obj}' due to exception: {repr(e)}", RuntimeWarning, stacklevel=2)
             # Check for custom object instances - may subclass above too
             if hasattr(obj, '__dict__'):
                 size += inner(vars(obj))
-            if hasattr(obj, '__slots__'):  # can have __slots__ with __dict__
+            if hasattr(obj, '__slots__'): # can have __slots__ with __dict__
                 size += sum(inner(getattr(obj, s)) for s in obj.__slots__ if hasattr(obj, s))
             return size
-
         return inner(obj_0)
-
     return getsize(obj_0)

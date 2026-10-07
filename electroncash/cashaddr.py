@@ -207,3 +207,53 @@ def encode(prefix, kind, addr_hash, *, checktype=True):
 def encode_full(prefix, kind, addr_hash, *, checktype=True):
     """Encode a full cashaddr address, with prefix and separator."""
     return ':'.join([prefix, encode(prefix, kind, addr_hash, checktype=checktype)])
+
+
+def encode_rpa(prefix, data):
+    """Encode RPA paycode bytes without a version byte, returning the payload without prefix."""
+    if not isinstance(prefix, str):
+        raise TypeError('prefix must be a string')
+    if not isinstance(data, (bytes, bytearray)):
+        raise TypeError('data must be binary bytes')
+    payload = _convertbits(data, 8, 5, True)
+    checksum = _create_checksum(prefix, payload)
+    return ''.join([_CHARSET[d] for d in (payload + checksum)])
+
+
+def encode_rpa_full(prefix, data):
+    """Encode a full RPA paycode address with prefix and separator, without a version byte."""
+    return ':'.join([prefix, encode_rpa(prefix, data)])
+
+
+def decode_rpa(address):
+    """Decode an RPA paycode address, returning (prefix, data).
+
+    Unlike decode(), this does not expect a version byte and places no upper
+    bound on payload length (RPA paycodes encode 77 bytes → 132 chars, which
+    exceeds the standard cashaddr maximum of 124).
+    """
+    if not isinstance(address, str):
+        raise TypeError('address must be a string')
+    lower = address.lower()
+    if lower != address and address.upper() != address:
+        raise ValueError('mixed case in address: {}'.format(address))
+    parts = lower.split(':', 1)
+    if len(parts) != 2:
+        raise ValueError("address missing ':' separator: {}".format(address))
+    prefix, payload_str = parts
+    if not prefix:
+        raise ValueError('address prefix is missing: {}'.format(address))
+    if not all(33 <= ord(x) <= 126 for x in prefix):
+        raise ValueError('invalid address prefix: {}'.format(prefix))
+    data = bytes(_CHARSET.find(x) for x in payload_str)
+    if _polymod(_prefix_expand(prefix) + data):
+        raise ValueError('invalid checksum in address: {}'.format(address))
+    if lower != address:
+        prefix = prefix.upper()
+    payload = data[:-8]
+    extrabits = len(payload) * 5 % 8
+    if extrabits >= 5:
+        raise ValueError('excess padding in address {}'.format(address))
+    if payload[-1] & ((1 << extrabits) - 1):
+        raise ValueError('non-zero padding in address {}'.format(address))
+    return prefix, bytes(_convertbits(payload, 5, 8, False))
