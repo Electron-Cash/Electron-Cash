@@ -53,7 +53,8 @@ def _load_library():
         library_paths =  (sys.executable,)
     else:
         library_paths = (os.path.join(os.path.dirname(__file__), 'libsecp256k1.so.0'),  # on linux we install it alongside the python scripts.
-                         'libsecp256k1.so.0')  # fall back to system lib, if any
+                         'libsecp256k1.so.0', # fall back to system lib, if any
+                         'libsecp256k1.so') # fall back to any version of it
 
     secp256k1 = None
     secp256k1_exceptions = {}
