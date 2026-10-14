@@ -25,7 +25,6 @@ try:
     #pysatochip
     from pysatochip.CardConnector import CardConnector, UninitializedSeedError, logger
     from pysatochip.JCconstants import JCconstants
-    from pysatochip.TxParser import TxParser
     from pysatochip.Satochip2FA import Satochip2FA
     from pysatochip.ecc import CURVE_ORDER, der_sig_from_r_and_s, get_r_and_s_from_der_sig, ECPubkey
     from pysatochip.version import SATOCHIP_PROTOCOL_MAJOR_VERSION, SATOCHIP_PROTOCOL_MINOR_VERSION, SATOCHIP_PROTOCOL_VERSION
@@ -397,9 +396,10 @@ class Satochip_KeyStore(Hardware_KeyStore):
                     (depth, bytepath)= bip32path2bytes(address_path)
                     (key, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
 
-                    # parse tx
+                    # compute the sighash locally: double-sha256 of the BIP143 preimage.
+                    # The card simply signs this hash via card_sign_transaction_hash();
+                    # the card-side parsing commands are deprecated (removed since applet v0.16)
                     pre_tx_hex= tx.serialize_preimage(i)
-                    pre_tx= bytes.fromhex(pre_tx_hex)# hex representation => converted to bytes
                     pre_hash = Hash(bfh(pre_tx_hex))
                     pre_hash_hex= pre_hash.hex()
                     self.print_error('sign_transaction(): pre_tx_hex=', pre_tx_hex) #debugSatochip
@@ -408,13 +408,8 @@ class Satochip_KeyStore(Hardware_KeyStore):
                     # check whether the input i has cashtoken
                     is_cashtoken = False
                     if tx.token_datas()[i] is not None:
+                        pre_tx= bytes.fromhex(pre_tx_hex)
                         is_cashtoken = (pre_tx[104] == 0xEF)
-
-                    if not is_cashtoken:
-                        (response, sw1, sw2, tx_hash, needs_2fa) = client.cc.card_parse_transaction(pre_tx, True) # use 'True' since BCH use BIP143 as in Segwit...
-                        tx_hash_hex= bytearray(tx_hash).hex()
-                        if pre_hash_hex!= tx_hash_hex:
-                            raise RuntimeError(f"[Satochip_KeyStore] Tx preimage mismatch: {pre_hash_hex} vs {tx_hash_hex}")
 
                     # sign tx
                     keynbr= 0xFF #for extended key
@@ -424,10 +419,10 @@ class Satochip_KeyStore(Hardware_KeyStore):
                         coin_type= 145 #see https://github.com/satoshilabs/slips/blob/master/slip-0044.md
                         test_net= networks.net.TESTNET
 
-                        if not is_cashtoken:
-                            msg= {'action':"sign_tx", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type']}
-                        else:
-                            msg= {'action':"sign_tx_hash", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type'], 'hash':pre_hash_hex, 'is_cashtoken':is_cashtoken}
+                        # 'sign_tx_hash' (with the sighash) makes the 2FA app compute the
+                        # challenge-response over [hash | 0xCC-padding], as required by the
+                        # card's SignTransactionHash command ('sign_tx' uses 0x00-padding)
+                        msg= {'action':"sign_tx_hash", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type'], 'hash':pre_hash_hex, 'is_cashtoken':is_cashtoken}
 
                         msg=  json.dumps(msg)
                         (id_2FA, msg_out)= client.cc.card_crypt_transaction_2FA(msg, True)
@@ -470,10 +465,8 @@ class Satochip_KeyStore(Hardware_KeyStore):
                     else:
                         chalresponse= None
 
-                    if not is_cashtoken:
-                        (tx_sig, sw1, sw2) = client.cc.card_sign_transaction(keynbr, tx_hash, chalresponse)
-                    else:
-                        (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
+                    self.print_error("Signing tx with is_cashtoken: ", is_cashtoken)
+                    (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
 
                     # check sw1sw2 for error (0x9c0b if wrong challenge-response)
                     if sw1 != 0x90 or sw2 != 0x00:
