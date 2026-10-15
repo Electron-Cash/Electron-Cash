@@ -26,7 +26,7 @@ try:
     from pysatochip.CardConnector import CardConnector, UninitializedSeedError, PinRequiredError, logger
     from pysatochip.JCconstants import JCconstants
     from pysatochip.Satochip2FA import Satochip2FA
-    from pysatochip.ecc import CURVE_ORDER, der_sig_from_r_and_s, get_r_and_s_from_der_sig, ECPubkey
+    from pysatochip.ecc import CURVE_ORDER, der_sig_from_r_and_s, get_r_and_s_from_der_sig
     from pysatochip.version import SATOCHIP_PROTOCOL_MAJOR_VERSION, SATOCHIP_PROTOCOL_MINOR_VERSION, SATOCHIP_PROTOCOL_VERSION
 
     #pyscard
@@ -129,14 +129,6 @@ class SatochipClient(PrintError):
 
     def get_xpub(self, bip32_path, xtype):
         assert xtype in SatochipPlugin.SUPPORTED_XTYPES
-
-        try:
-            hex_authentikey = self.handler.win.wallet.storage.get('authentikey')
-            self.print_error("get_xpub(): self.handler.win.wallet.storage.authentikey:", hex_authentikey)#debugSatochip
-            if hex_authentikey is not None:
-                self.cc.parser.authentikey_from_storage= ECPubkey(bytes.fromhex(hex_authentikey))
-        except Exception as e: #attributeError?
-            self.print_error("get_xpub(): exception when getting authentikey from self.handler.win.wallet.storage:", str(e))#debugSatochip
 
         try:
             # needs PIN
@@ -591,7 +583,6 @@ class SatochipPlugin(HW_PluginBase):
             raise Exception(_('Failed to create a client for this device.') + '\n' +
                             _('Make sure it is in the correct state.'))
         client.handler = self.create_handler(wizard)
-        client.cc.parser.authentikey_from_storage=None # https://github.com/simpleledger/Electron-Cash-SLP/pull/101#issuecomment-561238614
 
         # check setup
         while(client.cc.card_present):
@@ -694,8 +685,10 @@ class SatochipPlugin(HW_PluginBase):
 
             hex_authentikey= authentikey.get_public_key_hex(compressed=True)
             self.print_error("setup_device(): authentikey=", hex_authentikey)#debugSatochip
-            wizard.storage.put('authentikey', hex_authentikey)
-            self.print_error("setup_device(): authentikey from storage=", wizard.storage.get('authentikey'))#debugSatochip
+            # the authentikey is deliberately not persisted to the wallet file:
+            # it is a per-card identity key (not seed-derived), and pinning the
+            # wallet to it would reject a replacement/backup card holding the
+            # same seed. Pairing relies on the xpub comparison alone.
             break
 
     def get_xpub(self, device_id, derivation, xtype, wizard):
