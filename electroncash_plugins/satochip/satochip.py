@@ -23,7 +23,7 @@ from ..hw_wallet import HW_PluginBase
 
 try:
     #pysatochip
-    from pysatochip.CardConnector import CardConnector, UninitializedSeedError, logger
+    from pysatochip.CardConnector import CardConnector, UninitializedSeedError, PinRequiredError, logger
     from pysatochip.JCconstants import JCconstants
     from pysatochip.Satochip2FA import Satochip2FA
     from pysatochip.ecc import CURVE_ORDER, der_sig_from_r_and_s, get_r_and_s_from_der_sig, ECPubkey
@@ -343,8 +343,16 @@ class Satochip_KeyStore(Hardware_KeyStore):
         try:
             keynbr= 0xFF #for extended key
             (depth, bytepath)= bip32path2bytes(address_path)
-            (pubkey, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
-            (response2, sw1, sw2, compsig) = client.cc.card_sign_message(keynbr, pubkey, message_byte, hmac)
+            try:
+                (pubkey, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
+                (response2, sw1, sw2, compsig) = client.cc.card_sign_message(keynbr, pubkey, message_byte, hmac)
+            except PinRequiredError:
+                # PIN-protected operation but no PIN is cached (e.g. the card was
+                # removed and re-inserted): prompt the user for the PIN
+                # (interactive variant) and retry once
+                client.cc.card_verify_PIN()
+                (pubkey, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
+                (response2, sw1, sw2, compsig) = client.cc.card_sign_message(keynbr, pubkey, message_byte, hmac)
             if (compsig==b''):
                 self.handler.show_error(_("Wrong signature!\nThe 2FA device may have rejected the action."))
 
@@ -394,7 +402,14 @@ class Satochip_KeyStore(Hardware_KeyStore):
 
                     # get corresponing extended key
                     (depth, bytepath)= bip32path2bytes(address_path)
-                    (key, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
+                    try:
+                        (key, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
+                    except PinRequiredError:
+                        # PIN-protected operation but no PIN is cached (e.g. the card was
+                        # removed and re-inserted): prompt the user for the PIN
+                        # (interactive variant) and retry once
+                        client.cc.card_verify_PIN()
+                        (key, chaincode)=client.cc.card_bip32_get_extendedkey(bytepath)
 
                     # compute the sighash locally: double-sha256 of the BIP143 preimage.
                     # The card simply signs this hash via card_sign_transaction_hash();
@@ -466,7 +481,12 @@ class Satochip_KeyStore(Hardware_KeyStore):
                         chalresponse= None
 
                     self.print_error("Signing tx with is_cashtoken: ", is_cashtoken)
-                    (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
+                    try:
+                        (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
+                    except PinRequiredError:
+                        # prompt for the PIN and retry once (see above)
+                        client.cc.card_verify_PIN()
+                        (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
 
                     # check sw1sw2 for error (0x9c0b if wrong challenge-response)
                     if sw1 != 0x90 or sw2 != 0x00:
