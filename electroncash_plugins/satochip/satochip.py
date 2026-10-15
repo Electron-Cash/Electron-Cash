@@ -23,7 +23,7 @@ from ..hw_wallet import HW_PluginBase
 
 try:
     #pysatochip
-    from pysatochip.CardConnector import CardConnector, UninitializedSeedError, PinRequiredError, logger
+    from pysatochip.CardConnector import CardConnector, UninitializedSeedError, PinRequiredError
     from pysatochip.JCconstants import JCconstants
     from pysatochip.Satochip2FA import Satochip2FA
     from pysatochip.ecc import CURVE_ORDER, der_sig_from_r_and_s, get_r_and_s_from_der_sig
@@ -41,7 +41,24 @@ except:
     print_error("[satochip] satochip will not not be available")
     raise
 
-logging.basicConfig(level=logging.DEBUG, format='%(levelname)s [%(module)s] %(funcName)s | %(message)s') #debugSatochip
+# pysatochip logging is configured here, on the application side, as intended by
+# pysatochip's logging model (its module loggers stay at NOTSET; the importing
+# application owns levels and handlers): a single handler on the 'pysatochip'
+# package logger, and a level aligned with Electron Cash's --verbose flag.
+# Do NOT use logging.basicConfig(): it installs a handler and a level on the
+# root logger for the whole process, which leaked DEBUG traces from every
+# library (including pysatochip) regardless of --verbose.
+_psc_logger = logging.getLogger('pysatochip')
+if all(isinstance(h, logging.NullHandler) for h in _psc_logger.handlers):
+    # the library itself installs at most a NullHandler; add a real one, once
+    _psc_handler = logging.StreamHandler()
+    _psc_handler.setFormatter(logging.Formatter('%(levelname)s [%(module)s] %(funcName)s | %(message)s'))
+    _psc_logger.addHandler(_psc_handler)
+    _psc_logger.propagate = False
+# pysatochip >= 0.18.5 keeps its module loggers at NOTSET, so this package level
+# cascades to all of them (what pysatochip.set_log_level() also does); on older
+# versions, constructors set their own module levels, which take precedence.
+_psc_logger.setLevel(logging.DEBUG if is_verbose else logging.INFO)
 
 # debug: smartcard reader ids
 SATOCHIP_VID= 0x096E
@@ -79,13 +96,7 @@ class SatochipClient(PrintError):
         self.print_error("__init__()")#debugSatochip
         self.device = plugin.device
         self.handler = handler
-        #self.parser= CardDataParser()
-        #self.cc= CardConnector(self, _logger.getEffectiveLevel())
         self.cc= CardConnector(self)
-        if is_verbose:
-            logger.setLevel(logging.DEBUG)
-        else:
-            logger.setLevel(logging.INFO)
 
     def __repr__(self):
         return '<SatochipClient TODO>'
