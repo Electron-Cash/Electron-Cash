@@ -6,4 +6,4 @@ hidapi
 protobuf
 pyopenssl>=20.0.0
 pyscard>=2.0.0
-pysatochip>=0.18.5
+pysatochip>=0.18.6
