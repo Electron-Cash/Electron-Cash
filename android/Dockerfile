@@ -12,7 +12,8 @@ RUN echo "progress=dot:giga" > .wgetrc
 RUN apt-get update && \
     apt-get install -y gcc libbz2-dev libffi-dev liblzma-dev libsqlite3-dev libssl-dev \
                        zlib1g-dev make
-RUN version=3.8.16 && \
+                       
+RUN version=3.13.9 && \
     wget https://www.python.org/ftp/python/$version/Python-$version.tgz && \
     tar -xf Python-$version.tgz && \
     cd Python-$version && \
@@ -22,16 +23,21 @@ RUN version=3.8.16 && \
     cd .. && \
     rm -r Python-$version*
 
-RUN filename=commandlinetools-linux-6609375_latest.zip && \
+RUN filename=commandlinetools-linux-13114758_latest.zip && \
     wget https://dl.google.com/android/repository/$filename && \
-    mkdir -p android-sdk/cmdline-tools && \
-    unzip -q -d android-sdk/cmdline-tools $filename && \
-    rm $filename
+    mkdir -p android-sdk/cmdline-tools/latest && \
+    unzip -q -d /tmp/android-cmdline-tools $filename && \
+    mv /tmp/android-cmdline-tools/cmdline-tools/* android-sdk/cmdline-tools/latest/ && \
+    rm -rf /tmp/android-cmdline-tools $filename
 
 # Indicate that we accept the Android SDK license. The platform version here isn't critical:
 # all versions require the same license, and if app/build.gradle has a different
 # compileSdkVersion, the build process will automatically download it.
-RUN yes | android-sdk/cmdline-tools/tools/bin/sdkmanager "platforms;android-29"
+RUN yes | android-sdk/cmdline-tools/latest/bin/sdkmanager \
+    --sdk_root=/root/android-sdk \
+    "platforms;android-36" \
+    "build-tools;35.0.0" \
+    "platform-tools"
 
 # For generate_strings.py.
 RUN apt-get update && \
