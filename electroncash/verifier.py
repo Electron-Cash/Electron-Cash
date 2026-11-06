@@ -149,10 +149,9 @@ class SPV(ThreadJob):
             header = blockchain.read_header(tx_height)
             if header is None:
                 if tx_height <= networks.net.VERIFICATION_BLOCK_HEIGHT:
-                    # Per-header requests might be a lot heavier.
-                    # Also, they're not supported as header requests are
-                    # currently designed for catching up post-checkpoint headers.
-                    index = tx_height // 2016
+                    # Simple Header Verification (SHV)
+                    # Request small chunk of headers with checkpoint proof
+                    index = tx_height // self.network.SHV_CHUNK_SIZE
                     if self.network.request_chunk(interface, index):
                         interface.print_error("verifier requesting chunk {} for height {}".format(index, tx_height))
                 continue
