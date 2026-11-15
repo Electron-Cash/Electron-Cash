@@ -23,7 +23,7 @@
 import os
 
 from collections import namedtuple
-from typing import Optional, Union
+from typing import Optional, Union, Iterable, Tuple
 
 from .util import print_error
 
@@ -38,6 +38,79 @@ def bits_to_target(bits: int) -> int:
         return word >> (8 * (3 - size))
     else:
         return word << (8 * (size - 3))
+
+def _trunc_div(n: int, d: int) -> int:
+    """Integer division truncating toward zero, matching the C++ reference.
+
+    Python's // floors, which differs for negative numerators; both BCHN and
+    the ASERT spec's integer procedure truncate toward zero. The legacy code
+    got this from int(a / b) via float division, which additionally loses
+    up to an ulp of the quotient.
+    """
+    return -((-n) // d) if n < 0 else n // d
+
+
+class TickSchedule:
+    """Height -> cumulative tick mapping, per CHIP-2025-03.
+
+    T(0) == 0 and T(h) == T(h-1) + tau(h), where tau(h) is block h's own target
+    interval in ticks. An entry (h, tau) sets the interval of every block
+    strictly above h, until the next entry.
+
+    No entries means the uniform 600-tick schedule every network had before
+    CHIP-2025-03, under which T(h) == 600 * h and the tick arithmetic below
+    reduces exactly to the legacy height arithmetic.
+    """
+
+    BASE_TAU = 600
+
+    def __init__(self, entries: Iterable[Tuple[int, int]] = ()):
+        self.entries = tuple(sorted(entries))
+        prev = -1
+        for h, tau in self.entries:
+            if h < 0 or h <= prev:
+                raise ValueError("tick schedule heights must be strictly ascending")
+            if tau < 1 or tau > self.BASE_TAU or self.BASE_TAU % tau:
+                raise ValueError("tick schedule tau must divide 600 and be in [1, 600]")
+            prev = h
+
+    def __bool__(self) -> bool:
+        return bool(self.entries)
+
+    def tau(self, height: int) -> int:
+        """Target interval of block `height` itself."""
+        t = self.BASE_TAU
+        for h, tau in self.entries:
+            if h >= height:
+                break
+            t = tau
+        return t
+
+    def next_tau(self, height: int) -> int:
+        """Target interval of block `height + 1`."""
+        return self.tau(height + 1)
+
+    def tick(self, height: int) -> int:
+        """T(height): cumulative ticks through block `height`, inclusive."""
+        if height <= 0:
+            return 0
+        total = 0
+        cursor = 1
+        cur = self.BASE_TAU
+        for h, tau in self.entries:
+            end = min(h, height)
+            if end >= cursor:
+                total += (end - cursor + 1) * cur
+                cursor = end + 1
+            if h >= height:
+                break
+            cur = tau
+        if cursor <= height:
+            total += (height - cursor + 1) * cur
+        return total
+
+
+_UNIFORM_SCHEDULE = TickSchedule()
 
 def _get_asert_activation_mtp():
     """ Returns 1605441600 (Nov 15, 2020 12:00:00 UTC) or whatever override may
@@ -74,6 +147,16 @@ class ASERTDaa:
 
     # If left as none, blockchain.py will calculate this at runtime as we read headers.
     anchor: Optional[Anchor] = None
+
+    # CHIP-2025-03: the "+1" of the legacy formula is the anchor block's own
+    # interval. Per the spec this is a per-network constant that MUST NOT be
+    # derived from the tick schedule, so it is pinned here and not read from
+    # `tick_schedule`.
+    ANCHOR_IDEAL_BLOCK_TIME = 600
+
+    # Height-keyed intervals. None == uniform 600 ticks, i.e. pre-activation
+    # behaviour on every network.
+    tick_schedule: Optional[TickSchedule] = None
 
     def __init__(self, is_testnet=False):
         if is_testnet:
@@ -112,46 +195,70 @@ class ASERTDaa:
         h = hex(target)[2:]
         return '0' * (64 - len(h)) + h
 
-    def next_bits_aserti3_2d(self, anchor_bits: int, time_diff: Union[float, int], height_diff: int) -> int:
-        """ Integer ASERTI algorithm, based on Jonathan Toomim's
-        `next_bits_aserti` implementation in mining.py (see
-        https://github.com/jtoomim/difficulty) """
-
+    def _aserti3_2d(self, anchor_bits: int, time_diff: int,
+                    ideal_elapsed: int, interval_ratio: int = 1) -> int:
+        """ASERTI3-2D over an ideal elapsed time expressed in ticks."""
         target = self.bits_to_target(anchor_bits)
 
-        # Ultimately, we want to approximate the following ASERT formula, using
-        # only integer (fixed-point) math:
-        #     new_target = old_target * 2^((time_diff -
-        #     IDEAL_BLOCK_TIME*(height_diff+1)) / HALF_LIFE)
+        delta = time_diff - ideal_elapsed
+        assert abs(delta) < (1 << (63 - self.RBITS))
+        exponent = _trunc_div(delta * self.RADIX, self.HALF_LIFE)
 
-        # First, we'll calculate the exponent, using floor division. The
-        # assertion checks a type constraint of the C++ implementation which
-        # uses a 64-bit signed integer for the exponent. If inputs violate that,
-        # then the implementation will diverge.
-        assert(abs(time_diff - self.IDEAL_BLOCK_TIME * (height_diff+1)) < (1<<(63-self.RBITS)))
-        exponent = int(((time_diff - self.IDEAL_BLOCK_TIME*(height_diff+1)) * self.RADIX) / self.HALF_LIFE)
-
-        # Next, we use the 2^x = 2 * 2^(x-1) identity to shift our exponent into the (0, 1] interval.
+        # 2^x = 2 * 2^(x-1): shift the exponent into [0, 1)
         shifts = exponent >> self.RBITS
         exponent -= shifts * self.RADIX
-        assert(exponent >= 0 and exponent < 65536)
+        assert exponent >= 0 and exponent < self.RADIX
 
-        # Now we compute an approximated target * 2^(fractional part) * 65536
-        # target * 2^x ~= target * (1 + 0.695502049*x + 0.2262698*x**2 + 0.0782318*x**3)
-        target *= self.RADIX + ((195766423245049*exponent + 971821376*exponent**2 + 5127*exponent**3 + 2**47)>>(self.RBITS*3))
+        # target * 2^frac, in fixed point
+        # 2^x ~= (1 + 0.695502049*x + 0.2262698*x**2 + 0.0782318*x**3)
+        target *= self.RADIX + ((195766423245049 * exponent
+                                 + 971821376 * exponent ** 2
+                                 + 5127 * exponent ** 3 + 2 ** 47)
+                                >> (self.RBITS * 3))
 
-        # Next, we shift to multiply by 2^(integer part). Python doesn't allow
-        # shifting by negative integers, so:
         if shifts < 0:
             target >>= -shifts
         else:
             target <<= shifts
-        # Remove the 65536 multiplier we got earlier
         target >>= self.RBITS
+
+        if interval_ratio != 1:
+            # CHIP-2025-03: anchor_ideal_block_time / next_ideal_block_time.
+            # Exact because a conforming schedule's tau divides 600, so the
+            # ratio is a whole number. Python ints do not wrap, so the C++
+            # pre-multiply overflow guard is unnecessary; the clamp below is
+            # equivalent to it.
+            target *= interval_ratio
 
         if target == 0:
             return self.target_to_bits(1)
         if target > self.MAX_TARGET:
             return self.MAX_BITS
-
         return self.target_to_bits(target)
+
+    def next_bits_aserti3_2d(self, anchor_bits: int, time_diff: Union[float, int],
+                             height_diff: int) -> int:
+        """Legacy height-keyed entry point.
+
+        Kept for callers that have not migrated; identical to
+        next_bits_aserti3_2d_ticks() on a uniform 600-tick schedule.
+        """
+        return self._aserti3_2d(
+            anchor_bits, time_diff,
+            self.IDEAL_BLOCK_TIME * (height_diff + 1))
+
+    def next_bits_aserti3_2d_ticks(self, anchor_bits: int, anchor_height: int,
+                                   prev_height: int, prev_time: int,
+                                   anchor_prev_time: int,
+                                   schedule: Optional[TickSchedule] = None) -> int:
+        sched = schedule or self.tick_schedule or _UNIFORM_SCHEDULE
+        anchor_tick = self.IDEAL_BLOCK_TIME * anchor_height
+        tick_delta = sched.tick(prev_height) - anchor_tick
+        ideal_elapsed = tick_delta + self.ANCHOR_IDEAL_BLOCK_TIME
+
+        next_tau = sched.next_tau(prev_height)
+        assert self.IDEAL_BLOCK_TIME % next_tau == 0
+        interval_ratio = self.IDEAL_BLOCK_TIME // next_tau
+
+        return self._aserti3_2d(anchor_bits, prev_time - anchor_prev_time,
+                                ideal_elapsed, interval_ratio)

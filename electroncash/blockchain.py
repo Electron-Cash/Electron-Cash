@@ -599,9 +599,9 @@ class Blockchain(util.PrintError):
             anchor = self.get_asert_anchor(prior, daa_mtp, chunk)
             assert anchor is not None, "Failed to find ASERT anchor block for chain {!r}".format(self)
 
-            return networks.net.asert_daa.next_bits_aserti3_2d(anchor.bits,
-                                                               prev_ts - anchor.prev_time,
-                                                               prevheight - anchor.height)
+            return networks.net.asert_daa.next_bits_aserti3_2d_ticks(
+    anchor.bits, anchor.height, prev_height, prev_timestamp, anchor.prev_time,
+    schedule=getattr(self.coin, 'CHIP_TICK_SCHEDULE', None))
 
 
         # Mon Nov 13 19:06:40 2017 DAA HF

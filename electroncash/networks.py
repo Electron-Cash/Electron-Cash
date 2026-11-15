@@ -26,7 +26,7 @@
 import json
 import pkgutil
 
-from .asert_daa import ASERTDaa, Anchor
+from .asert_daa import ASERTDaa, Anchor, TickSchedule
 
 
 def _read_json_dict(filename):
@@ -48,6 +48,7 @@ class AbstractNet:
     DEFAULT_UNIT = "BCH"
     RPA_START_HEIGHT = 0
     PAYTACA_HOST = ""
+    CHIP_TICK_SCHEDULE = TickSchedule()
 
 
 class MainNet(AbstractNet):
@@ -166,6 +167,7 @@ class ChipNet(TestNet4):
     DEFAULT_PORTS = {'t': '64001', 's': '64002'}
     VERIFICATION_BLOCK_MERKLE_ROOT = "59a2a6a10b2fa406a8b22a16b934307159319454098fdddeae7148c801326c6c"
     VERIFICATION_BLOCK_HEIGHT = 302144
+    CHIP_TICK_SCHEDULE = TickSchedule([(332450, 60)])
 
 
 class ScaleNet(TestNet):
