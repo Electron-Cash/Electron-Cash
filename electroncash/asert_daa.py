@@ -62,7 +62,7 @@ class ASERTDaa:
 
     MTP_ACTIVATION_TIME = _get_asert_activation_mtp()  # Normally Nov. 15th, 2020 UTC 12:00:00
 
-    IDEAL_BLOCK_TIME = 10 * 60  # 10 mins
+    LEGACY_IDEAL_BLOCK_TIME = 10 * 60  # 10 mins
     HALF_LIFE = 2 * 24 * 3600  # for mainnet, testnet has 3600 (1 hour) half-life
     # Integer implementation uses these for fixed point math
     RBITS = 16  # number of bits after the radix for fixed-point math
@@ -112,10 +112,11 @@ class ASERTDaa:
         h = hex(target)[2:]
         return '0' * (64 - len(h)) + h
 
-    def next_bits_aserti3_2d(self, anchor_bits: int, time_diff: Union[float, int], height_diff: int) -> int:
-        """ Integer ASERTI algorithm, based on Jonathan Toomim's
-        `next_bits_aserti` implementation in mining.py (see
-        https://github.com/jtoomim/difficulty) """
+    def next_bits_aserti3_2d_legacy(self, anchor_bits: int, time_diff: Union[float, int], height_diff: int) -> int:
+        """ LEGACY (10-min block only)
+
+        Integer ASERTI algorithm, based on Jonathan Toomim's next_bits_aserti` implementation in mining.py
+        (see https://github.com/jtoomim/difficulty) """
 
         target = self.bits_to_target(anchor_bits)
 
@@ -128,8 +129,8 @@ class ASERTDaa:
         # assertion checks a type constraint of the C++ implementation which
         # uses a 64-bit signed integer for the exponent. If inputs violate that,
         # then the implementation will diverge.
-        assert(abs(time_diff - self.IDEAL_BLOCK_TIME * (height_diff+1)) < (1<<(63-self.RBITS)))
-        exponent = int(((time_diff - self.IDEAL_BLOCK_TIME*(height_diff+1)) * self.RADIX) / self.HALF_LIFE)
+        assert(abs(time_diff - self.LEGACY_IDEAL_BLOCK_TIME * (height_diff + 1)) < (1 << (63 - self.RBITS)))
+        exponent = int(((time_diff - self.LEGACY_IDEAL_BLOCK_TIME * (height_diff + 1)) * self.RADIX) / self.HALF_LIFE)
 
         # Next, we use the 2^x = 2 * 2^(x-1) identity to shift our exponent into the (0, 1] interval.
         shifts = exponent >> self.RBITS
@@ -148,6 +149,79 @@ class ASERTDaa:
             target <<= shifts
         # Remove the 65536 multiplier we got earlier
         target >>= self.RBITS
+
+        if target == 0:
+            return self.target_to_bits(1)
+        if target > self.MAX_TARGET:
+            return self.MAX_BITS
+
+        return self.target_to_bits(target)
+
+    def next_bits_aserti3_2d_tick_based(self, anchor_bits: int, time_diff: Union[float, int], tick_diff: int,
+                                        next_tick_interval: int,
+                                        anchor_tick_interval: int = LEGACY_IDEAL_BLOCK_TIME) -> int:
+        """ Tick based (can handle 10-min blocks, plus upgrades to 1-min blocks, etc).
+
+        A core assumption here is that any blocktime upgrade changes activate on a 10-min boundary.
+        """
+
+        # Block times should not be 0 or negative.
+        assert anchor_tick_interval > 0 and next_tick_interval > 0
+        if anchor_tick_interval >= next_tick_interval:
+            # We either scaled DOWN the block time from the anchor, or it's the same.
+            assert anchor_tick_interval % next_tick_interval == 0  # ratio should be integral
+            interval_ratio = anchor_tick_interval // next_tick_interval
+            interval_inverted = False
+        else:
+            # We scaled UP the block time from the anchor (can only really in tests)
+            assert next_tick_interval % anchor_tick_interval == 0  # ratio should be integral
+            interval_ratio = next_tick_interval // anchor_tick_interval
+            interval_inverted = True
+        assert interval_ratio >= 1
+
+        target = self.bits_to_target(anchor_bits)
+
+        # Ultimately, we want to approximate the following ASERT formula, using
+        # only integer (fixed-point) math:
+        #     new_target = anchor_target * (anchor_ideal_block_time / next_ideal_block_time)
+        #                  * 2^((time_delta - (tick_delta + anchor_ideal_block_time)) / halflife)
+
+        # First, we'll calculate the exponent, using floor division. The assertion checks a type constraint of the C++
+        # implementation which uses a 64-bit signed integer for the exponent. If inputs violate that, then the
+        # implementation will diverge.
+        assert abs(time_diff - tick_diff) < (1 << (63 - self.RBITS))
+        exponent = int(((time_diff - (tick_diff + anchor_tick_interval)) * self.RADIX) / self.HALF_LIFE)
+
+        # Next, we use the 2^x = 2 * 2^(x-1) identity to shift our exponent into the (0, 1] interval.
+        shifts = exponent >> self.RBITS
+        exponent -= shifts * self.RADIX
+        assert 0 <= exponent < 65536
+
+        # Now we compute an approximated target * 2^(fractional part) * 65536
+        # target * 2^x ~= target * (1 + 0.695502049*x + 0.2262698*x**2 + 0.0782318*x**3)
+        factor = self.RADIX + ((195766423245049 * exponent
+                                + 971821376 * exponent**2
+                                + 5127 * exponent**3
+                                + 2**47)
+                               >> (self.RBITS * 3))
+        target *= factor
+
+        # Next, we shift to multiply by 2^(integer part). Python doesn't allow
+        # shifting by negative integers, so:
+        if shifts < 0:
+            target >>= -shifts
+        else:
+            target <<= shifts
+        # Remove the 65536 multiplier we got earlier
+        target >>= self.RBITS
+
+        # Scale target by the interval_ratio (to support blocktime changes from the legacy 10-min)
+        if interval_ratio > 1:
+            if not interval_inverted:
+                target *= interval_ratio
+            else:
+                # This branch is for tests (since we never anticipate going >10 min blocks)
+                target //= interval_ratio
 
         if target == 0:
             return self.target_to_bits(1)

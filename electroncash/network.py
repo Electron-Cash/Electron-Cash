@@ -1826,6 +1826,12 @@ class Network(util.DaemonThread):
     def get_local_height(self):
         return self.blockchain().height()
 
+    def suggest_locktime(self) -> int:
+        ticks = self.blockchain().tip_ticks()
+        if ticks is not None:
+            return ticks // 600
+        return 0
+
     def synchronous_get(self, request, timeout=30):
         q = queue.Queue()
         self.send([request], q.put)

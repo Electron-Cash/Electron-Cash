@@ -564,6 +564,73 @@ class Blockchain(util.PrintError):
             mtp = prev_mtp
             anchor = prev
 
+    # Cached activation height for 1-min blocks, per-Blockchain instance, only used if the checkpoint for this network
+    # is *behind* the upgrade2027 activation (currently true for all networks but will not be true in the future
+    # after we add checkpoints for upgrade2027).
+    _cached_activation_height_1_min: Optional[int] = None
+
+    def _get_1_min_activation_height(self, header, mtp, chunk=None) -> Optional[int]:
+        activation_mtp = networks.net.UPGRADE_2027_MTP
+        if mtp < activation_mtp:
+            # Not activated yet
+            return None
+        if networks.net.UPGRADE_2027_HEIGHT is not None:
+            # Checkpointed, so just return that
+            return networks.net.UPGRADE_2027_HEIGHT
+        # Bug note: The below does not work if we don't have all the intervening
+        # headers -- therefore this execution path should only be taken for networks
+        # where the checkpoint block is before the activation block.  This means that
+        # adding a checkpoint after the activation block without setting the activation
+        # block in networks.net.UPGRADE_2027_HEIGHT will result in bugs.
+        if (self._cached_activation_height_1_min is not None
+                and self._cached_activation_height_1_min <= header['block_height']):
+            return self._cached_activation_height_1_min
+        cur = header
+        while mtp >= activation_mtp:
+            ht = cur['block_height']
+            prev = self.read_header(ht - 1, chunk)
+            if prev is None:
+                self.print_error(f"_get_1_min_activation_height missing header {ht - 1}")
+                return None
+            prev_mtp = self.get_median_time_past(ht - 1, chunk)
+            if prev_mtp < activation_mtp:
+                # Ok, use this
+                self.print_error(f"_get_1_min_activation_height: found activation header {cur['block_height']},"
+                                 f" hash {hash_header(cur)}")
+                self._cached_activation_height_1_min = cur['block_height']
+                return self._cached_activation_height_1_min
+            mtp = prev_mtp
+            cur = prev
+        # The below should never be reached, because the first conditional at the top of this function should return
+        # None if we are behind the 1-min upgrade activation block. Reaching the below indicates some internal error.
+        raise Exception("_get_1_min_activation_height failed to find the activation block for the 1 min upgrade")
+
+    def _get_tick_count_for_header(self, header, mtp, chunk=None) -> int:
+        height = header['block_height']
+        activation_height_1_min = self._get_1_min_activation_height(header, mtp, chunk)
+        if activation_height_1_min is None or height <= activation_height_1_min:
+            return height * 600
+        else:
+            return activation_height_1_min * 600 + (height - activation_height_1_min) * 60
+
+    def tip_ticks(self) -> Optional[int]:
+        height = self.height()
+        if height is None or height <= 0:
+            return None
+        if self._cached_activation_height_1_min is not None:
+            return (min(height, self._cached_activation_height_1_min) * 600
+                    + max(0, height - self._cached_activation_height_1_min) * 60)
+        tip = self.read_header(height)
+        if tip is None:
+            self.print_error(f"tip_ticks: missing header {height}")
+            return None
+        try:
+            mtp = self.get_median_time_past(height)
+        except TypeError:
+            self.print_error(f"tip_ticks: unable to determine mtp for {height}")
+            return None
+        return self._get_tick_count_for_header(tip, mtp)
+
     def get_bits(self, header, chunk=None):
         """Return bits for the given height."""
         if networks.net.REGTEST:
@@ -583,26 +650,36 @@ class Blockchain(util.PrintError):
         # NOV 13 HF DAA and/or ASERT DAA
 
         prevheight = height - 1
-        daa_mtp = self.get_median_time_past(prevheight, chunk)
+        prev_mtp = self.get_median_time_past(prevheight, chunk)
 
+        # Assumption below is that ASERT is activated *before* upgrade 2027 (true for all networks)
+        assert networks.net.asert_daa.MTP_ACTIVATION_TIME < networks.net.UPGRADE_2027_MTP
 
         # ASERTi3-2d DAA activated on Nov. 15th 2020 HF
         # on regtest it is disabled as documented in BCHN code
-        if daa_mtp >= networks.net.asert_daa.MTP_ACTIVATION_TIME and not networks.net.REGTEST:
-            header_ts = header['timestamp']
+        if prev_mtp >= networks.net.asert_daa.MTP_ACTIVATION_TIME and not networks.net.REGTEST:
             prev_ts = prior['timestamp']
+            this_block_tick_interval = 600
+            if prev_mtp >= networks.net.UPGRADE_2027_MTP:
+                this_block_tick_interval = 60  # 1-min blocks
+
             if networks.net.TESTNET:
-                # testnet 20 minute rule
-                if header_ts - prev_ts > 20*60:
+                # testnet 20-minute rule (2-minute rule if on 1-min blocks)
+                header_ts = header['timestamp']
+                if header_ts - prev_ts > 2 * this_block_tick_interval:
                     return MAX_BITS
 
-            anchor = self.get_asert_anchor(prior, daa_mtp, chunk)
+            anchor = self.get_asert_anchor(prior, prev_mtp, chunk)
             assert anchor is not None, "Failed to find ASERT anchor block for chain {!r}".format(self)
+            prev_ticks = self._get_tick_count_for_header(prior, prev_mtp, chunk)
+            assert prev_ticks is not None and prev_ticks >= anchor.height * 600
+            prev_tick_diff = prev_ticks - anchor.height * 600
 
-            return networks.net.asert_daa.next_bits_aserti3_2d(anchor.bits,
-                                                               prev_ts - anchor.prev_time,
-                                                               prevheight - anchor.height)
-
+            return networks.net.asert_daa.next_bits_aserti3_2d_tick_based(anchor_bits=anchor.bits,
+                                                                          time_diff=prev_ts - anchor.prev_time,
+                                                                          tick_diff=prev_tick_diff,
+                                                                          next_tick_interval=this_block_tick_interval,
+                                                                          anchor_tick_interval=600)
 
         # Mon Nov 13 19:06:40 2017 DAA HF
         if prevheight >= networks.net.CW144_HEIGHT:

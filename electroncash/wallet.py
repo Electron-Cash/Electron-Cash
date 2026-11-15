@@ -213,7 +213,7 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
         raise NotEnoughFunds(_('Not enough funds on address.') + '\nTotal: %d satoshis\nFee: %d\nDust Threshold: %d'%(total, fee, dust_threshold(network)))
 
     outputs = [(TYPE_ADDRESS, recipient, total - fee)]
-    locktime = network.get_local_height()
+    locktime = network.suggest_locktime()
 
     tx = Transaction.from_io(inputs, outputs, locktime=locktime, sign_schnorr=sign_schnorr)
     tx.BIP69_sort()
@@ -1041,6 +1041,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def get_local_height(self):
         """ return last known height if we are offline """
         return self.network.get_local_height() if self.network else self.storage.get('stored_height', 0)
+
+    def suggest_locktime(self) -> int:
+        """ Returns an appropriate nLockTime for a transaction. If we are offline or no blockchain, returns 0,
+        otherwise returns either the blockchain height if before 1-min blocks activated, or, if after it activated, then
+        we return the tip's tick count divided by 600."""
+        if self.network:
+            return self.network.suggest_locktime() or 0
+        return 0  # Default to just 0 for safety
 
     def get_tx_height(self, tx_hash):
         """ return the height and timestamp of a verified transaction. """
@@ -2737,11 +2745,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if bip69_sort:
             # Sort the inputs and outputs deterministically
             tx.BIP69_sort()
-        # Timelock tx to current height.
-        locktime = self.get_local_height()
-        if locktime == -1: # We have no local height data (no headers synced).
-            locktime = 0
-        tx.locktime = locktime
+        # Timelock tx
+        tx.locktime = self.suggest_locktime()
         run_hook('make_unsigned_transaction', self, tx)
 
         return tx

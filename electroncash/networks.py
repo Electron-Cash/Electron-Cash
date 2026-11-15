@@ -25,6 +25,7 @@
 
 import json
 import pkgutil
+from typing import Optional
 
 from .asert_daa import ASERTDaa, Anchor
 
@@ -48,6 +49,12 @@ class AbstractNet:
     DEFAULT_UNIT = "BCH"
     RPA_START_HEIGHT = 0
     PAYTACA_HOST = ""
+    # May 15, 2027 12:00 UTC; upgrade 2027 activation medium-time-past (the same for all nets except for ChipNet)
+    UPGRADE_2027_MTP = 1810382400
+    # This is None for now for all nets. Future code that checkpoints upgrade2027 can then set this on a per-net
+    # basis. We use this height to fast-path calculations related to deriving the tick count of a block header,
+    # etc.
+    UPGRADE_2027_HEIGHT: Optional[int] = None
 
 
 class MainNet(AbstractNet):
@@ -166,7 +173,8 @@ class ChipNet(TestNet4):
     DEFAULT_PORTS = {'t': '64001', 's': '64002'}
     VERIFICATION_BLOCK_MERKLE_ROOT = "59a2a6a10b2fa406a8b22a16b934307159319454098fdddeae7148c801326c6c"
     VERIFICATION_BLOCK_HEIGHT = 302144
-
+    # "Upgrade2027" on ChipNet activates early: Nov. 15, 2026 12:00 UTC
+    UPGRADE_2027_MTP = 1794744000
 
 class ScaleNet(TestNet):
     GENESIS = "00000000e6453dc2dfe1ffa19023f86002eb11dbb8e87d0291a4599f0430be52"
