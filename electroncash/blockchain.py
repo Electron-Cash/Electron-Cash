@@ -1,6 +1,9 @@
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2012 thomasv@ecdsa.org
 #
+# Electron Cash - Bitcoin Cash thin client
+# Copyright (C) 2017-2026 The Electron Cash Developers
+#
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
 # (the "Software"), to deal in the Software without restriction,
@@ -194,6 +197,14 @@ def read_blockchains(config):
 
         b = Blockchain(config, base_height, parent_base_height)
         blockchains[b.base_height] = b
+
+    # NOTE: We must call tip_ticks() once to pre-cache the upgrade2027 activation height (if any). This cached
+    # height is used by wallet code and by CashFusion to fast-path decide if a coinbase coin is mature or not.
+    # As such, do not delete the below loop unless you know what you are doing!
+    for base_height, b in blockchains.items():
+        tip_ticks = b.tip_ticks()
+        util.print_error(f"[Blockchain] Loaded blockchain with base height: {b.base_height}, height: {b.height()},"
+                         f" tip_ticks: {tip_ticks}")
 
     return blockchains
 
@@ -586,18 +597,20 @@ class Blockchain(util.PrintError):
                 and self._cached_activation_height_1_min <= header['block_height']):
             return self._cached_activation_height_1_min
         cur = header
+        def desc_blurb():
+            return f"(for blockchain with base: {self.base_height}, height: {self.height()})"
         while mtp >= activation_mtp:
             ht = cur['block_height']
             prev = self.read_header(ht - 1, chunk)
             if prev is None:
-                self.print_error(f"_get_1_min_activation_height missing header {ht - 1}")
+                self.print_error(f"_get_1_min_activation_height missing header {ht - 1} {desc_blurb()}")
                 return None
             prev_mtp = self.get_median_time_past(ht - 1, chunk)
             if prev_mtp < activation_mtp:
                 # Ok, use this
-                self.print_error(f"_get_1_min_activation_height: found activation header {cur['block_height']},"
-                                 f" hash {hash_header(cur)}")
-                self._cached_activation_height_1_min = cur['block_height']
+                self.print_error(f"_get_1_min_activation_height: found activation header {ht},"
+                                 f" hash {hash_header(cur)} {desc_blurb()}")
+                self._cached_activation_height_1_min = ht
                 return self._cached_activation_height_1_min
             mtp = prev_mtp
             cur = prev
@@ -613,23 +626,34 @@ class Blockchain(util.PrintError):
         else:
             return activation_height_1_min * 600 + (height - activation_height_1_min) * 60
 
-    def tip_ticks(self) -> Optional[int]:
-        height = self.height()
+    def tick_count_for_height(self, height, no_slow_path=False) -> Optional[int]:
+        """Returns the tick count given a block's height. Requires that we have the header for the block height in
+        question and that we can calculate its MTP. If these preconditions are not met, may return None."""
         if height is None or height <= 0:
             return None
         if self._cached_activation_height_1_min is not None:
             return (min(height, self._cached_activation_height_1_min) * 600
                     + max(0, height - self._cached_activation_height_1_min) * 60)
-        tip = self.read_header(height)
-        if tip is None:
-            self.print_error(f"tip_ticks: missing header {height}")
+        if no_slow_path:
+            # Caller does *NOT* want to take the slow path which involves attempts to deserialize the header
+            # because it may result in serious performance degradation. The wallet and/or utxo_list ends up taking this
+            # path when calculating coinbase maturity. It's fine to not take the slow path in those cases because
+            # the expectation is that if the upgrade has activated, then _cached_activation_height_1_min is not None,
+            # and if it hasn't, then the height-based coinbase maturity heuristics are sufficient.
+            return None
+        hdr = self.read_header(height)
+        if hdr is None:
+            self.print_error(f"tick_count_for_height: missing header {height}")
             return None
         try:
             mtp = self.get_median_time_past(height)
         except TypeError:
-            self.print_error(f"tip_ticks: unable to determine mtp for {height}")
+            self.print_error(f"tick_count_for_height: unable to determine mtp for {height}")
             return None
-        return self._get_tick_count_for_header(tip, mtp)
+        return self._get_tick_count_for_header(hdr, mtp)
+
+    def tip_ticks(self) -> Optional[int]:
+        return self.tick_count_for_height(self.height())
 
     def get_bits(self, header, chunk=None):
         """Return bits for the given height."""

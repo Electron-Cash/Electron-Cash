@@ -2,7 +2,7 @@
 # Copyright (C) 2015 Thomas Voegtlin
 #
 # Electron Cash - Bitcoin Cash thin client
-# Copyright (C) 2017-2023 The Electron Cash Developers
+# Copyright (C) 2017-2026 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -1386,6 +1386,29 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         received, sent = self.get_addr_io(address)
         return sum([v for height, v, is_cb, token_data in received.values()])
 
+    def is_coinbase_height_immature(self, cb_height: int, mempool_height = None) -> int:
+        """Helper function to test if a coinbase coin at a particular height is immature versus a mempool height.
+        This test relies on the 1-min blocktime upgrade being activated, and if it isn't, it falls back to
+        using legacy height-based heuristics (100 blocks). Note that if there is no network, it also falls back to the
+        same legacy heuristics.
+
+        NOTE: After all networks have upgraded to 1-min blocks (and they are all checkpointed), this function can be
+        removed or simplified (and we can just use height-based heuristics again everywhere).
+        But for now we must do this."""
+        if mempool_height is None:
+            mempool_height = self.get_local_height() + 1
+        if self.network:
+            mempool_ticks = self.network.blockchain().tick_count_for_height(mempool_height, no_slow_path=True)
+            cb_ticks = self.network.blockchain().tick_count_for_height(cb_height, no_slow_path=True)
+        else:
+            mempool_ticks = cb_ticks = None
+        if cb_ticks is None or mempool_ticks is None:
+            # 1-min blocks is not activated, or the network is down. Just use the height-based heuristic.
+            # Should be safe to do that here.
+            cb_maturity_legacy = COINBASE_MATURITY_TICKS // 600  # 100
+            return cb_height + cb_maturity_legacy > mempool_height
+        return cb_ticks + COINBASE_MATURITY_TICKS > mempool_ticks
+
     def get_addr_balance(self, address, exclude_frozen_coins=False, *, tokens=False):
         """ Returns the balance of a bitcoin address as a tuple of:
             (confirmed_matured, unconfirmed, unmatured) if tokens == False or
@@ -1412,7 +1435,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if exclude_frozen_coins and (txo in self.frozen_coins or txo in self.frozen_coins_tmp):
                 continue
             had_cb = had_cb or is_cb  # remember if this address has ever seen a coinbase txo
-            if is_cb and tx_height + COINBASE_MATURITY > mempoolHeight:
+            if is_cb and self.is_coinbase_height_immature(tx_height, mempoolHeight):
                 x += v
             elif tx_height > 0:
                 c += v
@@ -1511,7 +1534,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     # calculated based off mempool height (chain tip height + 1).
                     # See bitcoind consensus/tx_verify.cpp Consensus::CheckTxInputs
                     # and also txmempool.cpp  CTxMemPool::removeForReorg.
-                    if mature and x['coinbase'] and mempoolHeight - x['height'] < COINBASE_MATURITY:
+                    if mature and x['coinbase'] and self.is_coinbase_height_immature(x['height'], mempoolHeight):
                         continue
                     coins.append(x)
                 if addr_set_out is not None and len(coins) > len_before:

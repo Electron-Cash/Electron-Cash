@@ -1,7 +1,7 @@
 # Electron Cash - lightweight Bitcoin Cash client
 # Copyright (C) 2011 thomasv@gitorious
 # Copyright (C) 2017 Neil Booth
-# Copyright (C) 2023 The Electron Cash Developers
+# Copyright (C) 2023-2026 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
