@@ -1,6 +1,6 @@
 # Electrum - Lightweight Bitcoin Client
 # Copyright (c) 2011-2016 Thomas Voegtlin
-# Copyright (C) 2017-2020 The Electron Cash Developers
+# Copyright (C) 2017-2026 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -1825,6 +1825,12 @@ class Network(util.DaemonThread):
 
     def get_local_height(self):
         return self.blockchain().height()
+
+    def suggest_locktime(self) -> int:
+        ticks = self.blockchain().tip_ticks()
+        if ticks is not None:
+            return ticks // 600
+        return 0
 
     def synchronous_get(self, request, timeout=30):
         q = queue.Queue()

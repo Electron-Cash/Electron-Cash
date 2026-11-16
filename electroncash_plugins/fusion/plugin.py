@@ -35,7 +35,7 @@ import weakref
 from typing import Optional, Tuple
 
 from electroncash.address import Address, OpCodes
-from electroncash.bitcoin import COINBASE_MATURITY, TYPE_SCRIPT
+from electroncash.bitcoin import TYPE_SCRIPT
 from electroncash.plugins import BasePlugin, hook, daemon_command
 from electroncash.i18n import _, ngettext, pgettext
 from electroncash.util import profiler, PrintError, InvalidPassword
@@ -116,8 +116,8 @@ def select_coins(wallet):
     has_unconfirmed = False
     has_coinbase = False
     sum_value = 0
-    mincbheight = (wallet.get_local_height() + 1 - COINBASE_MATURITY if Conf(wallet).autofuse_coinbase
-                   else -1)  # -1 here causes coinbase coins to always be rejected
+    mempool_height = wallet.get_local_height() + 1
+    fuse_cb = Conf(wallet).autofuse_coinbase
     for addr in wallet.get_addresses():
         acoins = list(wallet.get_addr_utxo(addr).values())
         if not acoins:
@@ -135,7 +135,9 @@ def select_coins(wallet):
                 and not c['token_data']  # must not have a CashToken on it
                 and not c['slp_token']  # must not be SLP
                 and not c['is_frozen_coin']  # must not be frozen
-                and (not c['coinbase'] or c['height'] <= mincbheight)  # if coinbase -> must be mature coinbase
+                # if coinbase -> must be mature coinbase
+                and (not c['coinbase'] or (fuse_cb and not wallet.is_coinbase_height_immature(c['height'],
+                                                                                              mempool_height)))
             )
             # * = We skip addresses with too many coins, since they take up lots
             #     of 'space' for consolidation. TODO: there is possibility of

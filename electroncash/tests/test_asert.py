@@ -10,7 +10,7 @@ class Test_ASERTDaa(unittest.TestCase):
 
             t_delta = time - ref_time
             h_delta = height - anchor_height
-            self.assertEqual(target, asert.next_bits_aserti3_2d(ref_bits, t_delta, h_delta))
+            self.assertEqual(target, asert.next_bits_aserti3_2d_legacy(ref_bits, t_delta, h_delta))
 
     # Steady 600s blocks at POW limit target
     def test_steady_at_pow_limit(self):

@@ -27,7 +27,6 @@
 # SOFTWARE.
 from .util import *
 from electroncash.address import Address
-from electroncash.bitcoin import COINBASE_MATURITY
 from electroncash.i18n import _, ngettext
 from electroncash.plugins import run_hook
 from electroncash.util import profiler, PrintError
@@ -118,7 +117,7 @@ class UTXOList(MyTreeWidget, PrintError):
     @if_not_dead
     @profiler
     def on_update(self):
-        local_maturity_height = (self.wallet.get_local_height()+1) - COINBASE_MATURITY
+        mempool_height = self.wallet.get_local_height() + 1
         prev_selection = self.get_selected() # cache previous selection, if any
         self.clear()
         ca_by_addr = defaultdict(list)
@@ -147,7 +146,7 @@ class UTXOList(MyTreeWidget, PrintError):
                 address_text = f'{ca_info.emoji} {address_text}'  # prepend the address emoji char
                 tool_tip0 = self.wallet.cashacct.fmt_info(ca_info, emoji=True)
             height = x['height']
-            is_immature = x['coinbase'] and height > local_maturity_height
+            is_immature = x['coinbase'] and self.wallet.is_coinbase_height_immature(height, mempool_height)
             name = self.get_name(x)
             name_short = self.get_name_short(x)
             label = self.wallet.get_label(x['prevout_hash'])

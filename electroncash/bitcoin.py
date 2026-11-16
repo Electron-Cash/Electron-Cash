@@ -4,6 +4,9 @@
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2011 thomasv@gitorious
 #
+# Electron Cash - Bitcoin Cash thin client
+# Copyright (C) 2017-2026 The Electron Cash Developers
+#
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
 # (the "Software"), to deal in the Software without restriction,
@@ -62,7 +65,7 @@ FEE_STEP = 10000
 MAX_FEE_RATE = 20000
 FEE_TARGETS = [25, 10, 5, 2]
 
-COINBASE_MATURITY = 100
+COINBASE_MATURITY_TICKS = 100 * 600
 COIN = 100000000
 
 # supported types of transction outputs
