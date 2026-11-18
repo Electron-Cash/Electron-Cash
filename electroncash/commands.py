@@ -198,14 +198,12 @@ class Commands:
     @command('n')
     def getinfo(self):
         """ network info """
-        blockchain = self.network.blockchain()
         net_params = self.network.get_parameters()
-        tip_ticks = blockchain.tip_ticks()
         response = {
             'path': self.network.config.path,
             'server': net_params[0],
-            'blockchain_height': blockchain.height(),
-            'blockchain_nlocktime': tip_ticks // 600 if tip_ticks else 0,
+            'blockchain_height': self.network.get_local_height(),
+            'blockchain_nlocktime': self.network.suggest_locktime(),
             'server_height': self.network.get_server_height(),
             'spv_nodes': len(self.network.get_interfaces()),
             'connected': self.network.is_connected(),
