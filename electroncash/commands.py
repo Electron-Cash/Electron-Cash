@@ -203,6 +203,7 @@ class Commands:
             'path': self.network.config.path,
             'server': net_params[0],
             'blockchain_height': self.network.get_local_height(),
+            'blockchain_nlocktime': self.network.suggest_locktime(),
             'server_height': self.network.get_server_height(),
             'spv_nodes': len(self.network.get_interfaces()),
             'connected': self.network.is_connected(),
