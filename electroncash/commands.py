@@ -200,17 +200,13 @@ class Commands:
         """ network info """
         blockchain = self.network.blockchain()
         net_params = self.network.get_parameters()
-        server_height = self.network.get_server_height()
         tip_ticks = blockchain.tip_ticks()
         response = {
             'path': self.network.config.path,
             'server': net_params[0],
             'blockchain_height': blockchain.height(),
             'blockchain_nlocktime': tip_ticks // 600 if tip_ticks else 0,
-            'blockchain_ticks': tip_ticks,
-            'server_height': server_height,
-            'server_nlocktime': blockchain.tick_count_for_height(server_height) // 600 if server_height else 0,
-            'server_ticks': blockchain.tick_count_for_height(server_height) or 0,
+            'server_height': self.network.get_server_height(),
             'spv_nodes': len(self.network.get_interfaces()),
             'connected': self.network.is_connected(),
             'auto_connect': net_params[4],
