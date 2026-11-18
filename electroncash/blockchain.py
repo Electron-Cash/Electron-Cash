@@ -204,7 +204,7 @@ def read_blockchains(config):
     for base_height, b in blockchains.items():
         tip_ticks = b.tip_ticks()
         util.print_error(f"[Blockchain] Loaded blockchain with base height: {b.base_height}, height: {b.height()},"
-                         f" tip_ticks: {tip_ticks}")
+                         f" size: {b.size()}, tip_ticks: {tip_ticks}")
 
     return blockchains
 
@@ -405,9 +405,15 @@ class Blockchain(util.PrintError):
             self.verify_header(header, prev_header, bits)
             prev_header = header
 
+    def relative_path(self):
+        if self.parent_base_height is None:
+            return 'blockchain_headers'
+        else:
+            return os.path.join('forks', f'fork_{self.parent_base_height}_{self.base_height}')
+
     def path(self):
         d = util.get_headers_dir(self.config)
-        filename = 'blockchain_headers' if self.parent_base_height is None else os.path.join('forks', 'fork_%d_%d'%(self.parent_base_height, self.base_height))
+        filename = self.relative_path()
         return os.path.join(d, filename)
 
     def save_chunk(self, base_height, chunk_data):
@@ -580,6 +586,13 @@ class Blockchain(util.PrintError):
     # after we add checkpoints for upgrade2027).
     _cached_activation_height_1_min: Optional[int] = None
 
+    def _cache_cached_activation_height_1_min_from_parent(self):
+        if self.parent_base_height is not None and self._cached_activation_height_1_min is None:
+            # Cache from parent, to avoid expensive re-reads of headers
+            p = self.parent()
+            if p is not None and p._cached_activation_height_1_min is not None:
+                self._cached_activation_height_1_min = p._cached_activation_height_1_min
+
     def _get_1_min_activation_height(self, header, mtp, chunk=None) -> Optional[int]:
         activation_mtp = networks.net.UPGRADE_2027_MTP
         if mtp < activation_mtp:
@@ -588,14 +601,15 @@ class Blockchain(util.PrintError):
         if networks.net.UPGRADE_2027_HEIGHT is not None:
             # Checkpointed, so just return that
             return networks.net.UPGRADE_2027_HEIGHT
+        self._cache_cached_activation_height_1_min_from_parent()
+        if (self._cached_activation_height_1_min is not None
+                and self._cached_activation_height_1_min <= header['block_height']):
+            return self._cached_activation_height_1_min
         # Bug note: The below does not work if we don't have all the intervening
         # headers -- therefore this execution path should only be taken for networks
         # where the checkpoint block is before the activation block.  This means that
         # adding a checkpoint after the activation block without setting the activation
         # block in networks.net.UPGRADE_2027_HEIGHT will result in bugs.
-        if (self._cached_activation_height_1_min is not None
-                and self._cached_activation_height_1_min <= header['block_height']):
-            return self._cached_activation_height_1_min
         cur = header
         def desc_blurb():
             return f"(for blockchain with base: {self.base_height}, height: {self.height()})"
@@ -631,6 +645,7 @@ class Blockchain(util.PrintError):
         question and that we can calculate its MTP. If these preconditions are not met, may return None."""
         if height is None or height <= 0:
             return None
+        self._cache_cached_activation_height_1_min_from_parent()
         if self._cached_activation_height_1_min is not None:
             return (min(height, self._cached_activation_height_1_min) * 600
                     + max(0, height - self._cached_activation_height_1_min) * 60)
