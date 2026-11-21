@@ -50,8 +50,9 @@ class RequestList(MyTreeWidget):
     def item_changed(self, item):
         if item is None:
             return
-        if not item.isSelected():
-            return
+        # if not item.isSelected():
+        #     return
+        
         addr = item.data(0, Qt.UserRole)
         req = self.wallet.receive_requests.get(addr)
         if not req:
@@ -132,6 +133,10 @@ class RequestList(MyTreeWidget):
                                     amount_str, _(pr_tooltips.get(status,''))])
             item.setData(0, Qt.UserRole, address)
             item.setData(1, Qt.UserRole, status)
+            item.setData(2, Qt.UserRole, message)
+            item.setData(3, Qt.UserRole, timestamp)
+            item.setData(4, Qt.UserRole, expiration)
+            item.setData(5, Qt.UserRole, amount)
             if signature is not None:
                 item.setIcon(2, QIcon(":icons/seal.svg"))
                 item.setToolTip(2, 'signed by '+ requestor)
@@ -148,6 +153,10 @@ class RequestList(MyTreeWidget):
         self.setCurrentItem(item)  # sometimes it's not the current item.
         addr = item.data(0, Qt.UserRole)
         status = item.data(1, Qt.UserRole)
+        description = item.data(2, Qt.UserRole)
+        timestamp = item.data(3, Qt.UserRole)
+        expiration = item.data(4, Qt.UserRole)
+        amount = item.data(5, Qt.UserRole)
         req = self.wallet.receive_requests[addr]
         column = self.currentColumn()
         column_title = self.headerItem().text(column)
@@ -160,6 +169,6 @@ class RequestList(MyTreeWidget):
         # Original old list menu API, here for legacy reasons
         run_hook('receive_list_menu', menu, addr)
         # New menu API specific to the email plugin
-        run_hook('receive_list_menu_for_email_plugin', self.parent, menu, addr,
+        run_hook('receive_list_menu_for_email_plugin', self.parent, menu, addr, description, timestamp, expiration, amount,
                  self.parent.get_request_URI(addr), self.parent.receive_qr, status)
         menu.exec_(self.viewport().mapToGlobal(position))
