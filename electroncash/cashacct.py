@@ -1754,14 +1754,15 @@ class CashAcct(util.PrintError, verifier.SPVDelegate):
             self.minimal_ch_cache.d = {}
             self.processed_blocks.d = {}
 
-    def add_transaction_hook(self, txid: str, tx: object, out_n: int, script: ScriptOutput):
+    def add_transaction_hook(self, txid: str, tx: object, script: ScriptOutput):
         ''' Called by wallet inside add_transaction (with wallet.lock held) to
         notify us about transactions that were added containing a cashacct
         scriptoutput. Note these tx's aren't yet in the verified set. '''
         assert isinstance(script, ScriptOutput)
         with self.lock:
             self.wallet_reg_tx[txid] = self.RegTx(txid=txid, script=script)
-            self._find_script(txid, giveto='w')  # makes sure there is only 1 copy in wallet_reg_tx
+            # makes sure there is only 1 copy in wallet_reg_tx
+            self._find_script(txid, giveto='w')
 
     def remove_transaction_hook(self, txid: str):
         ''' Called by wallet inside remove_transaction (with wallet.lock held)
