@@ -58,7 +58,7 @@ class VerifyingDialog(WaitingDialog):
         hbox = QHBoxLayout()
         self._vbox.removeWidget(self._label)
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(QIcon(":icons/cashacct-logo.png").pixmap(50))
+        icon_lbl.setPixmap(QIcon(":icons/cashacct-logo-original.svg").pixmap(50))
         hbox.addWidget(icon_lbl)
         hbox.addWidget(self._label)
         self._vbox.addLayout(hbox)
@@ -196,12 +196,18 @@ class ButtonAssociatedLabel(QLabel):
 
 
 def naked_button_style() -> str:
-    ''' Returns a stylesheet for a small 'naked' (flat) QPushButton button which
-    is used in the lookup results and other associated widgets in this file '''
-    but_style_sheet = 'QPushButton { border-width: 1px; padding: 0px; margin: 0px; }'
-    if not ColorScheme.dark_scheme:
-        but_style_sheet += ''' QPushButton { border: 1px solid transparent; }
-        QPushButton:hover { border: 1px solid #3daee9; }'''
+    ''' Returns a stylesheet for a small 'naked' (flat) QPushButton button '''
+    but_style_sheet = '''
+        QPushButton {
+            border: none;  /* Remove border to avoid artifacts */
+            background: transparent;  /* Ensure no background */
+            padding: 2px;  /* Small padding for better click area */
+            margin: 0px;
+        }
+        QPushButton:hover {
+            background: rgba(61, 174, 233, 20);  /* Light hover effect */
+        }
+    '''
     return but_style_sheet
 
 def button_make_naked(but: QAbstractButton) -> QAbstractButton:
@@ -209,7 +215,7 @@ def button_make_naked(but: QAbstractButton) -> QAbstractButton:
     which is the look we use for the lookup results and various other odds and
     ends. Returns the button passed to it. '''
     but.setStyleSheet(naked_button_style())
-    but.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    but.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)  # Allow horizontal growth
     return but
 
 class InfoGroupBox(PrintError, QGroupBox):
@@ -429,7 +435,7 @@ class InfoGroupBox(PrintError, QGroupBox):
             # misc buttons
             hbox = QHBoxLayout()
             hbox.setContentsMargins(0,0,0,0)
-            hbox.setSpacing(4)
+            hbox.setSpacing(1)
             for func in self.extra_buttons:
                 if callable(func):
                     ab = func(item)
@@ -437,7 +443,7 @@ class InfoGroupBox(PrintError, QGroupBox):
                         button_make_naked(ab)
                         hbox.addWidget(ab)
             # copy button
-            copy_but = QPushButton(QIcon(":icons/copy.png"), "")
+            copy_but = QPushButton(QIcon(":icons/copy.svg"), "")
             button_make_naked(copy_but)
             hbox.addWidget(copy_but)
             grid.addLayout(hbox, row*3, col*5+3, 1, 1)
@@ -564,7 +570,7 @@ def lookup_cash_account_dialog(
     vbox = QVBoxLayout(d)
     hbox = QHBoxLayout()
     label = QLabel()
-    label.setPixmap(QIcon(":icons/cashacct-logo.png").pixmap(50))
+    label.setPixmap(QIcon(":icons/cashacct-logo-original.svg").pixmap(50))
     hbox.addWidget(label)
     hbox.addItem(QSpacerItem(10, 1))
     label = QLabel("<font size=+1><b>" + title + "</b></font>" + blurb)
@@ -839,7 +845,7 @@ def cash_account_detail_dialog(parent : MessageBoxMixin,  # Should be an Electru
     grid.addWidget(name_lbl, 0, 1, 1, 1)
     # copy name
     copy_name_but = QPushButton()
-    copy_name_but.setIcon(QIcon(":icons/copy.png"))
+    copy_name_but.setIcon(QIcon(":icons/copy.svg"))
     button_make_naked(copy_name_but)
     copy_name_but.setToolTip('<span style="white-space:nowrap">'
                                 + _("Copy <b>{cash_account_name}</b>").format(cash_account_name=ca_string_em)
@@ -853,7 +859,7 @@ def cash_account_detail_dialog(parent : MessageBoxMixin,  # Should be an Electru
     grid.addWidget(addr_lbl, 1, 1, 1, 1)
     # copy address label
     copy_addr_but = QPushButton()
-    copy_addr_but.setIcon(QIcon(":icons/copy.png"))
+    copy_addr_but.setIcon(QIcon(":icons/copy.svg"))
     button_make_naked(copy_addr_but)
     copy_addr_but.setToolTip(_("Copy {}").format(_("Address")))
     copy_addr_but.clicked.connect(lambda ignored=None, text=info.address.to_ui_string(), copy_but=copy_addr_but:

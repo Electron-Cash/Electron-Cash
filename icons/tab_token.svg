@@ -1,75 +1,24 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Svg Vector Icons : http://www.onlinewebfonts.com/icon -->
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="CashTokens" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 360 360">
+  <!-- Generator: Adobe Illustrator 29.4.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 152)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #201447;
+      }
 
-<svg
-   version="1.1"
-   x="0px"
-   y="0px"
-   viewBox="0 0 251.00013 239.9962"
-   enable-background="new 0 0 1000 1000"
-   xml:space="preserve"
-   id="svg884"
-   sodipodi:docname="tab_token.svg"
-   inkscape:version="1.2.1 (9c6d41e410, 2022-07-14)"
-   width="251.00012"
-   height="239.9962"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><defs
-   id="defs888"><linearGradient
-     inkscape:collect="always"
-     id="linearGradient1594"><stop
-       style="stop-color:#008000;stop-opacity:1;"
-       offset="0.31189713"
-       id="stop1590" /><stop
-       style="stop-color:#00ca00;stop-opacity:1;"
-       offset="0.63665599"
-       id="stop1592" /></linearGradient><linearGradient
-     inkscape:collect="always"
-     xlink:href="#linearGradient1594"
-     id="linearGradient1596"
-     x1="9.9991961"
-     y1="499.99976"
-     x2="989.99963"
-     y2="499.99976"
-     gradientUnits="userSpaceOnUse"
-     spreadMethod="reflect" /></defs><sodipodi:namedview
-   id="namedview886"
-   pagecolor="#505050"
-   bordercolor="#eeeeee"
-   borderopacity="1"
-   inkscape:showpageshadow="0"
-   inkscape:pageopacity="0"
-   inkscape:pagecheckerboard="0"
-   inkscape:deskcolor="#505050"
-   showgrid="false"
-   inkscape:zoom="0.921875"
-   inkscape:cx="137.22034"
-   inkscape:cy="183.86441"
-   inkscape:window-width="1440"
-   inkscape:window-height="799"
-   inkscape:window-x="0"
-   inkscape:window-y="25"
-   inkscape:window-maximized="1"
-   inkscape:current-layer="g882" />
-<metadata
-   id="metadata874"> Svg Vector Icons : http://www.onlinewebfonts.com/icon </metadata>
-<g
-   id="g882"
-   style="fill:url(#linearGradient1596);fill-opacity:1"
-   transform="translate(-2.2998506,-7.9999587)"><g
-     transform="matrix(0.07843746,0,0,-0.07499881,2.2999678,391.24391)"
-     id="g880"
-     style="fill:#0aff0a;fill-opacity:1;stroke:#000000;stroke-opacity:1;stroke-width:66.49381166;stroke-dasharray:none;stroke-linecap:round;stroke-linejoin:bevel;paint-order:fill markers stroke"
-     inkscape:label="g880"><path
-       d="M 1408.7728,5101.2874 C 872.72925,5036.1635 411.29034,4710.5444 168.57211,4226.198 -33.07274,3824.6772 -54.588925,3342.2252 109.14956,2926.7913 327.87023,2373.5325 826.59518,1989.7133 1415.7273,1920.8009 c 431.7275,-50.5901 874.8499,80.9313 1208.5957,359.1283 491.1502,410.3717 689.628,1064.8108 510.74,1685.7408 -78.3921,273.1674 -247.779,543.1668 -460.1655,732.2023 -254.7334,228.2927 -555.6335,364.2233 -890.0322,403.4151 -96.7086,11.3983 -281.2775,11.3983 -376.0925,0 z m 353.9886,-322.4512 c 486.0895,-63.2296 898.8803,-403.4151 1050.571,-866.2712 199.0982,-609.5644 -78.3921,-1267.792 -653.6153,-1549.7776 -431.7277,-211.1789 -940.5739,-161.8625 -1329.3346,128.3534 -65.1036,48.6959 -175.72093,156.8002 -228.80943,223.1978 -371.68473,466.6446 -371.68473,1127.4198 0,1593.4112 49.30112,61.3352 154.23741,165.651 214.93334,213.1059 173.2069,135.3099 393.78859,227.6395 613.16229,257.3599 89.7215,11.9863 242.0652,11.9863 333.0927,0.6206 z"
-       id="path876"
-       style="display:inline;fill:#0aff0a;fill-opacity:1;stroke:#000000;stroke-width:66.49381166;stroke-linejoin:bevel;stroke-opacity:1;stroke-dasharray:none;stroke-linecap:round;paint-order:fill markers stroke"
-       inkscape:label="path876" /><path
-       d="m 1844.9408,4456.9729 c -8.8481,-8.8508 -31.605,-68.9124 -92.9211,-240.8995 l -27.1647,-75.869 -89.1338,-0.6205 c -103.0425,-0.6204 -170.0398,-13.913 -246.5382,-49.3164 -225.6751,-103.7279 -342.6265,-321.8632 -330.6114,-615.2472 1.8938,-48.0426 7.5747,-106.8632 13.2885,-131.5214 30.9846,-140.3722 96.0883,-257.9807 187.736,-340.1855 l 39.1798,-34.7829 -58.1493,-159.9682 c -57.5288,-159.9681 -64.4832,-188.4476 -49.3011,-199.8132 12.0152,-9.4713 133.3743,-52.4845 148.5564,-52.4845 7.5747,0 18.3492,6.3361 24.0302,13.9131 5.681,8.2304 35.3923,82.8256 65.7239,166.3044 l 54.9823,151.7704 21.4835,-1.8943 c 12.0151,-0.6204 71.4377,-1.8943 132.1008,-2.5475 128.3136,-1.2737 173.8272,8.2303 265.4752,53.1052 42.9997,21.49 65.1036,37.9507 111.2376,84.0991 63.8303,63.2295 94.1946,111.9255 116.2984,185.247 30.3317,99.9066 0.6203,172.6076 -74.6046,182.7322 -66.3117,8.8507 -96.6433,-14.5338 -131.4153,-103.0422 -39.1797,-98.6327 -96.7085,-161.2417 -178.888,-193.4772 -29.0582,-11.3655 -48.6807,-13.913 -109.344,-13.913 -40.453,-0.6205 -75.225,1.2737 -77.1186,3.168 -3.167,3.168 249.6725,711.9858 274.9761,770.153 l 6.3341,15.187 17.0758,-16.428 c 9.4684,-9.4713 35.3923,-47.4222 58.1492,-84.7197 49.3011,-80.9313 68.2706,-96.7387 118.8451,-96.7387 75.225,0 117.5717,58.1672 102.3896,140.3722 -15.1822,82.2051 -87.2402,180.8379 -172.5539,236.4904 -25.271,16.428 -46.1342,30.341 -47.4076,30.9943 -0.6203,0.6204 22.757,67.6713 52.4682,149.223 29.7114,80.9313 53.7415,153.6322 53.7415,161.242 0,19.5959 -15.1821,29.7205 -85.9668,54.9992 -70.8499,25.8667 -79.698,27.1077 -92.9538,14.4684 z m -194.0701,-514.0668 c 0,-15.187 -268.642,-740.4326 -273.0824,-737.9178 -3.1671,1.8943 -12.0153,16.4605 -20.2103,32.8885 -42.3467,84.0992 -61.3162,213.0731 -49.301,335.7437 13.9087,137.2042 45.5137,215.6206 113.7843,284.5331 44.2404,44.2542 84.0731,67.6713 137.1616,80.3107 36.0127,8.8835 91.6478,11.3983 91.6478,4.4418 z"
-       id="path878"
-       style="display:inline;fill:#0aff0a;fill-opacity:1;stroke:#000000;stroke-width:66.49381166;stroke-linejoin:bevel;stroke-opacity:1;stroke-dasharray:none;stroke-linecap:round;paint-order:fill markers stroke"
-       inkscape:label="path878" /></g></g>
+      .st1 {
+        fill: #fff;
+      }
+
+      .st2 {
+        fill: #0ac18e;
+      }
+    </style>
+  </defs>
+  <circle id="purple" class="st0" cx="180" cy="180" r="176.4"/>
+  <g id="BCH">
+    <circle id="green" class="st2" cx="180" cy="180" r="132.3"/>
+    <path id="symbol" class="st1" d="M221.3,135.6c-6.6-15.1-21.9-18.3-40.6-15.2l-6-23.3-14.2,3.7,5.9,23.2c-3.7.9-7.6,1.7-11.4,2.8l-5.9-23.1-14.2,3.7,6,23.3c-3.1.9-28.6,7.4-28.6,7.4l3.9,15.2s10.4-2.9,10.3-2.7c5.8-1.5,8.5,1.4,9.8,4.1l16.5,63.9c.2,1.8-.1,5-4.1,6.1.2.1-10.3,2.7-10.3,2.7l1.5,17.7s25.3-6.5,28.6-7.3l6.1,23.6,14.2-3.7-6.1-23.7c3.9-.9,7.7-1.8,11.4-2.8l6,23.6,14.2-3.7-6.1-23.5c21.8-5.3,37.2-19.1,34.1-40.1-2-12.7-15.9-23.1-27.4-24.3,7.1-6.3,10.7-15.4,6.3-27.4h0ZM214.5,191.1c2.8,20.9-26.2,23.4-35.7,25.9l-8.3-31.2c9.6-2.5,39.3-13.1,44.1,5.3ZM197,148.7c3,18.5-21.8,20.7-29.8,22.7l-7.6-28.3c8-2,31.3-11.6,37.4,5.6Z"/>
+  </g>
 </svg>

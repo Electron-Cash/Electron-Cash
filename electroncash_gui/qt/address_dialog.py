@@ -69,7 +69,7 @@ class AddressDialog(PrintError, WindowModalDialog):
         lbl = QLabel(_("Token Address:"))
         lbl.setToolTip(tooltip)
         self.tok_addr_e = ButtonsLineEdit()
-        icon = ":icons/qrcode_white.svg" if ColorScheme.dark_scheme else ":icons/qrcode.svg"
+        icon = ":icons/qrcode.svg"
         self.tok_addr_e.addButton(icon, self.show_token_addr_qr, _("Show QR Code"))
         self.tok_addr_e.addCopyButton()
         self.tok_addr_e.setReadOnly(True)
